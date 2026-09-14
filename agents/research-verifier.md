@@ -14,6 +14,8 @@ You check a research note someone else wrote. You haven't seen how it was resear
 
 The brief gives you the note's path and today's date. It may also say `Round 2`: the note's Bottom line and Recommendation were rewritten after an earlier check. Then check the claims the rewritten sections rest on, and any claim they add, rather than a fresh sample of the whole note. It may also have an `Also check:` line listing claims by their wording: ones edited by hand since the last check, or ones a spec depends on. Check each of those as well as your own sample, whether or not it's load-bearing for the Bottom line.
 
+**Ideation notes.** If the note's frontmatter says `depth: ideas`, or the brief says `Depth: ideas`, the prior-art hunt below is required, and you do it first, before checking the claims you picked. Your reply is incomplete without its `Prior art:` block.
+
 ## Pick the claims
 
 Read the note. Choose the claims the answer rests on, meaning the ones that would change the Bottom line or Recommendation if they were wrong:
@@ -23,9 +25,29 @@ Read the note. Choose the claims the answer rests on, meaning the ones that woul
 - the Project health rows for the projects the note recommends or ranks first;
 - any date, limit, version or deadline the recommendation depends on.
 
-Aim for 8–12 claims for `depth: full` and 3–5 for `depth: quick`. Skip claims marked *(inferred)* unless the recommendation hinges on them; then say so. Do check load-bearing claims marked *(unverified)*: a source may exist now that didn't before.
+Aim for 8–12 claims for `depth: full` or `ideas`, and 3–5 for `depth: quick`. At `ideas` depth, the Format evidence cells of the two top-ranked Shortlist ideas are load-bearing; their Novelty cells are checked by the prior-art hunt below. Skip claims marked *(inferred)* unless the recommendation hinges on them; then say so. Do check load-bearing claims marked *(unverified)*: a source may exist now that didn't before.
 
 If the note already has a `## Verification` section from an earlier check, read it after choosing your claims, not before, so it doesn't steer the choice. Re-check any of its non-CONFIRMED rows that are still load-bearing.
+
+## Prior-art hunt (depth: ideas)
+
+An ideation note's recommendation rests on a claim of absence: that nobody has built this yet. Checking citations can't confirm that, and a search or two won't either: the note's author already searched and found nothing. So run the full hunt, every query against every venue, before anything else. For the two top-ranked Shortlist ideas (#1 and #2), write four queries each:
+
+1. what it does, in plain words;
+2. the problem it solves;
+3. an "X for Y" analogy ("git bisect for agents");
+4. the note's own name for it.
+
+Use phrasings the note's Sources don't already list. Run each query for #1 against all four venues, and each query for #2 against the first three (skip the web search: it adds time and rarely finds what the other three miss):
+
+- GitHub repositories: `gh api "search/repositories?q=<terms>&sort=stars&per_page=5" --jq '.items[] | "\(.stargazers_count) \(.full_name) \(.description)"'`;
+- arXiv: `curl -s "http://export.arxiv.org/api/query?search_query=all:<term>+AND+all:<term>&max_results=10"`, with `sleep 3` between calls, which arXiv's API terms ask for. If it still answers "Rate exceeded", use the listing search instead: `curl -sL "https://arxiv.org/search/?query=<terms>&searchtype=all"`;
+- HN: `curl -s "https://hn.algolia.com/api/v1/search?query=<terms>&tags=story"`;
+- one web search.
+
+Read enough of each promising hit (README, abstract, launch post) to classify it: `same` does what the idea does; `overlaps` does part of it, or the same thing in another setting; `adjacent` is nearby but different. Hits the note already names don't count, unless the note describes them wrongly.
+
+Each of the two Novelty cells becomes a row in your table, quoting the cell's wording: CONFIRMED if nothing `same` or `overlaps` turned up, WRONG otherwise, with the hit and the narrowed wording as the Fix. In `Round 2`, hunt again only if the #1 idea changed.
 
 ## Check each one
 
@@ -59,6 +81,17 @@ Reply with only this, no preamble:
 |---|---|---|---|---|---|
 ```
 
+At `ideas` depth, follow the table with this block. It is required: the caller sends back a reply without it.
+
+```
+Prior art:
+Queries, idea #1: "<plain words>"; "<problem>"; "<X for Y>"; "<name>" (each run on GitHub, arXiv, HN and the web)
+Queries, idea #2: … (each run on GitHub, arXiv and HN)
+- <same | overlaps | adjacent>, idea #<n>: <name> <URL>: <what it does, in one line>
+```
+
+List every hit the note doesn't already name. If nothing turned up, write `- nothing same or overlapping for #1 or #2` as the only hit line. The two Novelty rows go in the table above, like any other claim.
+
 - **Claim**: a short, exact, unique substring of the note's wording, so the caller can find and edit it.
 - **Evidence**: a quote of 25 words or fewer from the source, or the command output that settles it.
 - **Fix**: for WRONG, the corrected wording and source; for MISCITED, the source to cite; for UNSUPPORTED or UNREACHABLE, "mark *(unverified)*"; otherwise blank.
@@ -66,5 +99,5 @@ Reply with only this, no preamble:
 Then one line each:
 
 - `Confirmed: N of M` (CONFIRMED only)
-- `Bottom line holds: yes` or `Bottom line holds: no — <why, in one sentence>`. Answer no if the Bottom line or Recommendation depends on a WRONG claim, or depends so heavily on an UNSUPPORTED or UNREACHABLE one that marking it *(unverified)* would leave the recommendation with nothing under it. Otherwise answer yes: claims that are marked *(unverified)* but not load-bearing don't sink the note.
-- `Other problems:` dangling citations, unsupported Bottom-line statements, and anything you came across that the note missed and that bears on the recommendation (prior art, a feature that already exists, a newer release), each with its source; or `none`. Don't go hunting for these beyond the checks above.
+- `Bottom line holds: yes` or `Bottom line holds: no — <why, in one sentence>`. Answer no if the Bottom line or Recommendation depends on a WRONG claim, or depends so heavily on an UNSUPPORTED or UNREACHABLE one that marking it *(unverified)* would leave the recommendation with nothing under it, or, at `ideas` depth, if the prior-art hunt found a `same` hit for the #1 idea. Otherwise answer yes: claims that are marked *(unverified)* but not load-bearing don't sink the note.
+- `Other problems:` dangling citations, unsupported Bottom-line statements, and anything you came across that the note missed and that bears on the recommendation (prior art, a feature that already exists, a newer release), each with its source; or `none`. Don't go hunting for these beyond the checks above and, at `ideas` depth, the prior-art hunt.

@@ -3,8 +3,12 @@
 
 Usage: check-note.py [--headroom] <note.md>
 
---headroom applies the researcher's lower budget (1,300 words full, 500 quick), which leaves room
-for the verifier's fixes; without it the note's hard limit applies (1,500 full, 600 quick).
+--headroom applies the researcher's lower budget (1,300 words full, 500 quick, 2,100 ideas), which
+leaves room for the verifier's fixes; without it the note's hard limit applies (1,500 full, 600
+quick, 2,400 ideas).
+
+depth: ideas notes also get their Candidate pool and Shortlist checked: the pool sits after
+Sources, outside the word budget, and its lines are candidates tagged with a lens.
 
 Prints FAIL, WARN and INFO lines and exits 1 if anything failed. Checks only what can be
 checked mechanically; whether the sources support the claims is the verifier agent's job.
@@ -14,9 +18,10 @@ import argparse
 import re
 from pathlib import Path
 
-TEMPLATE = Path.home() / "notes" / "templates" / "research.md"
-WORD_BUDGET = {"full": 1500, "quick": 600}
-HEADROOM_BUDGET = {"full": 1300, "quick": 500}
+TEMPLATES = Path.home() / "notes" / "templates"
+TEMPLATE = {"ideas": TEMPLATES / "research-ideas.md"}  # any other depth: research.md
+WORD_BUDGET = {"full": 1500, "quick": 600, "ideas": 2400}
+HEADROOM_BUDGET = {"full": 1300, "quick": 500, "ideas": 2100}
 STATUSES = ("draft", "final", "outdated")
 VERDICTS = ("CONFIRMED", "MISCITED", "WRONG", "UNSUPPORTED", "UNREACHABLE")
 REQUIRED = {
@@ -31,7 +36,39 @@ REQUIRED = {
         "## Sources",
     ],
     "quick": ["## Bottom line", "## The question", "## Findings", "## Sources"],
+    "ideas": [
+        "## Bottom line",
+        "## The question",
+        "## Findings",
+        "### Prior art",
+        "### Attention evidence",
+        "### Counter-evidence",
+        "## Shortlist",
+        "## Recommendation",
+        "## Next step",
+        "## Sources",
+        "## Candidate pool",
+    ],
 }
+# Sections allowed after `## Sources`, in this order. Candidate pool is for depth: ideas only.
+AFTER_SOURCES = ("## Candidate pool", "## Verification")
+# depth: ideas. Keep in step with the Ideation rules in ~/.claude/agents/researcher.md.
+LENSES = ("finding", "tool", "dataset", "game", "lab", "essay")
+POOL_MIN = 20
+SHORTLIST_SIZE = (5, 7)
+RUBRIC = (
+    "Idea",
+    "Lens",
+    "Share hook",
+    "Novelty",
+    "Format evidence",
+    "Demo",
+    "Effort",
+    "Why it flops",
+)
+CANDIDATE = re.compile(r"^\s*[-*]\s+\[([^\]]+)\]")
+CANDIDATE_MARK = re.compile(r"\bcut:|\bshortlisted\b", re.IGNORECASE)
+EVIDENCE_NOTE = "attention-evidence.md"
 # [12], [1, 7], [8-9] or [8–9], but not a markdown link [12](url).
 CITE = re.compile(r"\[(\d+(?:\s*[,–-]\s*\d+)*)\](?!\()")
 SOURCE = re.compile(r"^(\d+)\.\s")
@@ -135,6 +172,23 @@ def table_rows(lines):
     return rows[1:]
 
 
+def first_table(lines):
+    """(header cells, body rows) of the first table in `lines`, or ([], [])."""
+    block = []
+    for line in lines:
+        if line.lstrip().startswith("|"):
+            block.append(line)
+        elif block:
+            break
+    rows = [cells(line) for line in block if not SEPARATOR.fullmatch(line)]
+    return (rows[0], rows[1:]) if rows else ([], [])
+
+
+def flow_list(value):
+    """Items of a frontmatter flow list, `[a, b]`."""
+    return [e.strip().strip("'\"") for e in value.strip("[]").split(",") if e.strip()]
+
+
 def normalise(text):
     """Lower-case, with links reduced to their text, without markdown emphasis, code ticks or
     escapes, whitespace collapsed."""
@@ -154,12 +208,13 @@ def cited_numbers(line):
     return nums
 
 
-def template_prompts():
-    """Prose lines from the template that should never survive into a finished note."""
-    if not TEMPLATE.exists():
+def template_prompts(depth):
+    """Prose lines from the depth's template that should never survive into a finished note."""
+    template = TEMPLATE.get(depth, TEMPLATES / "research.md")
+    if not template.exists():
         return []
     prompts = []
-    for line in TEMPLATE.read_text().splitlines():
+    for line in template.read_text().splitlines():
         text = line.strip()
         if (
             len(text) > 20
@@ -172,10 +227,7 @@ def template_prompts():
 
 def check_related(value, fails, warns):
     """Skills find notes by grepping `related` for exact paths, so every entry must resolve."""
-    entries = [
-        e.strip().strip("'\"") for e in value.strip("[]").split(",") if e.strip()
-    ]
-    for entry in entries:
+    for entry in flow_list(value):
         if not entry.startswith("~/"):
             warns.append(
                 f"related entry {entry!r} isn't a ~ path; skills grep for ~ paths"
@@ -187,31 +239,48 @@ def check_related(value, fails, warns):
             )
 
 
+def after_sources(depth):
+    return AFTER_SOURCES if depth == "ideas" else AFTER_SOURCES[1:]
+
+
 def check_after_sources(body, depth, fails):
-    """Only Sources and Verification may follow `## Sources`: anything else would escape the
-    word budget and the citation check."""
+    """Only Verification (and, for depth: ideas, Candidate pool before it) may follow
+    `## Sources`: anything else would escape the word budget and the citation check."""
+    allowed = after_sources(depth)
+    names = " and ".join(f"'{h}'" for h in allowed)
     src_at = heading_index(body, "## Sources")
     if src_at is None:
         return
+    seen = []
     for line in body[src_at + 1 :]:
-        if line.startswith("#") and not line.startswith("## Verification"):
+        if not line.startswith("#"):
+            continue
+        heading = next((h for h in allowed if line.startswith(h)), None)
+        if heading is None:
             fails.append(
-                f"'{line.strip()}' comes after Sources; only '## Verification' may. "
-                "Move it above Sources"
+                f"'{line.strip()}' comes after Sources; only {names} may. Move it above Sources"
             )
+        else:
+            seen.append(heading)
+    if seen != sorted(seen, key=allowed.index):
+        fails.append("'## Candidate pool' must come before '## Verification'")
 
 
-def stray_after_sources(body):
-    """Lines after `## Sources` that aren't a source, its continuation, a 'Checked on' line or
-    the Verification table. They're prose, so they count toward the budget and the citations."""
+def stray_after_sources(body, depth):
+    """Lines after `## Sources` that aren't a source, its continuation, a 'Checked on' line,
+    the Verification table or (depth: ideas) the Candidate pool. They're prose, so they count
+    toward the budget and the citations."""
     src_at = heading_index(body, "## Sources")
     if src_at is None:
         return []
-    stray = []
+    stray, in_pool = [], False
     for line in body[src_at + 1 :]:
+        if line.startswith("#"):
+            in_pool = depth == "ideas" and line.startswith("## Candidate pool")
         text = line.strip()
         if (
-            not text
+            in_pool
+            or not text
             or line.startswith("## Verification")
             or SOURCE.match(text)
             or line[:1] in (" ", "\t")
@@ -295,6 +364,142 @@ def check_verification(body, prose, status, fails, warns):
         )
 
 
+def check_pool(pool, scope, fails, warns):
+    """The Candidate pool: at least POOL_MIN candidates, each tagged with a lens in scope and
+    marked cut or shortlisted, spread across the lenses. Returns how many were shortlisted."""
+    candidates, untagged, prose = [], [], []
+    for line in pool:
+        text = line.strip()
+        if not text:
+            continue
+        if m := CANDIDATE.match(line):
+            candidates.append((m.group(1).strip().lower(), text))
+        elif re.match(r"[-*]\s", text):
+            untagged.append(text)
+        elif not line[:1].isspace():
+            prose.append(text)
+    if untagged:
+        fails.append(
+            f"{len(untagged)} Candidate pool lines have no [lens] tag "
+            f"(first: '{untagged[0][:50]}')"
+        )
+    if len(prose) > 2:
+        fails.append(
+            f"{len(prose)} lines of prose in the Candidate pool; it holds one-line candidates, "
+            "and prose there escapes the word budget. Move it above Sources"
+        )
+    if len(candidates) < POOL_MIN:
+        fails.append(
+            f"Candidate pool has {len(candidates)} candidates; at least {POOL_MIN} are required"
+        )
+    if bad := sorted({lens for lens, _ in candidates if lens not in scope}):
+        fails.append(
+            f"Candidate pool uses lenses outside this note's scope: {', '.join(bad)} "
+            f"(in scope: {', '.join(scope)})"
+        )
+    used = {lens for lens, _ in candidates if lens in scope}
+    need = min(5, len(scope))
+    if len(used) < need:
+        fails.append(
+            f"Candidate pool covers {len(used)} lenses ({', '.join(sorted(used)) or 'none'}); "
+            f"at least {need} of {', '.join(scope)} are required"
+        )
+    if thin := [lens for lens in scope if sum(c[0] == lens for c in candidates) == 1]:
+        warns.append(
+            f"only one candidate for lens {', '.join(thin)}; the rule is two per lens"
+        )
+    if unmarked := [text for _, text in candidates if not CANDIDATE_MARK.search(text)]:
+        fails.append(
+            f"{len(unmarked)} candidates are marked neither 'Cut: <reason>' nor "
+            f"'Shortlisted #n' (first: '{unmarked[0][:50]}')"
+        )
+    if long := [text for _, text in candidates if len(text.split()) > 60]:
+        warns.append(
+            f"{len(long)} candidates run over 60 words (first: '{long[0][:40]}'); keep them to one line"
+        )
+    return sum(
+        bool(re.search(r"\bshortlisted\b", t, re.IGNORECASE)) for _, t in candidates
+    )
+
+
+def check_shortlist(section_lines, scope, shortlisted, fails, warns):
+    """The Shortlist rubric table: every rubric column, 5-7 numbered ideas with every cell
+    filled, a baseline row, and at least three lenses."""
+    header, rows = first_table(section_lines)
+    if not header:
+        fails.append("Shortlist has no table")
+        return
+    names = [normalise(h) for h in header]
+    if missing := [c for c in RUBRIC if c.lower() not in names]:
+        fails.append(f"Shortlist table is missing rubric columns: {', '.join(missing)}")
+    ideas = [r for r in rows if r and r[0].strip("*# ").isdigit()]
+    baseline = [r for r in rows if r and not r[0].strip("*# ").isdigit()]
+    low, high = SHORTLIST_SIZE
+    if not low <= len(ideas) <= high:
+        fails.append(
+            f"Shortlist has {len(ideas)} numbered ideas; {low} to {high} are required"
+        )
+    if not baseline:
+        fails.append("Shortlist has no baseline row (do nothing, or post only)")
+    empty = [
+        r[0].strip("* ") for r in ideas if len(r) < len(header) or any(not c for c in r)
+    ]
+    if empty:
+        fails.append(
+            f"Shortlist rows with empty cells: #{', #'.join(empty)}; every rubric cell needs a reason"
+        )
+    if "lens" in names:
+        at = names.index("lens")
+        lenses = {normalise(r[at]).strip("[]") for r in ideas if len(r) > at} - {""}
+        need = min(3, len(scope))
+        if len(lenses) < need:
+            fails.append(
+                f"Shortlist spans {len(lenses)} lenses ({', '.join(sorted(lenses))}); "
+                f"at least {need} are required"
+            )
+        if odd := sorted(lens for lens in lenses if lens not in scope):
+            warns.append(
+                f"Shortlist Lens values outside this note's scope: {', '.join(odd)}"
+            )
+    if shortlisted != len(ideas):
+        warns.append(
+            f"{shortlisted} pool candidates are marked Shortlisted, but the Shortlist has "
+            f"{len(ideas)} numbered ideas"
+        )
+
+
+def check_ideas(body, fields, prose_end, sources, fails, warns):
+    """Checks that only apply to depth: ideas."""
+    scope = flow_list(fields.get("lenses", "")) or list(LENSES)
+    if bad := [lens for lens in scope if lens not in LENSES]:
+        fails.append(f"frontmatter 'lenses' has unknown lenses: {', '.join(bad)}")
+    if not fields.get("rank-by"):
+        warns.append(
+            "frontmatter 'rank-by' is empty; say what the shortlist is ranked by"
+        )
+    pool_at = heading_index(body, "## Candidate pool")
+    if pool_at is not None and pool_at < prose_end:
+        fails.append(
+            "'## Candidate pool' must come after Sources, outside the word budget"
+        )
+    shortlisted = check_pool(
+        section(body, "## Candidate pool") or [], scope, fails, warns
+    )
+    shortlist = section(body, "## Shortlist")
+    if shortlist is not None:
+        check_shortlist(shortlist, scope, shortlisted, fails, warns)
+    evidence = section(body, "### Attention evidence")
+    if evidence is not None and not any(l.lstrip().startswith("|") for l in evidence):
+        warns.append(
+            "Attention evidence has no table of data points; new ones found in this research "
+            "go there for merging into the attention-evidence note"
+        )
+    if not any(EVIDENCE_NOTE in line for line in sources):
+        warns.append(
+            f"Sources doesn't cite the attention-evidence note ({EVIDENCE_NOTE})"
+        )
+
+
 def main():
     parser = argparse.ArgumentParser(description="Check a /research note.")
     parser.add_argument("note")
@@ -318,7 +523,7 @@ def main():
         fails.append("no YAML frontmatter")
     depth = fields.get("depth", "full") or "full"
     if depth not in WORD_BUDGET:
-        fails.append(f"depth is {depth!r}; expected full or quick")
+        fails.append(f"depth is {depth!r}; expected full, quick or ideas")
         depth = "full"
     for key in ("title", "created", "status", "question"):
         if not fields.get(key) or "{{" in fields.get(key, ""):
@@ -354,7 +559,7 @@ def main():
     # Split the prose from Sources, and Sources from whatever follows it (Verification).
     src_at = heading_index(body, "## Sources")
     prose = body[:src_at] if src_at is not None else body
-    if stray := stray_after_sources(body):
+    if stray := stray_after_sources(body, depth):
         warns.append(
             f"{len(stray)} lines of prose after Sources (first: '{stray[0].strip()[:40]}'); "
             "they count toward the word budget. Move them above Sources"
@@ -369,7 +574,9 @@ def main():
         fails.append("Sources list is empty")
     if sources and not any("Checked on" in line for line in sources):
         warns.append("Sources has no 'Checked on <date>' line")
-    cited = set().union(*(cited_numbers(line) for line in prose))
+    # The Candidate pool is outside the word budget but inside the citation check.
+    pool = (section(body, "## Candidate pool") or []) if depth == "ideas" else []
+    cited = set().union(*(cited_numbers(line) for line in prose + pool))
     if dangling := sorted(cited - source_nums):
         fails.append(
             f"citations with no matching source: {', '.join(f'[{n}]' for n in dangling)}"
@@ -378,6 +585,15 @@ def main():
         warns.append(f"sources never cited in the text: {', '.join(map(str, uncited))}")
 
     check_verification(body, prose, status, fails, warns)
+    if depth == "ideas":
+        check_ideas(
+            body,
+            fields,
+            src_at if src_at is not None else len(body),
+            sources,
+            fails,
+            warns,
+        )
 
     words = sum(len(line.split()) for line in prose if not SEPARATOR.fullmatch(line))
     budget = (HEADROOM_BUDGET if args.headroom else WORD_BUDGET)[depth]
@@ -395,7 +611,7 @@ def main():
         infos.append(f"{words} words above Sources ({kind} {budget})")
 
     text = "\n".join(lines)
-    leftovers = [p for p in template_prompts() if p in text]
+    leftovers = [p for p in template_prompts(depth) if p in text]
     if "{{" in text:
         leftovers.append("{{placeholder}}")
     if any(line.strip() == "-" for line in prose):

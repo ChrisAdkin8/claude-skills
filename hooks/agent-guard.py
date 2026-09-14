@@ -32,6 +32,7 @@ SCRIPTS = {
     HOME / ".claude/skills/research/scripts/repo-health.sh",
     HOME / ".claude/skills/research/scripts/check-note.py",
     HOME / ".claude/skills/research/scripts/gcp-skus.sh",
+    HOME / ".claude/skills/research/scripts/reddit-search.sh",
     HOME / ".claude/skills/spec/scripts/check-spec.py",
 }
 # Reading and text tools that can't run other programs or write files (the flags that would

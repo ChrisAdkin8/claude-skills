@@ -62,8 +62,25 @@ SHELL_VARS = {
     "PATH", "HOME", "IFS", "CDPATH", "GLOBIGNORE", "BASH_ENV", "ENV", "SHELLOPTS", "BASHOPTS",
     "PS4",
 }  # fmt: skip
-# Families that git, Python, curl, the dynamic loader, ssh and gh read from the environment.
-DANGEROUS_PREFIXES = ("GIT_", "PYTHON", "CURL_", "LD_", "DYLD_", "SSH_", "GH_")
+# Names the Bash tool's shell exports but the hook's own environment lacks, so `os.environ`
+# can't catch them (compared on 2026-09-15; CLAUDE* is covered by the prefix below).
+SHELL_EXPORTED = {
+    "AI_AGENT",
+    "COREPACK_ENABLE_AUTO_PIN",
+    "NoDefaultCurrentDirectoryInExePath",
+}
+# Families that git, Python, curl, the dynamic loader, ssh and gh read from the environment,
+# and Claude Code's own session variables.
+DANGEROUS_PREFIXES = (
+    "GIT_",
+    "PYTHON",
+    "CURL_",
+    "LD_",
+    "DYLD_",
+    "SSH_",
+    "GH_",
+    "CLAUDE",
+)
 # `read` options that take a value; -a's value is an array name, so it's checked too.
 READ_ARG_OPTS = set("adinNptu")
 CLOUD = {
@@ -211,6 +228,7 @@ def dangerous(name):
     return (
         name in os.environ
         or name in SHELL_VARS
+        or name in SHELL_EXPORTED
         or name.startswith(DANGEROUS_PREFIXES)
         or name.lower().endswith("_proxy")
     )

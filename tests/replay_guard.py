@@ -40,7 +40,9 @@ def verdict(guard, command):
             guard.check_command(command)
     except SystemExit as stop:
         if stop.code == 2:
-            return "blocked", err.getvalue().strip().removeprefix("Blocked by agent-guard: ")
+            return "blocked", err.getvalue().strip().removeprefix(
+                "Blocked by agent-guard: "
+            )
         raise
     return "allowed", ""
 
@@ -67,7 +69,9 @@ def main():
 
     cutoff = datetime.fromisoformat(args.before).timestamp()
     files = sorted(
-        f for f in (Path.home() / ".claude").glob(args.glob) if f.stat().st_mtime < cutoff
+        f
+        for f in (Path.home() / ".claude").glob(args.glob)
+        if f.stat().st_mtime < cutoff
     )
     commands = []
     for f in files:
@@ -100,7 +104,9 @@ def main():
             elif before == "blocked" and after == "allowed":
                 newly_allowed.append(command)
 
-    print(f"{len(files)} transcripts before {args.before}; {len(unique)} unique Bash commands")
+    print(
+        f"{len(files)} transcripts before {args.before}; {len(unique)} unique Bash commands"
+    )
     print(f"new guard: {tally['allowed']} allowed, {tally['blocked']} blocked")
     print(f"\nallowed at {args.base}, blocked now: {len(newly_blocked)}")
     for command, reason in newly_blocked:

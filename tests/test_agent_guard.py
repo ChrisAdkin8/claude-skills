@@ -20,6 +20,7 @@ def verdict(command):
         input=json.dumps({"tool_input": {"command": command}}),
         capture_output=True,
         text=True,
+        check=False,  # exit 2 is a verdict, not an error
     )
     return run.returncode, run.stderr
 
@@ -57,7 +58,9 @@ class StillAllowed(GuardTestCase):
         self.assertAllowed("git -C ~/notes diff HEAD~1 HEAD")
 
     def test_skill_script_by_path(self):
-        self.assertAllowed("~/.claude/skills/research/scripts/check-note.py ~/notes/research/x.md")
+        self.assertAllowed(
+            "~/.claude/skills/research/scripts/check-note.py ~/notes/research/x.md"
+        )
 
     def test_env_wrapper_with_locale(self):
         self.assertAllowed("env LC_ALL=C sort f")
@@ -93,7 +96,9 @@ class AssignmentsBlocked(GuardTestCase):
         self.assertBlocked("GIT_EXTERNAL_DIFF='echo hi' git diff", "GIT_EXTERNAL_DIFF")
 
     def test_git_external_diff_via_env(self):
-        self.assertBlocked("env GIT_EXTERNAL_DIFF='echo hi' git diff", "GIT_EXTERNAL_DIFF")
+        self.assertBlocked(
+            "env GIT_EXTERNAL_DIFF='echo hi' git diff", "GIT_EXTERNAL_DIFF"
+        )
 
     def test_bare_path(self):
         # PATH is exported, so a bare assignment changes it for every later command.
@@ -101,7 +106,8 @@ class AssignmentsBlocked(GuardTestCase):
 
     def test_bash_env_on_skill_script(self):
         self.assertBlocked(
-            "BASH_ENV=f ~/.claude/skills/research/scripts/repo-health.sh o/r", "BASH_ENV"
+            "BASH_ENV=f ~/.claude/skills/research/scripts/repo-health.sh o/r",
+            "BASH_ENV",
         )
 
     def test_pythonpath_on_checker(self):
@@ -120,16 +126,26 @@ class AssignmentsBlocked(GuardTestCase):
         self.assertBlocked("GIT_DIR=/x; git log", "GIT_DIR")
 
     def test_prefix_in_substitution(self):
-        self.assertBlocked("echo $(GIT_EXTERNAL_DIFF='echo hi' git diff)", "GIT_EXTERNAL_DIFF")
+        self.assertBlocked(
+            "echo $(GIT_EXTERNAL_DIFF='echo hi' git diff)", "GIT_EXTERNAL_DIFF"
+        )
 
     def test_prefix_in_bash_c(self):
-        self.assertBlocked("bash -c \"GIT_EXTERNAL_DIFF='echo hi' git diff\"", "GIT_EXTERNAL_DIFF")
+        self.assertBlocked(
+            "bash -c \"GIT_EXTERNAL_DIFF='echo hi' git diff\"", "GIT_EXTERNAL_DIFF"
+        )
 
     def test_for_loop_over_path(self):
         self.assertBlocked("for PATH in /tmp; do git status; done", "PATH")
 
     def test_printf_into_path(self):
         self.assertBlocked("printf -v PATH '%s' /tmp; git status", "PATH")
+
+    def test_claude_session_variable(self):
+        # Exported by the Bash tool's shell but absent from the hook's own environment.
+        self.assertBlocked(
+            "CLAUDE_CODE_SESSION_ID=x; echo done", "CLAUDE_CODE_SESSION_ID"
+        )
 
     def test_ifs_prefix_on_other_command(self):
         self.assertBlocked("IFS=x grep y f", "IFS")

@@ -130,6 +130,24 @@ def section(lines, heading):
     return None
 
 
+def split_cold_review(lines, warns):
+    """Split off a saved '## Cold review' section. It records the reviewer's reply unchanged, so
+    it's left out of the word count and the citation, link and template checks, which the
+    author couldn't fix without editing the reviewer's words. The secrets check still reads it."""
+    at = next((i for i, line in enumerate(lines) if line.startswith("## Cold review")), None)
+    if at is None:
+        return lines, []
+    end = next(
+        (j for j in range(at + 1, len(lines)) if lines[j].startswith("## ")), len(lines)
+    )
+    if end < len(lines):
+        warns.append(
+            "'## Cold review' isn't the spec's last section; it records the reviewer's reply, "
+            "so it goes at the end"
+        )
+    return lines[:at] + lines[end:], lines[at:end]
+
+
 def template_prompts():
     """Prose lines from the template that should never survive into a finished spec."""
     if not TEMPLATE.exists():
@@ -380,6 +398,7 @@ def main():
         print("RESULT: FAIL")
         return 1
     fails, warns, infos = [], [], []
+    lines, review = split_cold_review(lines, warns)
     fields, start = frontmatter(lines)
     body = strip_code(lines[start:])
     # A template spec has the template's frontmatter or its Work items section; a renamed
@@ -510,16 +529,22 @@ def main():
 
     # Secrets and account IDs.
     for pattern, what in SECRETS:
-        if pattern.search(text):
+        if pattern.search("\n".join([text, *review])):
             fails.append(f"contains what looks like {what}")
     if ACCOUNT_ID.search("\n".join(body)):
         warns.append("contains a 12-digit number: make sure it isn't an AWS account ID")
 
     words = sum(len(l.split()) for l in body if not SEPARATOR.fullmatch(l))
     status = fields.get("status", "draft")
-    if templated and words > WORD_FAIL and status in ("draft", "reviewed"):
+    if templated and words > WORD_FAIL and status in ("draft", "reviewed") and not review:
         fails.append(
             f"{words} words; the limit is {WORD_FAIL}. Split it into specs that each land on their own"
+        )
+    elif templated and words > WORD_FAIL and review:
+        # Reviewed already: splitting now would orphan the review. Spikes and hand edits since
+        # still get `/spec finish`.
+        warns.append(
+            f"{words} words, over the {WORD_FAIL} limit; a cold review is saved, so left as is"
         )
     elif templated and words > WORD_FAIL:
         # In progress, done or superseded: a record, not something to split now.

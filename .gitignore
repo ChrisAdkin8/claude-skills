@@ -1,12 +1,3 @@
-# Track only hand-written config: skills, agents and hooks. Everything else in ~/.claude is
-# session data, history, caches, plugins or credentials, and must stay out of git.
-# settings.json is left out too: add it deliberately, after checking it holds no tokens.
-/*
-!/.gitignore
-!/skills/
-!/agents/
-!/hooks/
-!/tests/
 __pycache__/
 .ruff_cache/
 .DS_Store

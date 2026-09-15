@@ -7,17 +7,19 @@
 #   EVAL_MODEL     model to run the agents on (default: your default model)
 #
 # Each case directory in cases/ holds a fixture, agent.txt (the subagent), brief.txt (the brief,
-# with {{CASE}}, {{HOME}} and {{DATE}} filled in) and expect.txt: one Python regex per line that
+# with {{CASE}}, {{HOME}}, {{REPO}} and {{DATE}} filled in) and expect.txt: one Python regex per line that
 # must match the reply text, or must not match if the line starts with "!"; blank lines and
 # lines starting with "#" are ignored. Only the reply text (.result) is graded, never the JSON.
 #
 # The agents run with their own frontmatter tools pre-approved and their own PreToolUse hook
 # (checked 2026-09-15: the guard blocks `awk` under --agent), in a throwaway directory with read
-# access to ~/.claude and ~/notes, with no MCP servers and no saved session. Every run costs real tokens: run by hand after changing an
+# access to ~/.claude, ~/notes and this repo (~/.claude/skills, agents and hooks are symlinks into
+# it), with no MCP servers and no saved session. Every run costs real tokens: run by hand after changing an
 # agent or skill file, not on every commit. Results land in results/<timestamp>/ (git-ignored).
 set -uo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
+repo=$(cd "$here/../.." && pwd -P)
 agents="$HOME/.claude/agents"
 stamp=$(date +%Y%m%d-%H%M%S)
 out="$here/results/$stamp"
@@ -35,10 +37,11 @@ run_case() {
   agent=$(cat "$dir/agent.txt")
   # The agent's frontmatter tools line, e.g. "tools: Read, Bash, WebFetch, WebSearch".
   tools=$(sed -n 's/^tools:[[:space:]]*//p' "$agents/$agent.md" | head -1 | tr -d ' ')
-  brief=$(sed -e "s#{{CASE}}#$dir#g" -e "s#{{HOME}}#$HOME#g" -e "s#{{DATE}}#$today#g" "$dir/brief.txt")
+  brief=$(sed -e "s#{{CASE}}#$dir#g" -e "s#{{HOME}}#$HOME#g" -e "s#{{REPO}}#$repo#g" \
+    -e "s#{{DATE}}#$today#g" "$dir/brief.txt")
   work=$(mktemp -d)
   (cd "$work" && claude -p --agent "$agent" --output-format json --max-turns 40 \
-    --allowedTools "$tools" --add-dir "$HOME/.claude" "$HOME/notes" \
+    --allowedTools "$tools" --add-dir "$HOME/.claude" "$HOME/notes" "$repo" \
     --strict-mcp-config --no-session-persistence \
     --max-budget-usd "$max_usd" ${EVAL_MODEL:+--model "$EVAL_MODEL"} "$brief") \
     > "$out/$c.json" 2> "$out/$c.err"

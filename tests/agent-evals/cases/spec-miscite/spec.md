@@ -5,7 +5,7 @@ status: draft # draft | reviewed | in-progress | done | superseded
 research: none
 idea: none
 read-at: c7adaf4
-cite-repo: ~/.claude
+cite-repo: ~/code/github.com/claude-skills
 ---
 
 # Fixture spec with one planted miscitation
@@ -20,7 +20,7 @@ Describe the current behaviour only.
 
 ## Background
 
-Read at `c7adaf4` in `~/.claude`; citations point into that repo.
+Read at `c7adaf4` in `~/code/github.com/claude-skills`; citations point into that repo.
 
 - The guard allows five skill scripts by path (`hooks/agent-guard.py:31-37`).
 - `unwrap` drops assignment words before the command without reading them (`hooks/agent-guard.py:40-46`).

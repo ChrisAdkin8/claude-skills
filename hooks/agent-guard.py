@@ -36,12 +36,17 @@ from pathlib import Path
 from typing import NoReturn
 
 HOME = Path.home()
+# Resolved, like the command paths they're compared with, because ~/.claude/skills is a symlink
+# into the claude-skills repo: an unresolved entry would never match.
 SCRIPTS = {
-    HOME / ".claude/skills/research/scripts/repo-health.sh",
-    HOME / ".claude/skills/research/scripts/check-note.py",
-    HOME / ".claude/skills/research/scripts/gcp-skus.sh",
-    HOME / ".claude/skills/research/scripts/reddit-search.sh",
-    HOME / ".claude/skills/spec/scripts/check-spec.py",
+    (HOME / path).resolve()
+    for path in (
+        ".claude/skills/research/scripts/repo-health.sh",
+        ".claude/skills/research/scripts/check-note.py",
+        ".claude/skills/research/scripts/gcp-skus.sh",
+        ".claude/skills/research/scripts/reddit-search.sh",
+        ".claude/skills/spec/scripts/check-spec.py",
+    )
 }
 # Reading and text tools that can't run other programs or write files (the flags that would
 # are checked below).

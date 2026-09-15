@@ -1,6 +1,6 @@
 """Tests for skills/spec/scripts/check-spec.py's handling of a saved cold review.
 
-Run with: python3 -m unittest discover -s ~/.claude/tests
+Run with: python3 -m unittest discover -s ~/code/github.com/claude-skills/tests
 """
 
 import re

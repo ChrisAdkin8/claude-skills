@@ -1,19 +1,21 @@
 """Tests for hooks/agent-guard.py: which Bash commands the /research and /spec agents may run.
 
 Each case runs the guard as its hook would: the command in the hook's JSON on stdin, exit 0 to
-allow and exit 2 to block. Run with: python3 -m unittest discover -s ~/.claude/tests
+allow and exit 2 to block. Run with: python3 -m unittest discover -s ~/code/github.com/claude-skills/tests
 """
 
 import json
+import os
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
 GUARD = Path(__file__).resolve().parents[1] / "hooks" / "agent-guard.py"
 
 
-def verdict(command):
+def verdict(command, env=None):
     """(exit code, stderr) from the guard for one Bash command."""
     run = subprocess.run(
         [sys.executable, str(GUARD), "bash"],
@@ -21,6 +23,7 @@ def verdict(command):
         capture_output=True,
         text=True,
         check=False,  # exit 2 is a verdict, not an error
+        env=env,
     )
     return run.returncode, run.stderr
 
@@ -73,6 +76,22 @@ class StillAllowed(GuardTestCase):
 
     def test_printf_to_plain_variable(self):
         self.assertAllowed("printf -v out '%s' x")
+
+
+class SymlinkedInstall(unittest.TestCase):
+    """~/.claude/skills is a symlink into this repo, so a script's path resolves into the repo."""
+
+    def test_skill_script_through_symlink(self):
+        repo = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as home:
+            (Path(home) / ".claude").mkdir()
+            (Path(home) / ".claude" / "skills").symlink_to(repo / "skills")
+            env = {**os.environ, "HOME": home}
+            code, err = verdict(
+                "~/.claude/skills/research/scripts/check-note.py ~/notes/research/x.md",
+                env,
+            )
+        self.assertEqual(code, 0, err)
 
 
 class ReadIsAReader(GuardTestCase):

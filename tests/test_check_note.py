@@ -1,6 +1,6 @@
 """Tests for skills/research/scripts/check-note.py's Verification and word-limit checks.
 
-Run with: python3 -m unittest discover -s ~/.claude/tests
+Run with: python3 -m unittest discover -s ~/code/github.com/claude-skills/tests
 """
 
 import importlib.util

@@ -40,3 +40,18 @@ The spec expected `absence-claim` and `cold-review-skip` to fail here. Both pass
   agents worked around. The runner now also passes `--add-dir ~/.claude ~/notes`.
 - **Flakiness of absence-claim:** two runs agreed, both finding rere first; no GitHub-only
   fallback needed.
+
+## After part 2 (W2 to W5 applied)
+
+Second run on 2026-09-15, on the verifier files as committed at `56a2208`:
+
+| Case | Result | Turns | Cost |
+|---|---|---:|---:|
+| wrong-figure | PASS | 5 | $0.18 |
+| absence-claim | PASS | 19 | $0.56 |
+| spec-miscite | PASS | 10 | $0.22 |
+| cold-review-skip | PASS | 9 | $0.24 |
+
+Total $1.21. The difference W3 makes is visible in `absence-claim`'s reply, not its grade: it
+now carries a `Prior art:` block listing the four queries run on GitHub, arXiv and HN and each
+hit classified `same`, `overlaps` or `adjacent`. The baseline reply had neither.

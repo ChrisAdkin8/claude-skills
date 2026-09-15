@@ -72,7 +72,7 @@ A note verified before the `## Verification` section existed gets one from this 
 
 ## 3. When the verifier finishes
 
-At ideas depth, first check the reply has a `Prior art:` block listing the queries it ran for #1 and #2, and Novelty rows for both in its table. If either is missing, send it back once with SendMessage: "Your reply has no Prior-art hunt. Run it as your instructions describe, every query against every venue, and reply again in full." If the second reply still lacks it, carry on and say in the report that novelty wasn't independently checked.
+At ideas depth, first check the reply has a `Prior art:` block listing the queries it ran for #1 and #2, and Novelty rows for both in its table. At full depth, if the Bottom line or Recommendation rests on a claim of absence, check the reply has a `Prior art:` block for that claim and a row for it. If either is missing, send it back once with SendMessage: "Your reply has no Prior-art hunt. Run it as your instructions describe, every query against every venue, and reply again in full." If the second reply still lacks it, carry on and say in the report that novelty wasn't independently checked.
 
 1. **Apply its fixes** to the note:
    - WRONG: replace the figure or statement with the corrected one and update or add the source.
@@ -100,7 +100,8 @@ At ideas depth, first check the reply has a `Prior art:` block listing the queri
 3. **If the conclusion changed**, the rewritten text is the least-checked part of the note, so it gets one more check:
    - This applies on `Bottom line holds: no`, or when missed evidence weakens the recommendation. At ideas depth that includes a `same` prior-art hit on the #1 idea: re-rank the Shortlist, and if a different idea moves to #1, round 2 hunts prior art for it. Revise the Bottom line and Recommendation to match the evidence, set `status: draft`, and commit with the message `research: <title> (conclusion revised, re-verifying)`.
    - Launch `research-verifier` again with `Note: <absolute path>. Today's date: <YYYY-MM-DD>. Round 2.` Tell the user in one line that the conclusion changed and is being re-checked. End your turn.
-   - When round 2 returns, apply its fixes and update Verification as above, then carry on from step 4. There is no round 3: if round 2 also says `Bottom line holds: no`, leave the note as draft and say so in the report.
+   - When round 2 returns, apply its fixes and update Verification as above, then carry on from step 4. If round 2 also says `Bottom line holds: no`, leave the note as draft and say so in the report, with one exception.
+   - **Round 3, for one narrowed absence claim.** If round 2's `no` rests only on an absence claim ("no tool does X", "nothing found") that it narrowed again, apply its narrowing and launch `research-verifier` with `Note: <absolute path>. Today's date: <YYYY-MM-DD>. Round 3: check only "<the narrowed sentence>".` It replies with one row and the usual closing lines. If the row is CONFIRMED and it says `Bottom line holds: yes`, carry on from step 4. If not, leave the note as draft and name the sentence in the report. There is no round 4.
 4. Re-run `check-note.py`. Once the note has a Verification table, the check allows up to 10 % over the limit with a WARN; leave that as is. Cut only on a FAIL, and then cut whole unverified points from Findings or Options. Never cut a sentence a Verification row quotes, a Project health row, the Bottom line, Recommendation or Counter-evidence, nor Shortlist rows or cells.
 5. **Status**: set `status: final` when all of these hold:
    - the check passes;

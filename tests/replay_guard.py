@@ -92,6 +92,10 @@ def main():
         old_path = Path(tmp) / "agent_guard_old.py"
         old_path.write_text(old_source)
         old = load_guard(old_path, "agent_guard_old")
+        # The old guard compared unresolved script paths, which never match now that
+        # ~/.claude/skills is a symlink into this repo. Resolve them, so the replay shows rule
+        # changes rather than that install-layout difference.
+        old.SCRIPTS = {path.resolve() for path in old.SCRIPTS}
         new = load_guard(REPO / "hooks" / "agent-guard.py", "agent_guard_new")
         tally = {"allowed": 0, "blocked": 0}
         newly_blocked, newly_allowed = [], []

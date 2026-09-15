@@ -98,7 +98,7 @@ Today's date: <YYYY-MM-DD>
 
 Tell the user in one line that the spec is written and being verified. End your turn.
 
-In `finish` mode, start here. Take the repo from the spec's location, and `cite-repo` and `read-at` from its frontmatter; for a house-style spec with no frontmatter, use its "Read at `<sha>`" line, or `HEAD` if it has none (and say that drift can't be measured). Run the check, fix any FAIL lines yourself, then launch the verifier.
+In `finish` mode, start here. Take the repo from the spec's location, and `cite-repo` and `read-at` from its frontmatter; for a house-style spec with no frontmatter, use its "Read at `<sha>`" line, or `HEAD` if it has none (and say that drift can't be measured). Run the check, fix any FAIL lines yourself, then launch the verifier. If the spec already ends in a `## Cold review` section, finish mode stops after step 5's items 1 to 4: it re-checks, re-verifies and links, and launches no second cold review.
 
 ## 5. When the verifier finishes
 
@@ -120,7 +120,7 @@ In `finish` mode, start here. Take the repo from the spec's location, and `cite-
    - If there's an accepted decision, add the spec's path to its `related`.
    - Commit only those files: `git -C ~/notes add <files>`, then `git -C ~/notes commit` with the message `spec: <title>`, following this session's commit attribution rules. Don't push.
    - Leave the spec itself uncommitted in the repo. The user reviews it and commits it under the repo's own rules.
-5. **Write the cold-review prompt and launch it.** The verifier checked citations and numbers. Judging assumptions and costs needs a reader who didn't write the spec. Write the reviewer's prompt yourself, for this spec, and launch the Agent tool with `subagent_type: spec-reviewer` and that prompt. The agent brings only read-only tools and safety rules; everything it reviews for comes from your prompt.
+5. **Write the cold-review prompt and launch it,** unless the spec already has a `## Cold review` section: one adversarial round per spec (step 6, item 5). The verifier checked citations and numbers. Judging assumptions and costs needs a reader who didn't write the spec. Write the reviewer's prompt yourself, for this spec, and launch the Agent tool with `subagent_type: spec-reviewer` and that prompt. The agent brings only read-only tools and safety rules; everything it reviews for comes from your prompt.
 
    Build the prompt from this skeleton. Keep the core paragraph and the reply format word for word, so every review asks the same question and you can relay the answer; fill in the rest:
 
@@ -143,7 +143,7 @@ In `finish` mode, start here. Take the repo from the spec's location, and `cite-
    Then one line each: `Counts: N findings — C correctness, R requirement, K neither`; `Neither: <row numbers, or none>`; `Cold read: yes`, or `Cold read: no — <first place you had to stop>`; `New spike questions: <row numbers, or none>`.
    ````
 
-   In `finish` mode you skipped step 2, so find the check entry points and rules files now with a quick Glob (`.github/workflows/*`, `Makefile`, `Taskfile*`, `.pre-commit-config.yaml`, `CLAUDE.md`, `docs/*method*`).
+   In `finish` mode on a spec with no Cold review yet, you skipped step 2, so find the check entry points and rules files now with a quick Glob (`.github/workflows/*`, `Makefile`, `Taskfile*`, `.pre-commit-config.yaml`, `CLAUDE.md`, `docs/*method*`).
 
    What you add to the skeleton is pointers to where things are, never conclusions. Leave out a summary of the spec, why you made its choices, which parts you think are weak or sound, what the verifier found and what you changed. A reviewer handed the author's framing checks the framing instead of the spec. If the spec was split, write one prompt per part and launch the reviewers in the same message.
 
@@ -164,10 +164,11 @@ In `finish` mode, start here. Take the repo from the spec's location, and `cite-
    - The ones graded `neither`: one line in total, listing them and saying the reviewer judged they don't matter.
    - If it says `Cold read: no`, say where it had to stop.
    - If you think a finding is wrong, say so and why in one line, but leave it in the list. The user decides.
+   - Then save the review in the spec: append the reviewer's table and its closing lines unchanged at the very end, under `## Cold review`, after a line "Reviewed on <YYYY-MM-DD> by spec-reviewer. Saved unchanged; not acted on." It's the record of the one adversarial round, and it stops a later `/spec finish` from launching another. `check-spec.py` leaves the section out of its word count and its citation, link and template checks, and the spec verifier skips it. Saving the record isn't acting on it, so item 1 stands.
 4. **Repo-prescribed review.** If the repo prescribes its own review that a subagent doesn't satisfy (for example, `k8s-ai-observability`'s `docs/development-method.md` wants assumptions and costs reviewed by a cold session outside this one), say so, and give the user this prompt to paste into a fresh session:
 
    > Review `<spec path>` adversarially. Find assumptions presented as facts, costs not counted (files, checks that will go red, migrations), and anything a cold reader can't work through without redoing the research. Grade each finding by whether it affects correctness or a stated requirement, and say which don't. Don't edit the file.
 
 5. **Next.** Offer to fold in the findings that affect correctness or a requirement. If the user says yes, fold in those they pick, re-run `check-spec.py` until it passes, and if a fold adds or changes a citation or number, launch `spec-verifier` with the Round 2 line naming the work items changed. When it returns, apply its fixes and re-run the check, then report in one line; the notes are already linked. Don't run a second cold review: after one adversarial round the remaining risk is empirical, which is what the spikes are for.
 
-   After that, the order is: run any spikes, fold their results back into the spec, then implement. Implement in a fresh session on a branch, starting in plan mode: "implement `<spec path>`, W1 first".
+   After that, the order is: run any spikes, fold their results back into the spec, run `/spec finish <spec>` to re-check and re-verify it, then implement. Run `/spec finish` after any hand edit too; with a Cold review saved, it launches no second review. Implement in a fresh session on a branch, starting in plan mode: "implement `<spec path>`, W1 first".

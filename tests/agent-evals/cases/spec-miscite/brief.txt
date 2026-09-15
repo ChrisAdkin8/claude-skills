@@ -1,0 +1,6 @@
+Spec: {{CASE}}/spec.md
+Repo: {{HOME}}/.claude
+Cite repo: same
+Read at: c7adaf4
+Research note: none
+Today's date: {{DATE}}

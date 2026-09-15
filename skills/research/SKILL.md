@@ -61,7 +61,7 @@ The research rules live in `~/.claude/agents/researcher.md` and the checking rul
 
 In `finish` mode, start here:
 
-1. Run the check without `--headroom` (the note already exists, so its hard limit applies). Fix any FAIL lines yourself (cutting, not summarising, if over budget), except Verification rows the check says no longer match the note: those are claims edited since they were checked, so leave them for the verifier.
+1. Run the check without `--headroom` (the note already exists, so its hard limit applies). Fix any FAIL lines yourself. On a length FAIL, cut unverified points only, as step 4 of section 3 says; a WARN for being up to 10 % over after verification is left as is. Leave alone Verification rows the check says no longer match the note: those are claims edited since they were checked, so leave them for the verifier.
 2. Collect the claims to name in the brief:
    - any claims passed as arguments;
    - claims the check reports as no longer matching;
@@ -94,12 +94,14 @@ At ideas depth, first check the reply has a `Prior art:` block listing the queri
    | <…> | [9] | UNREACHABLE | marked *(unverified)*: <why, e.g. GCP page renders with JavaScript> |
    ```
 
+   Record every row the verifier returned, corrected ones included; don't drop any. `<N>` and `<M>` are the table's own counts: its CONFIRMED rows and all its rows. `check-note.py` compares them, so put round details, or the verifier's own count where it differs, after them, e.g. "16 of 21 claims confirmed across both rounds' rows. Round 1: 15 of 18 …".
+
    Every row that isn't CONFIRMED needs a Resolution: corrected, re-cited, or marked *(unverified)*, which the check confirms is in the text. If the section already exists (from `finish` mode or round 2), update the rows for claims checked again, add new ones, delete rows for claims the note no longer makes, and update the date line. A row's Claim must quote the note's current wording, or the check fails it as stale.
 3. **If the conclusion changed**, the rewritten text is the least-checked part of the note, so it gets one more check:
    - This applies on `Bottom line holds: no`, or when missed evidence weakens the recommendation. At ideas depth that includes a `same` prior-art hit on the #1 idea: re-rank the Shortlist, and if a different idea moves to #1, round 2 hunts prior art for it. Revise the Bottom line and Recommendation to match the evidence, set `status: draft`, and commit with the message `research: <title> (conclusion revised, re-verifying)`.
    - Launch `research-verifier` again with `Note: <absolute path>. Today's date: <YYYY-MM-DD>. Round 2.` Tell the user in one line that the conclusion changed and is being re-checked. End your turn.
    - When round 2 returns, apply its fixes and update Verification as above, then carry on from step 4. There is no round 3: if round 2 also says `Bottom line holds: no`, leave the note as draft and say so in the report.
-4. Re-run `check-note.py`. If adding sources or evidence took it over the word limit, cut whole points from Findings or Options, never from the Bottom line, Recommendation or Counter-evidence, nor Shortlist rows or cells.
+4. Re-run `check-note.py`. Once the note has a Verification table, the check allows up to 10 % over the limit with a WARN; leave that as is. Cut only on a FAIL, and then cut whole unverified points from Findings or Options. Never cut a sentence a Verification row quotes, a Project health row, the Bottom line, Recommendation or Counter-evidence, nor Shortlist rows or cells.
 5. **Status**: set `status: final` when all of these hold:
    - the check passes;
    - the latest verifier says `Bottom line holds: yes`;

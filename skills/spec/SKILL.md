@@ -254,4 +254,4 @@ In four lines or fewer:
 - the spike questions by route, naming any *research* claims (for `/research finish <note> "<claim>"`) and *decision* questions left for the user;
 - each spike that ran, with its verdict;
 - total cost and turns across the runs;
-- whether round 2 ran, and that `<results>` should be committed with the spec.
+- whether round 2 ran, that `<results>` should be committed with the spec, and the scratch directory the runs are kept in, which holds each spike's throwaway code, `run.json` and `run.err` until the same spike runs again.

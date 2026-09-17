@@ -1,7 +1,7 @@
 ---
 title: A spike step for /spec, run in sandboxed headless sessions and folded back into the spec
 created: 2026-09-17
-status: draft # draft | reviewed | in-progress | done | superseded
+status: in-progress # draft | reviewed | in-progress | done | superseded
 research: ~/notes/research/2026-09-17-spec-skill-spike-phase.md
 idea: none
 read-at: ac65fbd
@@ -307,8 +307,8 @@ These are estimates from reading the code, not from doing the work; the ordering
 
 ## Open questions
 
-- Should step 7 delete a spike's scratch dir after folding? The Design keeps it until the next run of the same spike clears it.
-- For a house-format repo whose specs live outside `docs/specs/`, is `<spec dir>/spikes/` the right place for results, or should the repo's convention decide?
+- **Should step 7 delete a spike's scratch dir after folding?** No, settled on 2026-09-17. A scratch dir holds the throwaway code, `run.json` and `run.err` behind a verdict, which is what you read when a result looks wrong; the results file carries only what the spiker chose to record. They're small, they sit outside any repo, and 7b clears each one before it runs again, so they don't accumulate per spike. 7e names the path so it can be deleted by hand.
+- **For a house-format repo whose specs live outside `docs/specs/`, where do results go?** `<spec dir>/spikes/`, settled on 2026-09-17. The repo's own convention already decides the spec directory (`skills/spec/SKILL.md:47` at read-at), so results follow the spec wherever it lands, and 7c's `mkdir -p` makes the directory on first use. A repo that wants them elsewhere can say so in its own rules, which override this skill.
 
 ## Cold review
 

@@ -80,3 +80,7 @@ records what each run cost and found. Recent full runs of its five cases cost $1
 **What things cost.** The evaluations spend real tokens, and so do spikes: each spike session is
 capped at $2 and 60 turns, and a spike that fetches anything should be assumed to cost near the cap.
 The cap stops a run only after the turn that crosses it, so a session can overshoot by up to a turn.
+
+## Licence
+
+MIT, so copy what's useful into your own `~/.claude`. See `LICENSE`.

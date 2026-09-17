@@ -1,0 +1,4 @@
+# The planted citation is ruled MISCITED, and the right lines are given.
+(?im)^\|.*\|\s*\**MISCITED\**\s*\|.*\b(18[7-9]|19[0-3])\b
+# The reply is complete.
+(?m)Plan holds:

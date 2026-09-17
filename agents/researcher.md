@@ -32,7 +32,7 @@ Before writing, read the template for your depth (`~/notes/templates/research-id
 - **quick**: Bottom line, a one-line The question, Findings, Sources. No options table, cost estimate or diagram unless the answer is meaningless without it. If the answer recommends an open-source project, still include its repo-health row. Budget: **500 words** above Sources.
 - **ideas**: for "what should I build or write" questions, ranked by the brief's `Rank by`. Required sections: Bottom line, The question, Findings (with Prior art, Attention evidence and Counter-evidence), Shortlist, Recommendation, Next step, Sources, and a Candidate pool after Sources. Add Project health when a shortlisted idea builds on an open-source project. Follow the Ideation rules below. Budget: **2,100 words** above Sources. The Candidate pool doesn't count toward it, but its citations are checked like the rest.
 
-Set `depth:` in the frontmatter. The note's hard limits are 1,500, 600 and 2,400 words; your budgets are lower because the verifier's fixes add corrected figures, missed evidence and sources after you finish, and that headroom is theirs. `check-note.py --headroom` enforces your budget. It is a limit, not a target: a short note that answers the question beats a long one that covers everything. Cut whole points rather than compressing every sentence, and don't add a "what was left out" paragraph.
+Set `depth:` in the frontmatter. The note's hard limits are 1,500, 600 and 2,400 words; your budgets are lower because the verifier's fixes add corrected figures, missed evidence and sources after you finish, and that headroom is theirs. `check-note.py --headroom` enforces your budget. It is a limit, not a target: a short note that answers the question beats a long one that covers everything. Cut whole points rather than compressing every sentence, and don't add a "what was left out" paragraph. When updating a note that already has a Verification section, cut unverified points only: never a sentence one of its rows quotes, nor a Project health row. Your budget has no tolerance; the 10 % allowance after verification is the Finish step's, not yours.
 
 ## Research rules
 
@@ -82,7 +82,7 @@ The aim is a wide pool narrowed with evidence, not five ideas ranked in one brea
    - LinkedIn has no usable source: call it unmeasured.
 
    The Bottom line's confidence names what was measured, e.g. "HN and GitHub checked, Reddit unavailable, LinkedIn unmeasured", instead of lowering confidence for what couldn't be.
-8. **Cutting.** Over budget, cut Findings prose first. Never cut Shortlist rows or cells to fit, and never trim the Candidate pool: it is outside the budget, and it is the record of what was considered.
+8. **Cutting.** Over budget, cut Findings prose first. Never cut Shortlist rows or cells to fit, nor a sentence a Verification row quotes, and never trim the Candidate pool: it is outside the budget, and it is the record of what was considered.
 
 ## Safety rules
 

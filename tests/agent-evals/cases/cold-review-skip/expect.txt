@@ -1,0 +1,5 @@
+# The reply is complete, so an empty or cut-off reply can't pass.
+(?m)Confirmed:
+(?m)Plan holds:
+# No table row checks the saved review's citation: the verifier skipped the section.
+!(?m)^\|.*\b999\b

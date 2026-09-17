@@ -12,6 +12,14 @@ gh, git or one of the skill scripts, and those have per-command limits (GET only
 writes). It's a guard against injected instructions, not a sandbox: data can still leave in a
 GET request's URL.
 
+Environment variables are checked too, because they change what an allowed command runs: git
+runs GIT_EXTERNAL_DIFF through a shell, bash sources BASH_ENV, Python reads PYTHONPATH. A
+`NAME=value` word before a command (or after `env` and the other wrappers) exports NAME to it,
+so only locale and timezone variables may be set that way. A bare `NAME=value` sets a shell
+variable, which later commands don't see unless NAME is already exported, so it's allowed unless
+the name is dangerous (see `dangerous`). `for NAME in`, `read NAME` and `printf -v NAME` assign
+too and get the same check.
+
 Usage, from an agent's frontmatter hooks:
   agent-guard.py bash            Bash tool
   agent-guard.py write <dir>     Write/Edit tools: allow only files under <dir>
@@ -28,12 +36,17 @@ from pathlib import Path
 from typing import NoReturn
 
 HOME = Path.home()
+# Resolved, like the command paths they're compared with, because ~/.claude/skills is a symlink
+# into the claude-skills repo: an unresolved entry would never match.
 SCRIPTS = {
-    HOME / ".claude/skills/research/scripts/repo-health.sh",
-    HOME / ".claude/skills/research/scripts/check-note.py",
-    HOME / ".claude/skills/research/scripts/gcp-skus.sh",
-    HOME / ".claude/skills/research/scripts/reddit-search.sh",
-    HOME / ".claude/skills/spec/scripts/check-spec.py",
+    (HOME / path).resolve()
+    for path in (
+        ".claude/skills/research/scripts/repo-health.sh",
+        ".claude/skills/research/scripts/check-note.py",
+        ".claude/skills/research/scripts/gcp-skus.sh",
+        ".claude/skills/research/scripts/reddit-search.sh",
+        ".claude/skills/spec/scripts/check-spec.py",
+    )
 }
 # Reading and text tools that can't run other programs or write files (the flags that would
 # are checked below).
@@ -42,8 +55,39 @@ READERS = {
     "jq", "diff", "comm", "paste", "column", "nl", "fold", "iconv", "basename", "dirname",
     "realpath", "readlink", "ls", "stat", "file", "du", "echo", "printf", "true", "false",
     "test", "[", "date", "pwd", "cd", "sleep", "base64", "zcat", "gunzip", "gzip", "od",
-    "shasum", "md5", "sha256sum", "sed", "find", ":", "[[",
+    "shasum", "md5", "sha256sum", "sed", "find", ":", "[[", "read",
 }  # fmt: skip
+ASSIGNMENT = re.compile(r"([A-Za-z_]\w*)=(.*)", re.DOTALL)
+NAME = re.compile(r"[A-Za-z_]\w*")
+# The only variables that may be exported to a command with a prefix or `env`: they change
+# locale and time formatting, not what runs.
+PREFIX_OK = {"LC_ALL", "LANG", "TZ"}
+# Variables the shell itself reads, dangerous even when not yet exported.
+SHELL_VARS = {
+    "PATH", "HOME", "IFS", "CDPATH", "GLOBIGNORE", "BASH_ENV", "ENV", "SHELLOPTS", "BASHOPTS",
+    "PS4",
+}  # fmt: skip
+# Names the Bash tool's shell exports but the hook's own environment lacks, so `os.environ`
+# can't catch them (compared on 2026-09-15; CLAUDE* is covered by the prefix below).
+SHELL_EXPORTED = {
+    "AI_AGENT",
+    "COREPACK_ENABLE_AUTO_PIN",
+    "NoDefaultCurrentDirectoryInExePath",
+}
+# Families that git, Python, curl, the dynamic loader, ssh and gh read from the environment,
+# and Claude Code's own session variables.
+DANGEROUS_PREFIXES = (
+    "GIT_",
+    "PYTHON",
+    "CURL_",
+    "LD_",
+    "DYLD_",
+    "SSH_",
+    "GH_",
+    "CLAUDE",
+)
+# `read` options that take a value; -a's value is an array name, so it's checked too.
+READ_ARG_OPTS = set("adinNptu")
 CLOUD = {
     "aws", "gcloud", "gsutil", "bq", "az", "kubectl", "helm", "terraform", "tofu", "eksctl",
     "kubectx", "kubens", "k9s", "pulumi", "doctl", "flux", "argocd", "kustomize",
@@ -184,27 +228,106 @@ def simple_commands(toks):
     return [c for c in commands if c]
 
 
+def dangerous(name):
+    """True if assigning NAME, even without exporting it, can change what later commands run."""
+    return (
+        name in os.environ
+        or name in SHELL_VARS
+        or name in SHELL_EXPORTED
+        or name.startswith(DANGEROUS_PREFIXES)
+        or name.lower().endswith("_proxy")
+    )
+
+
+def prefix_ok(name, command):
+    return (
+        name in PREFIX_OK
+        or name.startswith("LC_")
+        or (
+            name == "IFS" and command == "read"
+        )  # `IFS= read -r line` splits only that read
+    )
+
+
+def check_bare_name(name):
+    """A shell variable being set by a bare assignment, `for`, `read` or `printf -v`."""
+    if not NAME.fullmatch(name):
+        block(f"`{name}` isn't a plain variable name")
+    if dangerous(name) and not prefix_ok(name, None):
+        block(
+            f"`{name}` is a variable the shell or later commands read (it's exported, or it "
+            "controls git, Python, curl, ssh, gh or the shell), so it can change what an "
+            "allowed command runs. Use a lowercase name for your own shell variables"
+        )
+
+
+def check_assignments(names, command, bare):
+    if bare:
+        for name in names:
+            check_bare_name(name)
+        return
+    for name in names:
+        if not prefix_ok(name, command):
+            block(
+                f"`{name}=...` sets an environment variable for the command, and environment "
+                "variables can change what an allowed command runs (GIT_EXTERNAL_DIFF, "
+                "BASH_ENV, PYTHONPATH). Only LC_ALL, LANG, TZ and LC_* may be set this way"
+            )
+
+
 def unwrap(argv):
-    """Strip assignments, shell keywords and wrappers like timeout, returning the real command."""
+    """Strip assignments, shell keywords and wrappers like timeout, returning the real command.
+    Assignments are checked on the way: see the module docstring."""
+    assigned, wrapped = [], False
     while argv:
         word = argv[0]
-        if re.fullmatch(r"[A-Za-z_]\w*=.*", word) or word in KEYWORDS:
+        if m := ASSIGNMENT.fullmatch(word):
+            assigned.append(m.group(1))
+            argv = argv[1:]
+            continue
+        if word in KEYWORDS:
             argv = argv[1:]
             continue
         name = os.path.basename(word)
         if name not in WRAPPERS:
-            return argv
+            break
         if name == "env" and any(a in ("-S", "--split-string") for a in argv[1:]):
             block("`env -S` hides the command it runs")
+        wrapped = True
         with_value, rest = WRAPPERS[name], argv[1:]
-        while rest and (
-            rest[0].startswith("-") or re.fullmatch(r"[A-Za-z_]\w*=.*", rest[0])
-        ):
+        while rest and (rest[0].startswith("-") or ASSIGNMENT.fullmatch(rest[0])):
+            if m := ASSIGNMENT.fullmatch(rest[0]):
+                assigned.append(m.group(1))  # after a wrapper, always exported
             rest = rest[2:] if rest[0] in with_value else rest[1:]
         if name == "timeout" and rest:
             rest = rest[1:]  # the duration
         argv = rest
+    command = os.path.basename(argv[0]) if argv else None
+    check_assignments(assigned, command, bare=not argv and not wrapped)
     return argv
+
+
+def read_variables(args):
+    """The variable names `read` assigns: its operands, and -a's array name."""
+    names, i = [], 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "--":
+            names += args[i + 1 :]
+            break
+        if arg.startswith("-") and len(arg) > 1:
+            for j, letter in enumerate(arg[1:]):
+                if letter in READ_ARG_OPTS:
+                    value = arg[j + 2 :] or (args[i + 1] if i + 1 < len(args) else "")
+                    if not arg[j + 2 :]:
+                        i += 1  # the value was the next word
+                    if letter == "a":
+                        names.append(value)
+                    break
+        else:
+            names.append(arg)
+        i += 1
+    return names
 
 
 def check_gh(args, raw, expands):
@@ -360,7 +483,16 @@ def sed_script_writes(script):
 
 
 def check_reader(name, args):
-    if name == "sed":
+    if name == "read":
+        for var in read_variables(args):
+            check_bare_name(var)
+    elif name == "printf":
+        for k, arg in enumerate(args[:-1]):
+            if arg == "-v":
+                check_bare_name(args[k + 1])
+            elif arg.startswith("-v") and len(arg) > 2:
+                check_bare_name(arg[2:])
+    elif name == "sed":
         if any(a == "--in-place" or re.fullmatch(r"-[a-zA-Z]*i.*", a) for a in args):
             block("`sed -i` edits files; these agents may not write files from Bash")
         scripts = [args[k + 1] for k, a in enumerate(args[:-1]) if a == "-e"]
@@ -396,6 +528,8 @@ def check_command(command, depth=0):
         if not argv or argv[0].startswith("#"):
             continue
         if argv[0] in ("for", "select"):
+            if len(argv) > 1:
+                check_bare_name(argv[1])  # the loop assigns this variable
             continue  # the loop header; its body is checked as separate commands
         word, args = argv[0], argv[1:]
         if "$" in word or "`" in word:

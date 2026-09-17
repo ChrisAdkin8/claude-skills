@@ -10,6 +10,10 @@ quick, 2,400 ideas).
 depth: ideas notes also get their Candidate pool and Shortlist checked: the pool sits after
 Sources, outside the word budget, and its lines are candidates tagged with a lens.
 
+Once a note has a Verification table, its word limit tolerates up to 10 % over with a WARN, so
+the Finish step never has to cut verified content to fit; --headroom has no tolerance. The
+Verification header's first "N of M" must be the table's CONFIRMED count and row count.
+
 Prints FAIL, WARN and INFO lines and exits 1 if anything failed. Checks only what can be
 checked mechanically; whether the sources support the claims is the verifier agent's job.
 """
@@ -304,9 +308,10 @@ def paragraphs(lines):
     return out
 
 
-def check_verification(body, prose, status, fails, warns):
+def check_verification(body, prose, status, fails, warns, pool=()):
     """The Verification section records which claims the verifier checked and how each ended.
-    `/spec` trusts it, so each row must still match the note's text."""
+    `/spec` trusts it, so each row must still match the note's text (the prose, or the Candidate
+    pool at ideas depth), and its header must count the table's rows."""
     ver_at = heading_index(body, "## Verification")
     if ver_at is None:
         if status == "final":
@@ -324,7 +329,31 @@ def check_verification(body, prose, status, fails, warns):
         return
     # Final notes must be consistent; in a draft these are work still to do.
     problems = fails if status == "final" else warns
-    paras = paragraphs(prose)
+    header = next(
+        (
+            line
+            for line in section(body, "## Verification")
+            if line.startswith("Checked on")
+        ),
+        "",
+    )
+    if counts := re.search(r"(\d+) of (\d+)", header):
+        said = (int(counts.group(1)), int(counts.group(2)))
+        confirmed = sum(
+            len(row) >= 3 and row[2].strip("* ").upper() == "CONFIRMED" for row in rows
+        )
+        if said != (confirmed, len(rows)):
+            problems.append(
+                f"Verification header says {said[0]} of {said[1]} confirmed, but the table "
+                f"has {confirmed} CONFIRMED of {len(rows)} rows. Record every row the verifier "
+                "returned, and give the table's counts first in the 'Checked on' line"
+            )
+    else:
+        warns.append(
+            "Verification's 'Checked on' line doesn't say 'N of M claims confirmed'; give the "
+            "table's CONFIRMED count and row count"
+        )
+    paras = paragraphs(prose + list(pool))
     prose_text = " ".join(paras)
     unresolved, stale, unmarked = [], [], []
     for row in rows:
@@ -584,7 +613,7 @@ def main():
     if uncited := sorted(source_nums - cited):
         warns.append(f"sources never cited in the text: {', '.join(map(str, uncited))}")
 
-    check_verification(body, prose, status, fails, warns)
+    check_verification(body, prose, status, fails, warns, pool)
     if depth == "ideas":
         check_ideas(
             body,
@@ -602,7 +631,14 @@ def main():
         if args.headroom
         else "limit"
     )
-    if words > budget:
+    verified = bool(table_rows(section(body, "## Verification") or []))
+    if words > budget and verified and not args.headroom and words <= budget * 1.1:
+        warns.append(
+            f"{words} words above Sources, over the {budget} limit after verification. Up to "
+            "10 % over is allowed once a note is verified: cut only unverified points, never a "
+            "sentence a Verification row quotes"
+        )
+    elif words > budget:
         fails.append(
             f"{words} words above Sources; the {kind} for depth {depth} is {budget}. "
             "Cut, don't summarise the cuts"

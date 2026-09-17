@@ -14,7 +14,7 @@ The work happens in background agents so the user can keep working:
 1. **Frame** (here, under a minute): settle the question, depth and output path.
 2. **Research**: the `researcher` agent writes the note and self-checks it with `check-note.py`.
 3. **Verify**: the `research-verifier` agent, which has not seen the research, checks the claims the recommendation rests on against their sources.
-4. **Finish** (here): apply the verifier's fixes, record what was checked in the note, re-verify once if the conclusion changed, set the status, link the idea, commit. At `ideas` depth, also merge the new attention data into the shared evidence note and file the shortlist as idea notes.
+4. **Finish** (here): apply the verifier's fixes, record what was checked in the note, re-verify once if the conclusion changed, set the status, link the idea, commit. At `ideas` depth, also merge the new attention data into the shared evidence note and file the top three ideas as idea notes.
 
 The research rules live in `~/.claude/agents/researcher.md` and the checking rules in `~/.claude/agents/research-verifier.md`. Don't restate them in briefs; edit those files to change them.
 
@@ -22,7 +22,7 @@ The research rules live in `~/.claude/agents/researcher.md` and the checking rul
 
 - `/research <question or idea path>`: full depth, unless the question is narrow and factual (a limit, a version, a price, how one feature behaves) with no decision to make; then quick. If it asks for ideas, candidates, what to build or write, or a ranking of things to do, use ideas depth, and say in the framing line that you chose it so the user can redirect.
 - `/research quick <question>`: quick depth. Bottom line, a one-line The question, Findings and Sources, 600 words at most.
-- `/research ideas <question or idea path>`: ideas depth. A pool of at least 20 candidates across six lenses, narrowed to a ranked shortlist of 5–7 with a rubric; the verifier hunts for prior art on the top two; the shortlist is filed as idea notes. 2,400 words at most, with the pool after Sources and outside the budget.
+- `/research ideas <question or idea path>`: ideas depth. A pool of at least 20 candidates across six lenses, narrowed to a ranked shortlist of 5–7 with a rubric; the verifier hunts for prior art on the top two; the top three are filed as idea notes. 2,400 words at most, with the pool after Sources and outside the budget.
 - `/research finish <research note path> ["claim" ...]`: skip to verification. Use it when a session ended before a note was verified, after editing a note by hand, or when `/spec` flags a borrowed claim as unverified (pass that claim's wording).
 
 ## 1. Frame (in the conversation)
@@ -61,7 +61,7 @@ The research rules live in `~/.claude/agents/researcher.md` and the checking rul
 
 In `finish` mode, start here:
 
-1. Run the check without `--headroom` (the note already exists, so its hard limit applies). Fix any FAIL lines yourself (cutting, not summarising, if over budget), except Verification rows the check says no longer match the note: those are claims edited since they were checked, so leave them for the verifier.
+1. Run the check without `--headroom` (the note already exists, so its hard limit applies). Fix any FAIL lines yourself. On a length FAIL, cut unverified points only, as step 4 of section 3 says; a WARN for being up to 10 % over after verification is left as is. Leave alone Verification rows the check says no longer match the note: those are claims edited since they were checked, so leave them for the verifier.
 2. Collect the claims to name in the brief:
    - any claims passed as arguments;
    - claims the check reports as no longer matching;
@@ -72,7 +72,7 @@ A note verified before the `## Verification` section existed gets one from this 
 
 ## 3. When the verifier finishes
 
-At ideas depth, first check the reply has a `Prior art:` block listing the queries it ran for #1 and #2, and Novelty rows for both in its table. If either is missing, send it back once with SendMessage: "Your reply has no Prior-art hunt. Run it as your instructions describe, every query against every venue, and reply again in full." If the second reply still lacks it, carry on and say in the report that novelty wasn't independently checked.
+At ideas depth, first check the reply has a `Prior art:` block listing the queries it ran for #1 and #2, and Novelty rows for both in its table. At full depth, if the Bottom line or Recommendation rests on a claim of absence, check the reply has a `Prior art:` block for that claim and a row for it. If either is missing, send it back once with SendMessage: "Your reply has no Prior-art hunt. Run it as your instructions describe, every query against every venue, and reply again in full." If the second reply still lacks it, carry on and say in the report that novelty wasn't independently checked.
 
 1. **Apply its fixes** to the note:
    - WRONG: replace the figure or statement with the corrected one and update or add the source.
@@ -94,12 +94,15 @@ At ideas depth, first check the reply has a `Prior art:` block listing the queri
    | <…> | [9] | UNREACHABLE | marked *(unverified)*: <why, e.g. GCP page renders with JavaScript> |
    ```
 
+   Record every row the verifier returned, corrected ones included; don't drop any. `<N>` and `<M>` are the table's own counts: its CONFIRMED rows and all its rows. `check-note.py` compares them, so put round details, or the verifier's own count where it differs, after them, e.g. "16 of 21 claims confirmed across both rounds' rows. Round 1: 15 of 18 …".
+
    Every row that isn't CONFIRMED needs a Resolution: corrected, re-cited, or marked *(unverified)*, which the check confirms is in the text. If the section already exists (from `finish` mode or round 2), update the rows for claims checked again, add new ones, delete rows for claims the note no longer makes, and update the date line. A row's Claim must quote the note's current wording, or the check fails it as stale.
 3. **If the conclusion changed**, the rewritten text is the least-checked part of the note, so it gets one more check:
    - This applies on `Bottom line holds: no`, or when missed evidence weakens the recommendation. At ideas depth that includes a `same` prior-art hit on the #1 idea: re-rank the Shortlist, and if a different idea moves to #1, round 2 hunts prior art for it. Revise the Bottom line and Recommendation to match the evidence, set `status: draft`, and commit with the message `research: <title> (conclusion revised, re-verifying)`.
    - Launch `research-verifier` again with `Note: <absolute path>. Today's date: <YYYY-MM-DD>. Round 2.` Tell the user in one line that the conclusion changed and is being re-checked. End your turn.
-   - When round 2 returns, apply its fixes and update Verification as above, then carry on from step 4. There is no round 3: if round 2 also says `Bottom line holds: no`, leave the note as draft and say so in the report.
-4. Re-run `check-note.py`. If adding sources or evidence took it over the word limit, cut whole points from Findings or Options, never from the Bottom line, Recommendation or Counter-evidence, nor Shortlist rows or cells.
+   - When round 2 returns, apply its fixes and update Verification as above, then carry on from step 4. If round 2 also says `Bottom line holds: no`, leave the note as draft and say so in the report, with one exception.
+   - **Round 3, for one narrowed absence claim.** If round 2's `no` rests only on an absence claim ("no tool does X", "nothing found") that it narrowed again, apply its narrowing and launch `research-verifier` with `Note: <absolute path>. Today's date: <YYYY-MM-DD>. Round 3: check only "<the narrowed sentence>".` It replies with one row and the usual closing lines. If the row is CONFIRMED and it says `Bottom line holds: yes`, carry on from step 4. If not, leave the note as draft and name the sentence in the report. There is no round 4.
+4. Re-run `check-note.py`. Once the note has a Verification table, the check allows up to 10 % over the limit with a WARN; leave that as is. Cut only on a FAIL, and then cut whole unverified points from Findings or Options. Never cut a sentence a Verification row quotes, a Project health row, the Bottom line, Recommendation or Counter-evidence, nor Shortlist rows or cells.
 5. **Status**: set `status: final` when all of these hold:
    - the check passes;
    - the latest verifier says `Bottom line holds: yes`;
@@ -108,10 +111,10 @@ At ideas depth, first check the reply has a `Prior art:` block listing the queri
    A claim that can't be verified (a JavaScript-only pricing page, a login wall) doesn't hold a note in draft forever, as long as it's visibly marked and the Bottom line doesn't stand on it. Otherwise set `status: draft` (in `finish` mode the note may have been `final`); the report says why.
 6. **Link the idea**, if there was one: in the idea note, set `status: exploring` and add the research note's path to `related`. If the Bottom line recommends against the idea, don't go further: say so in the report and suggest `parked` or `dropped`. That call is the user's.
 7. **Merge the attention evidence** (ideas depth). Append each row of the note's Findings → Attention evidence table to the table in `~/notes/projects/mindshare/attention-evidence.md`, unless a row with the same Source is already there. Use corrected figures where the verifier corrected one. If the new rows change a reading in its Patterns list, or support a new one, update that line and its date. This is the only step that edits the evidence note.
-8. **File the shortlist as idea notes** (ideas depth). For each numbered Shortlist row:
+8. **File the top three as idea notes** (ideas depth). For Shortlist rows #1, #2 and #3 only; the rest of the Shortlist and the Candidate pool stay in the research note as the record:
    - Look for an existing note by title: `grep -il '^title:.*<idea name>' ~/notes/ideas/*.md`. Match titles only: a name can appear in another idea's text, including one filed moments earlier in this step. If there is one, add the research note's path to its `related` and leave the rest alone. If the run started from an idea note and it is the #1 idea, step 6 has already linked it.
-   - Otherwise create `~/notes/ideas/YYYY-MM-DD-short-slug.md` from `~/notes/templates/idea.md`. Set `title` to the idea's name and a few words on what it is, `created` to today, `tags` from the research note, and `related` to the research note's `~` path, plus the repo if one was in scope. Fill the sections from the Shortlist row: The idea from Idea and Share hook; Why from Format evidence; How it might work from Demo and Effort; Open questions from Novelty, as what the prior art leaves open; Risks from Why it flops. Next step is the research note's Next step for the #1 idea and "Not yet planned." for the rest. Drop citation numbers, which mean nothing outside the research note, and link the research note instead.
-   - Set `status: exploring` for the #1 idea and `parked` for the others. Under the title of each parked note, add a line: "Ranked #n in [<research note title>](../research/<file>); parked because <Why it flops, in a few words>." If the research note ends as draft because its Bottom line doesn't hold, park all of them and say why in that line.
+   - Otherwise create `~/notes/ideas/YYYY-MM-DD-short-slug.md` from `~/notes/templates/idea.md`. Set `title` to the idea's name and a few words on what it is, `created` to today, `tags` from the research note, and `related` to the research note's `~` path, plus the repo if one was in scope. Write each section in whole sentences, not pasted cells, drawing on the Shortlist row: The idea from Idea and Share hook; Why from Format evidence; How it might work from Demo and Effort; Open questions from Novelty, as what the prior art leaves open; Risks from Why it flops. Next step is the research note's Next step for the #1 idea and "Not yet planned." for the others. Citation numbers mean nothing outside the research note, so replace each with a markdown link to that source's URL; for a source with no URL (a command, a search, a note), link the research note instead.
+   - Set `status: exploring` for the #1 idea and `parked` for #2 and #3. Under the title of each parked note, add a line: "Ranked #n in [<research note title>](../research/<file>); parked because <Why it flops, in a few words>." If the research note ends as draft because its Bottom line doesn't hold, park all of them and say why in that line.
    - Add every idea note's `~` path to the research note's `related`, then re-run `check-note.py`: each `related` entry must exist.
 9. **Commit** only the files you created or changed in `~/notes` (the research note, the idea note if edited and, at ideas depth, the evidence note and the idea notes filed in step 8): `git -C ~/notes add <files>`, then `git -C ~/notes commit` with message `research: <title>`, following this session's commit attribution rules. Don't push.
 10. **Report** in five lines or fewer (six at ideas depth):

@@ -1,0 +1,7 @@
+Spec: {{CASE}}/spec.md
+Repo: {{REPO}}
+Cite repo: same
+Read at: bb9f240
+Research note: none
+Today's date: {{DATE}}
+Spike results: {{CASE}}/results.md

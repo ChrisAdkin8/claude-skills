@@ -1,7 +1,7 @@
 ---
 title: A spike step for /spec, run in sandboxed headless sessions and folded back into the spec
 created: 2026-09-17
-status: in-progress # draft | reviewed | in-progress | done | superseded
+status: done # draft | reviewed | in-progress | done | superseded
 research: ~/notes/research/2026-09-17-spec-skill-spike-phase.md
 idea: none
 read-at: ac65fbd

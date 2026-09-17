@@ -1,0 +1,5 @@
+# The figure the results don't show (0.4 s) is ruled INHERITED or WRONG.
+(?im)^\|.*0\.4.*\|\s*\**(INHERITED|WRONG)\**\s*\|
+# The reply is complete, so an empty or cut-off reply can't pass.
+(?m)Confirmed:
+(?m)Plan holds:

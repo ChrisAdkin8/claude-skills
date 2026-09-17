@@ -55,3 +55,36 @@ Second run on 2026-09-15, on the verifier files as committed at `56a2208`:
 Total $1.21. The difference W3 makes is visible in `absence-claim`'s reply, not its grade: it
 now carries a `Prior art:` block listing the four queries run on GitHub, arXiv and HN and each
 hit classified `same`, `overlaps` or `adjacent`. The baseline reply had neither.
+
+## After the spike step (2026-09-17)
+
+Third run on 2026-09-17, after `/spec`'s step 7 and the spike-results rule in `spec-verifier`
+(W2 to W4 of `docs/specs/2026-09-17-spec-spike-phase.md`), on the agent and skill files as
+committed at `bb9f240`, with the new `spike-inherited` case. All five cases in parallel, on the
+default model, 65 s wall-clock.
+
+| Case | Agent | Result | Turns | Cost |
+|---|---|---|---:|---:|
+| wrong-figure | research-verifier | PASS | 3 | $0.13 |
+| absence-claim | research-verifier | PASS | 10 | $0.47 |
+| spec-miscite | spec-verifier | PASS | 5 | $0.20 |
+| cold-review-skip | spec-verifier | PASS | 5 | $0.20 |
+| spike-inherited | spec-verifier | PASS | 7 | $0.22 |
+
+Total $1.22. In `spike-inherited` the verifier read the `Spike results:` file, ruled the planted
+"about 0.4 s per run" INHERITED against the recorded `real 0.09`, `0.08` and `0.10`, and
+confirmed the `Answered: EXPECTED` verdict and the run count. The case wasn't run against the
+verifier before its spike-results rule, so it's a regression check, not a red-to-green one.
+
+### Spike 1's command
+
+The spiker's launch, as `skills/spec/scripts/run-spike.sh` runs it from the scratch directory
+(`docs/specs/spikes/2026-09-17-spec-spike-phase-results.md`, S1):
+
+```
+claude -p --model sonnet --append-system-prompt-file ~/.claude/skills/spec/spiker.md --settings settings.json --allowedTools "Read Grep Glob Bash Write(./**) Edit(./**)" --max-budget-usd 2 --max-turns 60 --output-format json --strict-mcp-config --no-session-persistence "$(cat brief.md)" < /dev/null > run.json 2> run.err
+```
+
+Spike 1 cost $1.54 in all: three settings versions at $0.51, $0.50 and $0.27, the budget-cap run
+at $0.10 (capped at $0.05, ended at $0.097) and the git follow-up at $0.16. A smoke test of
+`/spec spike` on a one-file spec after W2 ran its spiker for $0.14 to $0.15 in 6 to 7 turns.

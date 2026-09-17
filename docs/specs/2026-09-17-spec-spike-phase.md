@@ -132,7 +132,7 @@ claude -p --model sonnet --append-system-prompt-file ~/.claude/skills/spec/spike
 
 A bare `cd <scratch> && claude -p …` can't be pre-approved: Claude Code refuses a `cd` outside the session's working directories, and the `$(cat brief.md)` substitution can't be statically analysed (spike 2). Each run's completion notification tells the main session when to fold. `--max-budget-usd` stops a run only after the turn that crosses it: a $0.05 cap ended at $0.097 (spike 1), so a run can overshoot $2 by up to a turn.
 
-`skills/spec/spike-settings.json` (W1, as corrected by spike 1 in `110b9ba` and `1810bd8`) is literally:
+`skills/spec/spike-settings.json` (W1, as corrected by spike 1 in `110b9ba` and `1810bd8`, and by W6 for `helm`) is literally:
 
 ```json
 {
@@ -152,7 +152,10 @@ A bare `cd <scratch> && claude -p …` can't be pre-approved: Claude Code refuse
       "Edit(~/notes/**)", "Edit(~/code/**)", "Edit(~/.claude/**)", "Edit(~/.ssh/**)", "Edit(~/.aws/**)",
       "Write(~/.zshrc)", "Write(~/.zprofile)", "Write(~/.bashrc)", "Write(~/.profile)",
       "Edit(~/.zshrc)", "Edit(~/.zprofile)", "Edit(~/.bashrc)", "Edit(~/.profile)",
-      "Bash(aws *)", "Bash(gcloud *)", "Bash(az *)", "Bash(kubectl *)", "Bash(helm *)", "Bash(terraform *)", "Bash(docker *)"
+      "Bash(aws *)", "Bash(gcloud *)", "Bash(az *)", "Bash(kubectl *)", "Bash(terraform *)", "Bash(docker *)",
+      "Bash(helm install *)", "Bash(helm upgrade *)", "Bash(helm uninstall *)", "Bash(helm rollback *)",
+      "Bash(helm test *)", "Bash(helm status *)", "Bash(helm list *)", "Bash(helm get *)", "Bash(helm history *)",
+      "Bash(helm status)", "Bash(helm list)", "Bash(helm get)", "Bash(helm history)"
     ]
   }
 }
@@ -232,6 +235,16 @@ Two layers contain the spiker (spike 1). Bash is held by the sandbox: reads of t
 - **Change:** Add `tests/agent-evals/cases/spike-inherited/` for `spec-verifier`: `agent.txt`, `brief.txt` (with a `Spike results:` line pointing at the case directory's `results.md`, through run.sh's CASE placeholder), a `spec.md` whose `Answered:` line claims a figure that `results.md`'s output doesn't show, and `expect.txt` requiring an INHERITED or WRONG row for that figure. The case format follows `tests/agent-evals/run.sh:9-12`. Run all cases with `run.sh`, since W2 and W3 change a skill and an agent file, and add a dated section to `tests/agent-evals/BASELINE.md` with every case's result and spike 1's command and cost.
 - **Files:** `tests/agent-evals/cases/spike-inherited/{agent.txt,brief.txt,spec.md,results.md,expect.txt}` (new), `tests/agent-evals/BASELINE.md`.
 - **Done when:** `tests/agent-evals/run.sh` prints `PASS spike-inherited` and `5 of 5 passed`, and `BASELINE.md` has a section dated on the run day with all five rows.
+
+### W6: The spike sandbox allows local `helm` rendering
+
+- **Change:** In `skills/spec/spike-settings.json`, replace the `Bash(helm *)` deny with denies on the subcommands that reach a cluster (`install`, `upgrade`, `uninstall`, `rollback`, `test`, `status`, `list`, `get`, `history`, each with and without arguments, since a pattern with `*` doesn't match the bare command). `helm template`, `dependency`, `show` and `repo` are then allowed, so a spike can render a chart locally. The blanket deny came from the cloud-CLI list, but `helm template` reaches nothing: it renders in the working directory, which is what a render-check spike has to do. Found on 2026-09-17 by triaging a real spec (`~/code/github.com/perfectscale-gitops-pr/docs/specs/2026-09-13-rightsizing-pr-action.md`), whose question 6 asks whether `helm template` is deterministic; it would have come back BLOCKED. Update Design's literal JSON to match.
+- **Files:** `skills/spec/spike-settings.json`, this spec.
+- **Done when:**
+  - `python3 -m json.tool skills/spec/spike-settings.json` exits 0.
+  - `grep -c '"Bash(helm \*)"' skills/spec/spike-settings.json` prints `0`, and `grep -c 'Bash(helm install \*)' skills/spec/spike-settings.json` prints `1`.
+  - The JSON block in this spec's Design and the file are identical: `diff <(sed -n '/^{$/,/^}$/p' <(sed -n '/```json/,/```/p' docs/specs/2026-09-17-spec-spike-phase.md)) skills/spec/spike-settings.json` is empty.
+  - A spike whose brief asks it to run `helm template` on a local chart reports a verdict rather than BLOCKED on a permission denial.
 
 ## Effort
 

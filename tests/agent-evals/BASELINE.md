@@ -88,3 +88,38 @@ claude -p --model sonnet --append-system-prompt-file ~/.claude/skills/spec/spike
 Spike 1 cost $1.54 in all: three settings versions at $0.51, $0.50 and $0.27, the budget-cap run
 at $0.10 (capped at $0.05, ended at $0.097) and the git follow-up at $0.16. A smoke test of
 `/spec spike` on a one-file spec after W2 ran its spiker for $0.14 to $0.15 in 6 to 7 turns.
+
+## After the spiker and Guard changes (2026-09-17)
+
+Fourth run on 2026-09-17, on the agent and skill files as committed at `3e7e3e7`: the spiker's
+Go-CLI fetching rule and 7a's host guidance (W6), and the narrowed Guard (W8). Re-run because
+`skills/spec/SKILL.md` and `skills/spec/spiker.md` changed, as `README.md` asks. All five cases
+in parallel, on the default model.
+
+| Case | Agent | Result | Turns | Cost |
+|---|---|---|---:|---:|
+| wrong-figure | research-verifier | PASS | 8 | $0.26 |
+| absence-claim | research-verifier | PASS | 18 | $0.72 |
+| spec-miscite | spec-verifier | PASS | 9 | $0.25 |
+| cold-review-skip | spec-verifier | PASS | 10 | $0.29 |
+| spike-inherited | spec-verifier | PASS | 13 | $0.31 |
+
+Total $1.82, against $1.22 for the same five cases earlier the same day at `bb9f240`. Every case
+took more turns than that run, on unchanged case files and unchanged agent instructions, so the
+spread is run-to-run variance rather than anything the changes did; neither changed file is read
+by these agents.
+
+## Spikes on a real spec
+
+Step 7 ran on `~/code/github.com/perfectscale-gitops-pr/docs/specs/2026-09-13-rightsizing-pr-action.md`
+on 2026-09-17, which is where W6, W7 and W8 came from. Two spikes ran, both `--model sonnet`
+through `run-spike.sh`:
+
+| Spike | Question | Verdict | Turns | Cost |
+|---|---|---|---:|---:|
+| S5 | Does ruamel give correct positions for every key in a flow map? | EXPECTED | 32 | $0.84 |
+| S6 | Is `helm template` deterministic? | DIFFERENT | 57 | $1.64 |
+
+S6 came within $0.36 of its $2 cap, at 57 of 60 turns, because it had to work around the
+sandbox's TLS failure for `helm` and assemble the chart's subcharts by hand. A spike that fetches
+anything should be assumed to cost near the cap.

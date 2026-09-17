@@ -7,8 +7,9 @@ spikes in. Notes they write live in `~/notes`.
 ## Layout
 
 - `skills/`: `idea`, `research` (with `scripts/check-note.py`, `repo-health.sh`, `gcp-skus.sh`,
-  `reddit-search.sh`) and `spec` (with `scripts/check-spec.py`, `template.md`, and `spiker.md` and
-  `spike-settings.json`, the rules and sandbox settings for its spike sessions).
+  `reddit-search.sh`) and `spec` (with `scripts/check-spec.py`, `template.md`, and `spiker.md`,
+  `spike-settings.json` and `scripts/run-spike.sh`, the rules, sandbox settings and launcher for
+  its spike sessions).
 - `agents/`: `researcher`, `research-verifier`, `spec-verifier`, `spec-reviewer`.
 - `hooks/agent-guard.py`: the PreToolUse guard the subagents' Bash and Write calls go through. The
   spiker isn't a subagent and doesn't run under it; its sandbox settings contain it.

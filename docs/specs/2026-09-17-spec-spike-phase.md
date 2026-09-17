@@ -246,6 +246,15 @@ Two layers contain the spiker (spike 1). Bash is held by the sandbox: reads of t
   - The JSON block in this spec's Design and the file are identical: `diff <(sed -n '/^{$/,/^}$/p' <(sed -n '/```json/,/```/p' docs/specs/2026-09-17-spec-spike-phase.md)) skills/spec/spike-settings.json` is empty.
   - A spike whose brief asks it to run `helm template` on a local chart reports a verdict rather than BLOCKED on a permission denial.
 
+### W7: Step 7's folded lines don't count towards the word limit
+
+- **Change:** In `skills/spec/scripts/check-spec.py`, leave the lines step 7 folds under a spike question (`Route:`, `Changes:`, `Expect:`, `Box:`, `Answered:`, `Partly answered:`, `Open:`) out of the word count, as a saved `## Cold review` already is (`skills/spec/scripts/check-spec.py:133-138` at read-at). They record a round that has happened, so a fold shouldn't push a spec over the limit. Found on 2026-09-17 folding two spikes into `~/code/github.com/perfectscale-gitops-pr/docs/specs/2026-09-13-rightsizing-pr-action.md`: it was 3,947 words, and step 7's 16 lines took it to 4,090, a FAIL, so 7d's "run `check-spec.py` until it passes" could only be met by cutting the author's prose or splitting their spec. Prose the fold rewrites elsewhere still counts; only the folded lines are exempt. Add tests to `tests/test_check_spec.py`.
+- **Files:** `skills/spec/scripts/check-spec.py`, `tests/test_check_spec.py`.
+- **Done when:**
+  - A spec with 180 words of folded spike lines counts fewer than 20 words more than the same spec without them.
+  - A spec over 4,000 words on its own prose still FAILs.
+  - `python3 -m unittest discover -s tests` passes.
+
 ## Effort
 
 | Item | Estimate | Depends on |

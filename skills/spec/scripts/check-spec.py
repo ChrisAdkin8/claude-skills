@@ -63,6 +63,12 @@ NOTE_PATH = re.compile(r"~/notes/[\w./-]+\.md")
 # The indented lines /spec's step 7 folds under a spike question, and the repo-relative
 # results files they cite.
 SPIKE_ANSWER = re.compile(r"\s*(?:Answered|Partly answered|Open):")
+# Every line step 7 folds under a spike question. Like a saved cold review, they record a round
+# that has happened, so they're left out of the word count: a fold shouldn't push an author's
+# spec over the limit, when the only way back under would be cutting their prose.
+SPIKE_FOLD = re.compile(
+    r"\s+(?:Route|Changes|Expect|Box|Answered|Partly answered|Open):"
+)
 RESULTS_PATH = re.compile(r"(?<![\w./~-])[\w.-][\w./-]*/spikes/[\w.-]+-results\.md")
 WORK_ITEM = re.compile(r"^#{2,3}\s+W(\d+)\b")
 DONE_WHEN = re.compile(r"done when", re.IGNORECASE)
@@ -566,9 +572,19 @@ def main():
     if ACCOUNT_ID.search("\n".join(body)):
         warns.append("contains a 12-digit number: make sure it isn't an AWS account ID")
 
-    words = sum(len(l.split()) for l in body if not SEPARATOR.fullmatch(l))
+    folded = [
+        l for l in section(body, "## Spike questions") or [] if SPIKE_FOLD.match(l)
+    ]
+    words = sum(
+        len(l.split()) for l in body if not SEPARATOR.fullmatch(l) and l not in folded
+    )
     status = fields.get("status", "draft")
-    if templated and words > WORD_FAIL and status in ("draft", "reviewed") and not review:
+    if (
+        templated
+        and words > WORD_FAIL
+        and status in ("draft", "reviewed")
+        and not review
+    ):
         fails.append(
             f"{words} words; the limit is {WORD_FAIL}. Split it into specs that each land on their own"
         )

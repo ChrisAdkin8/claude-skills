@@ -154,6 +154,32 @@ class SpikeResults(unittest.TestCase):
         self.assertEqual(result, "RESULT: PASS", out)
         self.assertRegex(out, r"WARN: spike question 1 has more than one")
 
+    def test_spike_lines_are_not_counted(self):
+        # Step 7's folded lines are a record of the spike round, like the cold review: they
+        # shouldn't push an author's spec over the word limit.
+        base_words = words(check(self.base)[0])
+        entry = (
+            "   Route: spike\n"
+            "   Changes: " + " ".join(["filler"] * 60) + "\n"
+            "   Expect: " + " ".join(["filler"] * 60) + "\n"
+            "   Box: $2, 60 turns; hosts: none\n"
+            f"   Answered: {' '.join(['filler'] * 60)} (spike S1, `{EXISTING_RESULTS}`)\n"
+        )
+        out, result = check(with_spikes(self.base, entry))
+        self.assertEqual(result, "RESULT: PASS", out)
+        # Only the question line itself is counted, not the folded lines.
+        self.assertLess(words(out) - base_words, 20, out)
+
+    def test_long_spec_still_fails_without_spike_lines(self):
+        pad = " ".join(["filler"] * 4200)
+        text = self.base.replace(
+            "Nothing to cite, because read-at is none.",
+            f"Nothing to cite, because read-at is none. {pad}",
+        )
+        out, result = check(text)
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertRegex(out, r"FAIL: \d+ words; the limit is 4000")
+
     def test_one_answer_line_per_question_does_not_warn(self):
         entry = f"   Route: spike\n   Answered: it runs (spike S1, `{EXISTING_RESULTS}`)\n"
         text = with_spikes(self.base, entry).replace(

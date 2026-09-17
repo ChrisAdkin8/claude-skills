@@ -19,6 +19,7 @@ line says what the spec claims is the spec-verifier agent's job.
 """
 
 import argparse
+import collections
 import re
 import subprocess
 from pathlib import Path
@@ -59,6 +60,10 @@ CODE_EXT = re.compile(
     r"\.(py|sh|bash|md|ya?ml|json|toml|tf|tfvars|hcl|go|rs|ts|tsx|js|jsx|tpl|txt|cfg|ini|mk|sql|rb|java|kt|c|h|cpp)$"
 )
 NOTE_PATH = re.compile(r"~/notes/[\w./-]+\.md")
+# The indented lines /spec's step 7 folds under a spike question, and the repo-relative
+# results files they cite.
+SPIKE_ANSWER = re.compile(r"\s*(?:Answered|Partly answered|Open):")
+RESULTS_PATH = re.compile(r"(?<![\w./~-])[\w.-][\w./-]*/spikes/[\w.-]+-results\.md")
 WORK_ITEM = re.compile(r"^#{2,3}\s+W(\d+)\b")
 DONE_WHEN = re.compile(r"done when", re.IGNORECASE)
 ACCEPTANCE = "## Acceptance criteria"
@@ -509,6 +514,33 @@ def main():
     for ref in sorted(set(NOTE_PATH.findall(text))):
         if not Path(ref).expanduser().is_file():
             fails.append(f"links a note that doesn't exist: {ref}")
+
+    # Spike answers must cite results files that exist. Only the answer lines step 7 writes
+    # count: a results path in prose (a Design, say) may name a file no spike has written yet.
+    for path in sorted(
+        {
+            p
+            for line in body
+            if SPIKE_ANSWER.match(line)
+            for p in RESULTS_PATH.findall(line)
+        }
+    ):
+        if not (repo / path).is_file():
+            fails.append(
+                f"a spike answer cites a results file that doesn't exist: {path}"
+            )
+    question, answers = None, collections.Counter()
+    for line in section(body, "## Spike questions") or []:
+        numbered = re.match(r"(\d+)\.\s", line)
+        if numbered:
+            question = numbered.group(1)
+        elif question and SPIKE_ANSWER.match(line):
+            answers[question] += 1
+    for q in sorted((q for q, n in answers.items() if n > 1), key=int):
+        warns.append(
+            f"spike question {q} has more than one Answered:, Partly answered: or Open: line; "
+            "keep the one that stands"
+        )
 
     # Leftover template text.
     if templated:

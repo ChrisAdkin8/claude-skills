@@ -1,4 +1,4 @@
-"""Tests for skills/spec/scripts/check-spec.py's handling of a saved cold review.
+"""Tests for skills/spec/scripts/check-spec.py's handling of a saved cold review and spike results.
 
 Run with: python3 -m unittest discover -s ~/code/github.com/claude-skills/tests
 """
@@ -98,6 +98,70 @@ class ColdReview(unittest.TestCase):
         out, result = check(with_review(self.base, REVIEW + f"\nleaked {token}\n"))
         self.assertEqual(result, "RESULT: FAIL", out)
         self.assertIn("GitHub token", out)
+
+
+EXISTING_RESULTS = "docs/specs/spikes/2026-09-17-spec-spike-phase-results.md"
+
+
+def with_spikes(text, entry):
+    """The fixture with its Spike questions section replaced by one question and these lines."""
+    question = "1. Does the checker run? Experiment: run it once.\n" + entry
+    return text.replace("## Spike questions\n\nNone.", "## Spike questions\n\n" + question)
+
+
+class SpikeResults(unittest.TestCase):
+    def setUp(self):
+        self.base = FIXTURE.read_text()
+        self.assertIn("## Spike questions\n\nNone.", self.base)
+
+    def test_missing_results_file_fails(self):
+        for prefix in ("Answered:", "Partly answered:", "Open:"):
+            with self.subTest(prefix=prefix):
+                entry = f"   {prefix} it runs (spike S1, `docs/specs/spikes/nope-results.md`)\n"
+                out, result = check(with_spikes(self.base, entry))
+                self.assertEqual(result, "RESULT: FAIL", out)
+                self.assertRegex(out, r"FAIL: .*spikes/nope-results.md")
+
+    def test_existing_results_file_passes(self):
+        entry = f"   Answered: it runs (spike S1, `{EXISTING_RESULTS}`)\n"
+        self.assertTrue((ROOT / EXISTING_RESULTS).is_file())
+        out, result = check(with_spikes(self.base, entry))
+        self.assertEqual(result, "RESULT: PASS", out)
+
+    def test_results_line_in_review_not_checked(self):
+        review = REVIEW + "\n   Answered: it runs (spike S1, `docs/specs/spikes/nope-results.md`)\n"
+        out, result = check(with_review(self.base, review))
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertNotIn("nope-results", out)
+
+    def test_results_path_on_other_lines_not_checked(self):
+        # A spec may name a results path in prose, e.g. its Design, before any spike has run.
+        text = self.base.replace(
+            "Nothing to cite, because read-at is none.",
+            "Nothing to cite, because read-at is none. Results go to "
+            "`docs/specs/spikes/nope-results.md`.",
+        )
+        out, result = check(text)
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertNotIn("nope-results", out)
+
+    def test_two_answer_lines_warn(self):
+        entry = (
+            f"   Answered: it runs (spike S1, `{EXISTING_RESULTS}`)\n"
+            "   Open: needs docker\n"
+        )
+        out, result = check(with_spikes(self.base, entry))
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertRegex(out, r"WARN: spike question 1 has more than one")
+
+    def test_one_answer_line_per_question_does_not_warn(self):
+        entry = f"   Route: spike\n   Answered: it runs (spike S1, `{EXISTING_RESULTS}`)\n"
+        text = with_spikes(self.base, entry).replace(
+            "## Open questions", "2. Is it fast? Experiment: time it.\n   Open: needs docker\n\n## Open questions", 1
+        )
+        out, result = check(text)
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertNotIn("more than one", out)
 
 
 if __name__ == "__main__":

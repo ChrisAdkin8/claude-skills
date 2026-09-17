@@ -11,6 +11,10 @@
   "permissions": {
     "deny": [
       "Read(~/notes/**)", "Read(~/code/**)", "Read(~/.claude/**)", "Read(~/.ssh/**)", "Read(~/.aws/**)",
+      "Write(~/notes/**)", "Write(~/code/**)", "Write(~/.claude/**)", "Write(~/.ssh/**)", "Write(~/.aws/**)",
+      "Edit(~/notes/**)", "Edit(~/code/**)", "Edit(~/.claude/**)", "Edit(~/.ssh/**)", "Edit(~/.aws/**)",
+      "Write(~/.zshrc)", "Write(~/.zprofile)", "Write(~/.bashrc)", "Write(~/.profile)",
+      "Edit(~/.zshrc)", "Edit(~/.zprofile)", "Edit(~/.bashrc)", "Edit(~/.profile)",
       "Bash(aws *)", "Bash(gcloud *)", "Bash(az *)", "Bash(kubectl *)", "Bash(helm *)", "Bash(terraform *)", "Bash(docker *)"
     ]
   }

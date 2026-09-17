@@ -1,16 +1,19 @@
 # claude-skills
 
 Personal Claude Code skills, subagents and hooks: `/idea`, `/research` and `/spec`, the agents they
-launch, and the guard hook those agents run under. Notes they write live in `~/notes`.
+launch, the guard hook the subagents run under, and the sandboxed headless sessions `/spec` runs
+spikes in. Notes they write live in `~/notes`.
 
 ## Layout
 
 - `skills/`: `idea`, `research` (with `scripts/check-note.py`, `repo-health.sh`, `gcp-skus.sh`,
-  `reddit-search.sh`) and `spec` (with `scripts/check-spec.py` and `template.md`).
+  `reddit-search.sh`) and `spec` (with `scripts/check-spec.py`, `template.md`, and `spiker.md` and
+  `spike-settings.json`, the rules and sandbox settings for its spike sessions).
 - `agents/`: `researcher`, `research-verifier`, `spec-verifier`, `spec-reviewer`.
-- `hooks/agent-guard.py`: the PreToolUse guard every agent's Bash and Write calls go through.
+- `hooks/agent-guard.py`: the PreToolUse guard the subagents' Bash and Write calls go through. The
+  spiker isn't a subagent and doesn't run under it; its sandbox settings contain it.
 - `tests/`: deterministic tests for the guard and both checkers, a transcript replay for the guard,
-  and `agent-evals/`, which runs the verifiers on planted defects.
+  and `agent-evals/`, which runs the verifier agents on planted defects.
 
 ## Install
 

@@ -1,0 +1,18 @@
+{
+  "sandbox": {
+    "enabled": true,
+    "allowUnsandboxedCommands": false,
+    "network": { "allowedDomains": [], "strictAllowlist": true },
+    "filesystem": {
+      "denyRead": ["~/notes", "~/code", "~/.claude", "~/.ssh", "~/.aws", "~/.config/gh"],
+      "allowWrite": ["~/.cache/uv"]
+    }
+  },
+  "permissions": {
+    "deny": [
+      "Read(~/notes/**)", "Read(~/code/**)", "Read(~/.claude/**)", "Read(~/.ssh/**)", "Read(~/.aws/**)",
+      "Write(~/**)", "Edit(~/**)",
+      "Bash(aws *)", "Bash(gcloud *)", "Bash(az *)", "Bash(kubectl *)", "Bash(helm *)", "Bash(terraform *)", "Bash(docker *)"
+    ]
+  }
+}

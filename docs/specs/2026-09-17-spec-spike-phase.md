@@ -72,7 +72,7 @@ Read at `ac65fbd` on 2026-09-17. The research note was read at the same commit, 
 - Read from the [Sandboxing](https://code.claude.com/docs/en/sandboxing) page on 2026-09-17 while writing this spec, not through the research note, so *(unverified)* beyond what the note's Verification table covers; spike 1 tests the parts W1's JSON relies on:
   - The keys are `sandbox.enabled`, `sandbox.allowUnsandboxedCommands`, `sandbox.network.allowedDomains`, `sandbox.network.strictAllowlist` (honoured from CLI `--settings`, v2.1.219+), `sandbox.filesystem.allowWrite`, `denyRead` and `allowRead`, and `sandbox.credentials`. `permissions.blockReadsOutsideWorkingDirectories` also exists.
   - The sandbox enforces its boundary on Bash, PowerShell and Monitor commands only. The default read policy still allows `~/.ssh` and `~/.aws/credentials`.
-  - `docker` is incompatible with the sandbox, and Go CLIs such as `gh` may fail TLS verification under Seatbelt.
+  - `docker` is incompatible with the sandbox, and Go CLIs such as `gh` may fail TLS verification under Seatbelt. Spike S6 of the PerfectScale spec observed this for `helm` on 2026-09-17: every host failed with `x509: OSStatus -26276` while `curl` succeeded (W6).
   - A relative path such as `.` in these settings resolves against the settings file's directory.
 - The AskUserQuestion tool takes 1–4 questions with 2–4 options each *(unverified: its tool schema as seen in this session on 2026-09-17; nothing in the repo records it)*.
 - `claude --help` (2.1.274) lists `--append-system-prompt[-file]`, `--settings`, `--max-budget-usd`, `--allowedTools` and `--no-session-persistence`. `uv` and `python3` are in `/opt/homebrew/bin`, `claude` is in `~/.local/bin`, and uv's cache is `~/.cache/uv` (`which` and `ls` on 2026-09-17).
@@ -245,6 +245,7 @@ Two layers contain the spiker (spike 1). Bash is held by the sandbox: reads of t
   - `grep -c '"Bash(helm \*)"' skills/spec/spike-settings.json` prints `0`, and `grep -c 'Bash(helm install \*)' skills/spec/spike-settings.json` prints `1`.
   - The JSON block in this spec's Design and the file are identical: `diff <(sed -n '/^{$/,/^}$/p' <(sed -n '/```json/,/```/p' docs/specs/2026-09-17-spec-spike-phase.md)) skills/spec/spike-settings.json` is empty.
   - A spike whose brief asks it to run `helm template` on a local chart reports a verdict rather than BLOCKED on a permission denial.
+- **What a spike still can't do with `helm`.** Observed by spike S6 of the PerfectScale spec on 2026-09-17: in the sandbox, `helm` fails TLS on every host, allowlisted or not, with `tls: failed to verify certificate: x509: OSStatus -26276`, while `curl` and Python reached the same hosts. This is the [Sandboxing](https://code.claude.com/docs/en/sandboxing) page's warning about Go CLIs under Seatbelt, now observed rather than *(unverified)*. So `helm repo add`, `helm pull` and OCI subcharts are unusable; a chart has to arrive by `git clone` or `curl`, and only local rendering works. GitHub also serves release assets from `release-assets.githubusercontent.com`, so an allowlist naming `objects.githubusercontent.com` misses them. Both are recorded in `skills/spec/spiker.md` rule 6 and in 7a's host guidance.
 
 ### W7: Step 7's folded lines don't count towards the word limit
 
@@ -254,6 +255,15 @@ Two layers contain the spiker (spike 1). Bash is held by the sandbox: reads of t
   - A spec with 180 words of folded spike lines counts fewer than 20 words more than the same spec without them.
   - A spec over 4,000 words on its own prose still FAILs.
   - `python3 -m unittest discover -s tests` passes.
+
+### W8: A question left Open can be spiked again
+
+- **Change:** In `skills/spec/SKILL.md`, narrow step 7's Guard: refuse when a spike question carries an `Answered:` or `Partly answered:` line, but let a question whose only folded line is `Open:` run again, since nothing was learned and no round was spent on it. On such a re-run, 7a triages only those questions and replaces each `Open:` line instead of adding a second, which W4's WARN already guards. The four-spike cap and the per-spike box still bound the cost. Found on 2026-09-17: S6 of the PerfectScale spec was left `Open:` because the settings denied `helm`, and once W6 fixed that, the only way to run it was by hand, which is what step 7 exists to replace. It also unblocks the seven `Open:` questions in rag-forge's specs.
+- **Files:** `skills/spec/SKILL.md`.
+- **Done when:**
+  - `grep -c 'whose only folded line is .Open:. is the exception' skills/spec/SKILL.md` prints `1`.
+  - Step 7 run on this spec, whose questions all carry `Answered:` lines, still refuses.
+  - Step 7 run on a spec whose only folded lines are `Open:` triages those questions rather than refusing.
 
 ## Effort
 

@@ -195,7 +195,7 @@ In `spike` mode, start here. Take the repo from the spec's location, and `cite-r
 - Read files with the Read tool, never `cat` or `ls`; make files with the Write tool, never `cp` or a redirect.
 - If a call this step needs is refused anyway, stop step 7 and tell the user which call was refused and why. Don't work around it with another command, and never build or copy `src/` or any other scratch file by another route: a spike run on anything but the export at read-at answers the wrong question.
 
-**Guard.** If any spike question already has an indented `Route:`, `Answered:`, `Partly answered:` or `Open:` line, refuse and say why: one spike round per spec, and that includes spikes run by hand.
+**Guard.** If any spike question already has an indented `Answered:` or `Partly answered:` line, refuse and say why: one spike round per spec, and that includes spikes run by hand. A question whose only folded line is `Open:` is the exception: nothing was learned, so it can run again. In that case triage only those questions, leave the answered ones alone, and replace each one's `Open:` line rather than adding a second line under it.
 
 ### 7a. Triage
 
@@ -205,13 +205,15 @@ Give each question in `## Spike questions` one route:
 - *decision*: it's a preference, so it's the user's to answer;
 - *deferred*: it needs credentials, a cloud account, a cluster, `docker`, code a work item hasn't built, or the repo's code when read-at is `none`.
 
-If there are *spike* routes, ask one AskUserQuestion multiSelect question listing them, recommended first, up to four. With only one, add a second option, "Skip spikes", since a question needs at least two. With more than four, the rest become *deferred* with `Open: over the four-spike limit`. A *spike* the user doesn't pick gets `Open: not picked`.
+On a re-run allowed by the Guard, the questions to triage are only those whose folded line is `Open:`. If there are *spike* routes, ask one AskUserQuestion multiSelect question listing them, recommended first, up to four. With only one, add a second option, "Skip spikes", since a question needs at least two. With more than four, the rest become *deferred* with `Open: over the four-spike limit`. A *spike* the user doesn't pick gets `Open: not picked`.
 
 Edit the spec. Under each chosen question, add these indented lines:
 - `Route: spike`;
 - `Changes:` the work items and quoted claims that change with the answer;
 - `Expect:` what you expect the experiment to show, written now, before it runs;
 - `Box: $2, 60 turns; hosts: <list, or none>`.
+
+List every host the experiment reaches, including redirect targets: GitHub serves release assets from `release-assets.githubusercontent.com`, not `objects.githubusercontent.com`. A spiker can't use `helm`, `gh` or another Go CLI to fetch over the network at all — they fail TLS in the sandbox — so an experiment that needs a chart or a release fetches it with `git` or `curl` and works on the local copy (`skills/spec/spiker.md`, rule 6).
 
 Under each of the others, add `Route: research`, `Route: decision` or `Open: <why>`. If no spike was chosen, skip to 7e.
 

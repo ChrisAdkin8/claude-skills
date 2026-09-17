@@ -1,0 +1,24 @@
+{
+  "sandbox": {
+    "enabled": true,
+    "allowUnsandboxedCommands": false,
+    "network": { "allowedDomains": [], "strictAllowlist": true },
+    "filesystem": {
+      "denyRead": ["~/notes", "~/code", "~/.claude", "~/.ssh", "~/.aws", "~/.config/gh"],
+      "allowWrite": ["~/.cache/uv"]
+    }
+  },
+  "permissions": {
+    "deny": [
+      "Read(~/notes/**)", "Read(~/code/**)", "Read(~/.claude/**)", "Read(~/.ssh/**)", "Read(~/.aws/**)",
+      "Write(~/notes/**)", "Write(~/code/**)", "Write(~/.claude/**)", "Write(~/.ssh/**)", "Write(~/.aws/**)",
+      "Edit(~/notes/**)", "Edit(~/code/**)", "Edit(~/.claude/**)", "Edit(~/.ssh/**)", "Edit(~/.aws/**)",
+      "Write(~/.zshrc)", "Write(~/.zprofile)", "Write(~/.bashrc)", "Write(~/.profile)",
+      "Edit(~/.zshrc)", "Edit(~/.zprofile)", "Edit(~/.bashrc)", "Edit(~/.profile)",
+      "Bash(aws *)", "Bash(gcloud *)", "Bash(az *)", "Bash(kubectl *)", "Bash(terraform *)", "Bash(docker *)",
+      "Bash(helm install *)", "Bash(helm upgrade *)", "Bash(helm uninstall *)", "Bash(helm rollback *)",
+      "Bash(helm test *)", "Bash(helm status *)", "Bash(helm list *)", "Bash(helm get *)", "Bash(helm history *)",
+      "Bash(helm status)", "Bash(helm list)", "Bash(helm get)", "Bash(helm history)"
+    ]
+  }
+}

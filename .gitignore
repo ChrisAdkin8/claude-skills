@@ -1,11 +1,7 @@
-# Track only hand-written config: skills, agents and hooks. Everything else in ~/.claude is
-# session data, history, caches, plugins or credentials, and must stay out of git.
-# settings.json is left out too: add it deliberately, after checking it holds no tokens.
-/*
-!/.gitignore
-!/skills/
-!/agents/
-!/hooks/
 __pycache__/
 .ruff_cache/
 .DS_Store
+# Agent evaluation output: large, and holds full agent replies.
+/tests/agent-evals/results/
+# Skills Claude Code syncs from the claude.ai account into ~/.claude/skills, which links here.
+/skills/synced/

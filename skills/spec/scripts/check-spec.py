@@ -19,6 +19,7 @@ line says what the spec claims is the spec-verifier agent's job.
 """
 
 import argparse
+import collections
 import re
 import subprocess
 from pathlib import Path
@@ -59,6 +60,16 @@ CODE_EXT = re.compile(
     r"\.(py|sh|bash|md|ya?ml|json|toml|tf|tfvars|hcl|go|rs|ts|tsx|js|jsx|tpl|txt|cfg|ini|mk|sql|rb|java|kt|c|h|cpp)$"
 )
 NOTE_PATH = re.compile(r"~/notes/[\w./-]+\.md")
+# The indented lines /spec's step 7 folds under a spike question, and the repo-relative
+# results files they cite.
+SPIKE_ANSWER = re.compile(r"\s*(?:Answered|Partly answered|Open):")
+# Every line step 7 folds under a spike question. Like a saved cold review, they record a round
+# that has happened, so they're left out of the word count: a fold shouldn't push an author's
+# spec over the limit, when the only way back under would be cutting their prose.
+SPIKE_FOLD = re.compile(
+    r"\s+(?:Route|Changes|Expect|Box|Answered|Partly answered|Open):"
+)
+RESULTS_PATH = re.compile(r"(?<![\w./~-])[\w.-][\w./-]*/spikes/[\w.-]+-results\.md")
 WORK_ITEM = re.compile(r"^#{2,3}\s+W(\d+)\b")
 DONE_WHEN = re.compile(r"done when", re.IGNORECASE)
 ACCEPTANCE = "## Acceptance criteria"
@@ -128,6 +139,24 @@ def section(lines, heading):
                 body.append(nxt)
             return body
     return None
+
+
+def split_cold_review(lines, warns):
+    """Split off a saved '## Cold review' section. It records the reviewer's reply unchanged, so
+    it's left out of the word count and the citation, link and template checks, which the
+    author couldn't fix without editing the reviewer's words. The secrets check still reads it."""
+    at = next((i for i, line in enumerate(lines) if line.startswith("## Cold review")), None)
+    if at is None:
+        return lines, []
+    end = next(
+        (j for j in range(at + 1, len(lines)) if lines[j].startswith("## ")), len(lines)
+    )
+    if end < len(lines):
+        warns.append(
+            "'## Cold review' isn't the spec's last section; it records the reviewer's reply, "
+            "so it goes at the end"
+        )
+    return lines[:at] + lines[end:], lines[at:end]
 
 
 def template_prompts():
@@ -380,6 +409,7 @@ def main():
         print("RESULT: FAIL")
         return 1
     fails, warns, infos = [], [], []
+    lines, review = split_cold_review(lines, warns)
     fields, start = frontmatter(lines)
     body = strip_code(lines[start:])
     # A template spec has the template's frontmatter or its Work items section; a renamed
@@ -491,6 +521,33 @@ def main():
         if not Path(ref).expanduser().is_file():
             fails.append(f"links a note that doesn't exist: {ref}")
 
+    # Spike answers must cite results files that exist. Only the answer lines step 7 writes
+    # count: a results path in prose (a Design, say) may name a file no spike has written yet.
+    for path in sorted(
+        {
+            p
+            for line in body
+            if SPIKE_ANSWER.match(line)
+            for p in RESULTS_PATH.findall(line)
+        }
+    ):
+        if not (repo / path).is_file():
+            fails.append(
+                f"a spike answer cites a results file that doesn't exist: {path}"
+            )
+    question, answers = None, collections.Counter()
+    for line in section(body, "## Spike questions") or []:
+        numbered = re.match(r"(\d+)\.\s", line)
+        if numbered:
+            question = numbered.group(1)
+        elif question and SPIKE_ANSWER.match(line):
+            answers[question] += 1
+    for q in sorted((q for q, n in answers.items() if n > 1), key=int):
+        warns.append(
+            f"spike question {q} has more than one Answered:, Partly answered: or Open: line; "
+            "keep the one that stands"
+        )
+
     # Leftover template text.
     if templated:
         leftovers = [p for p in template_prompts() if p in text]
@@ -510,16 +567,32 @@ def main():
 
     # Secrets and account IDs.
     for pattern, what in SECRETS:
-        if pattern.search(text):
+        if pattern.search("\n".join([text, *review])):
             fails.append(f"contains what looks like {what}")
     if ACCOUNT_ID.search("\n".join(body)):
         warns.append("contains a 12-digit number: make sure it isn't an AWS account ID")
 
-    words = sum(len(l.split()) for l in body if not SEPARATOR.fullmatch(l))
+    folded = [
+        l for l in section(body, "## Spike questions") or [] if SPIKE_FOLD.match(l)
+    ]
+    words = sum(
+        len(l.split()) for l in body if not SEPARATOR.fullmatch(l) and l not in folded
+    )
     status = fields.get("status", "draft")
-    if templated and words > WORD_FAIL and status in ("draft", "reviewed"):
+    if (
+        templated
+        and words > WORD_FAIL
+        and status in ("draft", "reviewed")
+        and not review
+    ):
         fails.append(
             f"{words} words; the limit is {WORD_FAIL}. Split it into specs that each land on their own"
+        )
+    elif templated and words > WORD_FAIL and review:
+        # Reviewed already: splitting now would orphan the review. Spikes and hand edits since
+        # still get `/spec finish`.
+        warns.append(
+            f"{words} words, over the {WORD_FAIL} limit; a cold review is saved, so left as is"
         )
     elif templated and words > WORD_FAIL:
         # In progress, done or superseded: a record, not something to split now.

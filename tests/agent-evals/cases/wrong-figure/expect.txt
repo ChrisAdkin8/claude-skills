@@ -1,0 +1,4 @@
+# The planted figure is ruled WRONG in a table row.
+(?im)^\|.*9\.6 ?GB.*\|\s*\**WRONG\**\s*\|
+# The reply is complete.
+(?m)Bottom line holds:

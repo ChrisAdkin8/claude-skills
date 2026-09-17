@@ -189,7 +189,11 @@ In `spike` mode, start here. Take the repo from the spec's location, and `cite-r
 - `<scratch>`: `~/.cache/spec-spikes/<repo dir name>/<basename>/S<n>`, where `<n>` is the spike question's number.
 - `<source repo>`: the spec's `cite-repo` if set, else the repo.
 
-In every Bash call, write paths under the home directory with `~`, not expanded, or `allowed-tools` won't match them.
+**Tool calls.** `allowed-tools` pre-approves only the command shapes given below, so use them exactly:
+- In every Bash call, write paths under the home directory with `~`, not expanded (`~/code/…`, not `/Users/<name>/code/…`).
+- Run scripts directly, not through `python3` or `bash`.
+- Read files with the Read tool, never `cat` or `ls`; make files with the Write tool, never `cp` or a redirect.
+- If a call this step needs is refused anyway, stop step 7 and tell the user which call was refused and why. Don't work around it with another command, and never build or copy `src/` or any other scratch file by another route: a spike run on anything but the export at read-at answers the wrong question.
 
 **Guard.** If any spike question already has an indented `Route:`, `Answered:`, `Partly answered:` or `Open:` line, refuse and say why: one spike round per spec, and that includes spikes run by hand.
 
@@ -215,8 +219,8 @@ Under each of the others, add `Route: research`, `Route: decision` or `Open: <wh
 
 For each chosen spike, in order:
 
-1. Clear and make its scratch directory in one foreground Bash call: `rm -rf <scratch> && mkdir -p <scratch>/src`, or `mkdir -p <scratch>` when read-at is `none`. Unless read-at is `none`, export the code in a second foreground call: `git -C <source repo> archive <read-at> | tar -x -C <scratch>/src`. Don't chain the two; the combined call isn't pre-approved.
-2. Write `<scratch>/spec.md`, a copy of the spec as it stands; the spiker's settings deny reads of `~/code`, so it can't read the original. Write `<scratch>/brief.md` with these fields and nothing else:
+1. Clear and make its scratch directory in one foreground Bash call: `rm -rf <scratch> && mkdir -p <scratch>/src`, or `mkdir -p <scratch>` when read-at is `none`. Unless read-at is `none`, export the code in a second foreground call: `git -C <source repo> archive <read-at> | tar -x -C <scratch>/src`, with `-C` and both paths written with `~`, e.g. `git -C ~/code/github.com/o/r archive ac65fbd | tar -x -C ~/.cache/spec-spikes/r/2026-09-17-x/S1/src`. Don't chain the two calls, and don't drop `-C` or add flags; neither form is pre-approved. Nothing else puts code in `src/`.
+2. With the Write tool, write `<scratch>/spec.md`, a copy of the spec as it stands; the spiker's settings deny reads of `~/code`, so it can't read the original. Write `<scratch>/brief.md` with these fields and nothing else:
    - the question, verbatim;
    - its `Changes:`, `Expect:` and `Box:` lines;
    - `Runs:` 3 when timing, network or randomness is involved, else 1;
@@ -229,7 +233,7 @@ Tell the user in one line which spikes are running. End your turn. Each run's co
 
 ### 7c. Fold
 
-1. **Results file.** Bash `mkdir -p <spec dir>/spikes`. Write `<results>` with a `# Spike results: <spec title>` heading and the first spike's section, then Edit it to append one `## S<n>` section for each further spike. Each section is that spike's `results.md`, plus `total_cost_usd` and `num_turns` from its `run.json`. Record a spike as BLOCKED, with the reason from `run.err` or `run.json`, if `run.json` is missing, its `subtype` isn't `success`, or `results.md` is missing. Step 7b cleared the directory, so any `results.md` there is from this run.
+1. **Results file.** Read each spike's `run.json`, `run.err` and `results.md` with the Read tool. Bash `mkdir -p <spec dir>/spikes`, with the path written with `~`, e.g. `mkdir -p ~/code/github.com/o/r/docs/specs/spikes`. Write `<results>` with a `# Spike results: <spec title>` heading and the first spike's section, then Edit it to append one `## S<n>` section for each further spike. Each section is that spike's `results.md` with every heading moved two levels down (its `# <question>` becomes `### <question>`, `## Verdict` becomes `#### Verdict`), plus `total_cost_usd` and `num_turns` from its `run.json`. Record a spike as BLOCKED, with the reason from `run.err` or `run.json`, if `run.json` is missing, its `subtype` isn't `success`, or `results.md` is missing. Step 7b cleared the directory, so any `results.md` there is from this run.
 2. **Fold each verdict** under its question in the spec:
    - EXPECTED: add `Answered: <the answer> (spike S<n>, <results>)`, and drop the *(assumption)* marks it settles.
    - DIFFERENT: add `Answered:` in the same form, and rewrite the work items, Done when lines and Background named in `Changes:`, citing `<results>`. If the answer contradicts the Decision, stop and tell the user, as step 2 does.
@@ -238,7 +242,7 @@ Tell the user in one line which spikes are running. End your turn. Each run's co
 
 ### 7d. Re-verify
 
-Run `check-spec.py` as in step 3 until it prints `RESULT: PASS`. If a fold changed a work item or a Background claim:
+Run `~/.claude/skills/spec/scripts/check-spec.py <spec> --repo <repo root> --read-at <commit>` as in step 3, directly and with `~` paths, until it prints `RESULT: PASS`. If a fold changed a work item or a Background claim:
 - If `## Open questions` has no `Verifier round 2 ran on` line, launch `spec-verifier` with step 4's brief plus `Round 2: <Wn, Wm> were revised after spikes; re-check them.` and `Spike results: <absolute path of <results>>`. Add `- Verifier round 2 ran on <YYYY-MM-DD>: after spikes.` to Open questions. Tell the user in one line, and end your turn. When it returns, apply its fixes as in step 5 item 1 and re-run the check. There is no round 3.
 - If a round 2 is already recorded, launch none, and tell the user to run `/spec finish <spec>` after reviewing the changes.
 

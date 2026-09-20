@@ -2,8 +2,9 @@
 
 Personal Claude Code skills, subagents and hooks for taking an idea to an implementation plan:
 `/idea`, `/research` and `/spec`, the agents they launch, the guard hook those agents run under,
-and the sandboxed headless sessions `/spec` runs spikes in. Notes live in `~/notes`; specs live in
-the repo they describe.
+and the sandboxed headless sessions `/spec` runs spikes in. `/cold-review` stands apart from that
+flow, and gives any markdown file the same adversarial cold read `/spec` gives a spec. Notes live
+in `~/notes`; specs live in the repo they describe.
 
 ## How a change flows through it
 
@@ -28,6 +29,15 @@ the repo they describe.
 `docs/specs/2026-09-17-spec-spike-phase.md` is a worked example of the output, with its spike
 results beside it in `docs/specs/spikes/`.
 
+Outside that flow, **`/cold-review <markdown file>`** hands a document - a walkthrough, runbook,
+README, design doc, spec or research note - to a `cold-reviewer` agent that has seen none of the
+conversation that produced it. The skill works out what kind of document it is and what a cold
+reader has to be able to do with it, writes the prompt, and relays the findings; the reviewer edits
+nothing and neither does the skill. `/cold-review prompt <file>` writes the prompt for a fresh
+session instead of launching an agent. The reviewer is read-only, so it settles what it can by
+reading the Taskfile, CLI and config a document points at, and names the findings that need a
+command run instead of guessing at output.
+
 ## Layout
 
 - `skills/idea/`: `/idea`.
@@ -36,7 +46,9 @@ results beside it in `docs/specs/spikes/`.
 - `skills/spec/`: `/spec`, with `scripts/check-spec.py` and `template.md`. Spikes add three files:
   `spiker.md` (the rules a spike session runs under), `spike-settings.json` (its sandbox and
   permission settings) and `scripts/run-spike.sh` (the launcher).
-- `agents/`: `researcher`, `research-verifier`, `spec-verifier`, `spec-reviewer`.
+- `skills/cold-review/`: `/cold-review`. One file, and no script: the review is a prompt and an
+  agent.
+- `agents/`: `researcher`, `research-verifier`, `spec-verifier`, `spec-reviewer`, `cold-reviewer`.
 - `hooks/agent-guard.py`: the PreToolUse guard those subagents' Bash and Write calls go through. The
   spiker isn't a subagent and doesn't run under it; its sandbox settings contain it instead.
 - `tests/`: deterministic tests for the guard and both checkers, a transcript replay for the guard,

@@ -6,8 +6,13 @@ Usage: replay_guard.py [--before 2026-09-15T09:14] [--base c7adaf4] [--glob PATT
 Reads every Bash command from the subagent transcripts last modified before --before (the default
 selects the 48 present when the guard's assignment rule was specified, so the result is stable as
 new runs add transcripts), runs each through hooks/agent-guard.py as committed at --base and as it
-is now, and prints the commands whose verdict changed, with the new guard's reason. It prints
-commands, which come from the user's own transcripts: don't paste its output anywhere public.
+is now, and prints the commands whose verdict changed, with the new guard's reason.
+
+Then it replays every Read, Grep and Glob call the guarded agents have made, from all their
+transcripts to date (--reads-glob), through the guard's `read` mode, and lists the ones it would
+now refuse. The guard had no `read` mode before, so there's no old verdict to compare with, and
+this half grows as new runs add transcripts. It prints commands and paths, which come from the
+user's own transcripts: don't paste its output anywhere public.
 """
 
 import argparse
@@ -23,6 +28,16 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 DEFAULT_GLOB = "projects/-Users-chrisadkin/*/subagents/agent-*.jsonl"
+READS_GLOB = "projects/*/*/subagents/agent-*.jsonl"
+# The agents whose frontmatter runs agent-guard.py; spec-reviewer was merged into cold-reviewer.
+GUARDED = {
+    "researcher",
+    "research-verifier",
+    "spec-verifier",
+    "spec-reviewer",
+    "cold-reviewer",
+}
+READ_TOOLS = ("Read", "Grep", "Glob")
 
 
 def load_guard(path, name):
@@ -47,6 +62,42 @@ def verdict(guard, command):
     return "allowed", ""
 
 
+def read_verdict(guard, tool, tool_input, cwd):
+    """('allowed', '') or ('blocked', reason) for one Read, Grep or Glob call."""
+    guard.CWD = cwd
+    err = io.StringIO()
+    try:
+        with contextlib.redirect_stderr(err):
+            guard.check_read(tool, tool_input)
+    except SystemExit as stop:
+        if stop.code == 2:
+            return "blocked", err.getvalue().strip().removeprefix(
+                "Blocked by agent-guard: "
+            )
+        raise
+    return "allowed", ""
+
+
+def read_calls(path):
+    """(tool, input, cwd) for each Read, Grep and Glob call in a guarded agent's transcript."""
+    meta = path.with_name(path.name.removesuffix(".jsonl") + ".meta.json")
+    try:
+        agent = json.loads(meta.read_text()).get("agentType")
+    except (OSError, json.JSONDecodeError):
+        return
+    if agent not in GUARDED:
+        return
+    for line in path.read_text(errors="replace").splitlines():
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        content = (entry.get("message") or {}).get("content")
+        for item in content if isinstance(content, list) else []:
+            if item.get("type") == "tool_use" and item.get("name") in READ_TOOLS:
+                yield item["name"], item.get("input") or {}, entry.get("cwd") or ""
+
+
 def bash_commands(obj):
     if isinstance(obj, dict):
         if obj.get("type") == "tool_use" and obj.get("name") == "Bash":
@@ -65,6 +116,9 @@ def main():
     parser.add_argument("--before", default="2026-09-15T09:14")
     parser.add_argument("--base", default="c7adaf4")
     parser.add_argument("--glob", default=DEFAULT_GLOB, help="relative to ~/.claude")
+    parser.add_argument(
+        "--reads-glob", default=READS_GLOB, help="relative to ~/.claude, all dates"
+    )
     args = parser.parse_args()
 
     cutoff = datetime.fromisoformat(args.before).timestamp()
@@ -118,6 +172,27 @@ def main():
     print(f"\nblocked at {args.base}, allowed now: {len(newly_allowed)}")
     for command in newly_allowed:
         print(f"  - {command[:160]!r}")
+
+    reads = [
+        call
+        for f in sorted((Path.home() / ".claude").glob(args.reads_glob))
+        for call in read_calls(f)
+    ]
+    unique_reads = list(
+        {json.dumps(call, sort_keys=True): call for call in reads}.values()
+    )
+    refused = []
+    for tool, tool_input, cwd in unique_reads:
+        after, reason = read_verdict(new, tool, tool_input, cwd)
+        if after == "blocked":
+            refused.append((tool, tool_input, reason))
+    print(
+        f"\n{len(unique_reads)} unique Read, Grep and Glob calls by guarded agents; "
+        f"refused now: {len(refused)}"
+    )
+    for tool, tool_input, reason in refused:
+        target = tool_input.get("file_path") or tool_input.get("path") or ""
+        print(f"  - {tool} {target[:140]}\n    {reason[:160]}")
     return 0
 
 

@@ -8,6 +8,10 @@ hooks:
       hooks:
         - type: command
           command: python3 "$HOME/.claude/hooks/agent-guard.py" bash
+    - matcher: "Read|Grep|Glob"
+      hooks:
+        - type: command
+          command: python3 "$HOME/.claude/hooks/agent-guard.py" read
 ---
 
 You review a document someone else wrote, cold. The prompt you're given says what to look for, how to grade it and how to reply; follow it. This file adds only the rules that hold for every review.

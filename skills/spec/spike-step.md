@@ -36,7 +36,7 @@ Edit the spec. Under each chosen question, add these indented lines:
 - `Expect:` what you expect the experiment to show, written now, before it runs;
 - `Box: $2, 60 turns; hosts: <list, or none>`.
 
-List every host the experiment reaches, including redirect targets: GitHub serves release assets from `release-assets.githubusercontent.com`, not `objects.githubusercontent.com`. A spiker can't use `helm`, `gh` or another Go CLI to fetch over the network at all — they fail TLS in the sandbox — so an experiment that needs a chart or a release fetches it with `git` or `curl` and works on the local copy (`skills/spec/spiker.md`, rule 6).
+Spikes have their own uv cache, `~/.cache/spec-spikes/.uv-cache`, never the user's `~/.cache/uv`, so a spike that runs Python with packages (`uv run --with botocore`) lists `pypi.org` and `files.pythonhosted.org` in its hosts unless an earlier spike already fetched them. List every host the experiment reaches, including redirect targets: GitHub serves release assets from `release-assets.githubusercontent.com`, not `objects.githubusercontent.com`. A spiker can't use `helm`, `gh` or another Go CLI to fetch over the network at all — they fail TLS in the sandbox — so an experiment that needs a chart or a release fetches it with `git` or `curl` and works on the local copy (`skills/spec/spiker.md`, rule 6).
 
 Under each of the others, add `Route: research`, `Route: decision` or `Open: <why>`. If no spike was chosen, skip to 7e.
 

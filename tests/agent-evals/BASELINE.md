@@ -155,3 +155,34 @@ No case covered `cold-reviewer` or `researcher`, so two things were added the sa
 - `replay_guard.py` now also replays every Read, Grep and Glob call the guarded agents have made,
   from all their transcripts, through the `read` mode. It covers the researcher without a paid
   run: 262 unique calls, none refused.
+
+## After the variable, symlink and URL-size rules (2026-09-24)
+
+Sixth run on 2026-09-24, on the uncommitted working tree of branch `security-guard-gaps`:
+agent-guard refuses variables a command didn't set, jq's `env`, links into credentials, Glob
+patterns into them, symlink-following searches, and URLs over the size limits (now also for
+WebFetch, through the new `fetch` mode); the skills' `git log`/`git diff` pre-approvals moved to
+`hooks/git-read.py`; spikes got their own uv cache. All six cases in parallel, on the default
+model.
+
+| Case | Agent | Result | Turns | Cost |
+|---|---|---|---:|---:|
+| absence-claim | research-verifier | PASS | 14 | $0.23 |
+| cold-review-skip | spec-verifier | PASS | 5 | $0.11 |
+| delta-review | cold-reviewer | PASS | 7 | $0.15 |
+| spec-miscite | spec-verifier | PASS | 6 | $0.10 |
+| spike-inherited | spec-verifier | PASS | 5 | $0.08 |
+| wrong-figure | research-verifier | PASS | 3 | $0.06 |
+
+Total $0.73. absence-claim had two commands refused, `python3 -c` and `curl -o /dev/null`, both
+by rules the guard already had at HEAD; the agent found other routes. The replies that mention
+agent-guard are quoting the fixture specs, which are about it.
+
+No case calls WebFetch, so the `fetch` hook was checked by hand: `research-verifier` under
+`claude -p --agent`, asked for a 533-character URL and then `https://example.com/`. The first was
+refused by the hook ("the URL has 514 characters after the host, over the 400 allowed"), the
+second loaded. 3 turns, $0.05.
+
+A test spike (read-at none, hosts pypi.org and files.pythonhosted.org) confirmed the uv change:
+`uv cache dir` is `~/.cache/spec-spikes/.uv-cache`, `uv run --with six` ran, and `touch
+~/.cache/uv/spike-probe` failed with "Operation not permitted". EXPECTED, 3 turns, $0.11.

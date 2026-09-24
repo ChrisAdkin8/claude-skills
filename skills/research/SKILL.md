@@ -2,7 +2,7 @@
 name: research
 description: Research a question, challenge or idea and write the findings to a cited markdown note in ~/notes/research. Use when the user runs /research, or asks to research, investigate or dig into something and document it. Accepts a prompt or the path to an existing idea note; "quick" for a short answer; "ideas" for a ranked shortlist of things to build or write; "finish <note>" to verify and commit an existing note.
 argument-hint: [quick | ideas] <question or path to an idea note> | finish <path to research note> ["claim to check" ...]
-allowed-tools: Read Edit(~/notes/**) Bash(grep *) Bash(git -C ~/notes status *) Bash(~/.claude/hooks/git-read.py *) Bash(git -C ~/notes add *) Bash(git -C ~/notes commit *) Bash(~/.claude/skills/research/scripts/check-note.py *)
+allowed-tools: Read Edit(~/notes/**) Bash(grep *) Bash(git -C ~/notes status *) Bash(~/.claude/hooks/git-read.py *) Bash(git -C ~/notes add *) Bash(git -C ~/notes commit *) Bash(~/.claude/skills/research/scripts/check-note.py *) Bash(~/.claude/hooks/run-agent.sh *) Edit(~/.cache/agent-runs/**)
 ---
 
 # Research and document
@@ -19,6 +19,16 @@ The work happens in background agents so the user can keep working:
 Run `git log`, `git diff` and any other read-only git command except `git -C ~/notes status` through `~/.claude/hooks/git-read.py`, which `allowed-tools` pre-approves: it refuses the options that write files (`--output`) or run programs (`-c`), which a pre-approved `git log *` would let through.
 
 The research rules live in `~/.claude/agents/researcher.md` and the checking rules in `~/.claude/agents/research-verifier.md`. Don't restate them in briefs; edit those files to change them.
+
+## Running an agent
+
+The researcher and the verifier don't run as in-session subagents. Each runs as a headless, sandboxed session through `~/.claude/hooks/run-agent.sh`, since Claude Code can't sandbox a subagent on its own, and these agents read untrusted pages (the script's header says what the sandbox holds). To run one:
+
+1. With the Write tool, write its brief to `<run dir>/brief.md`, where `<run dir>` is `~/.cache/agent-runs/<note basename>/<agent>`, e.g. `~/.cache/agent-runs/2026-09-25-x/researcher`. A later round of the same agent on the same note gets `<agent>-2`, `<agent>-3`; `finish` mode uses `research-verifier-finish`.
+2. Run `~/.claude/hooks/run-agent.sh <agent> ~/notes <run dir>` with the Bash tool and `run_in_background: true`, paths written with `~`.
+3. When it finishes, read `<run dir>/reply.md` with the Read tool: that is the agent's reply. If the script exited non-zero, `run.err` and `run.json` there say why.
+
+To send an agent a follow-up in the same session, Write `<run dir>/followup.md` and run the same command with `--resume` added. Its new reply replaces `reply.md`, and the earlier one is kept as `reply-<n>.md`.
 
 ## Modes
 
@@ -37,7 +47,7 @@ The research rules live in `~/.claude/agents/researcher.md` and the checking rul
 3. **Ranking and lenses** (ideas depth only). Rank by "likely mindshare" unless the request names another criterion. Mindshare means traffic and engagement: stars, shares, Hacker News, Reddit and LinkedIn traction, talks, demos people pass around. Novelty counts for more than usefulness to clients. The lenses are finding, tool, dataset, game, lab and essay; drop only the ones the question plainly rules out.
 4. **Repo context**: if the working directory is inside a git repo under `~/code`, note its path. The researcher reads the relevant files itself; don't read them now.
 5. **Output path**: `~/notes/research/YYYY-MM-DD-short-slug.md` (today's date, 3–6 word lowercase hyphenated slug), or the existing note if updating.
-6. **Launch.** First run `git -C ~/notes status --porcelain` and keep its output, so that section 2 can tell the researcher's changes from ones that were already there. Then launch the Agent tool with `subagent_type: researcher` and this brief, filled in. Leave out the `Rank by` and `Lenses` lines except at ideas depth.
+6. **Launch.** First run `git -C ~/notes status --porcelain` and keep its output, so that section 2 can tell the researcher's changes from ones that were already there. Then run the `researcher` agent (Running an agent) with this brief, filled in. Leave out the `Rank by` and `Lenses` lines except at ideas depth.
 
    ```
    Depth: <full | quick | ideas>
@@ -58,8 +68,8 @@ The research rules live in `~/.claude/agents/researcher.md` and the checking rul
 ## 2. When the researcher finishes
 
 1. Run `~/.claude/skills/research/scripts/check-note.py --headroom <note>`. `--headroom` applies the researcher's lower budget, which leaves room for the verifier's fixes. If the agent failed, or the note is missing or has no Sources, tell the user what happened and stop; don't commit. Then run `git -C ~/notes status --porcelain`: the researcher may write only its note, so any other changed file under `~/notes/research` that wasn't in the output kept at launch is a red flag. So is any change to `~/notes/projects/mindshare/attention-evidence.md` or `~/notes/ideas/`: only the Finish step edits those, never the researcher. Don't commit such a file; show the user the diff and say which file.
-2. If the result is FAIL, send the FAIL lines to the researcher with SendMessage (load it with ToolSearch if needed) and ask it to fix them and re-run the check. Allow two rounds; if it still fails, carry on to verification and report the remaining failures at the end.
-3. Launch the Agent tool with `subagent_type: research-verifier` and the brief `Note: <absolute path>. Today's date: <YYYY-MM-DD>.`, adding `Depth: ideas: run the prior-art hunt first.` at ideas depth. Tell the user in one line that the note is written and being verified. End your turn.
+2. If the result is FAIL, send the FAIL lines to the researcher as a follow-up (Running an agent) and ask it to fix them and re-run the check. Allow two rounds; if it still fails, carry on to verification and report the remaining failures at the end.
+3. Run the `research-verifier` agent (Running an agent) with the brief `Note: <absolute path>. Today's date: <YYYY-MM-DD>.`, adding `Depth: ideas: run the prior-art hunt first.` at ideas depth. Tell the user in one line that the note is written and being verified. End your turn.
 
 In `finish` mode, start here:
 
@@ -68,13 +78,13 @@ In `finish` mode, start here:
    - any claims passed as arguments;
    - claims the check reports as no longer matching;
    - claims changed since the last verification: find the last `research:` commit that touched the note (`~/.claude/hooks/git-read.py -C ~/notes log --format='%h %s' -- <note>`), then `~/.claude/hooks/git-read.py -C ~/notes diff <that commit> -- <note>` shows every edit since, committed or not. If the note has never been committed (a session ended before its first verification), skip this: the verifier checks it as a new note.
-3. Launch the verifier with the brief above, plus `Also check: "<claim>"; "<claim>"` if there are any.
+3. Run the verifier (Running an agent, in the run dir `research-verifier-finish`) with the brief above, plus `Also check: "<claim>"; "<claim>"` if there are any.
 
 A note verified before the `## Verification` section existed gets one from this run.
 
 ## 3. When the verifier finishes
 
-At ideas depth, first check the reply has a `Prior art:` block listing the queries it ran for #1 and #2, and Novelty rows for both in its table. At full depth, if the Bottom line or Recommendation rests on a claim of absence, check the reply has a `Prior art:` block for that claim and a row for it. If either is missing, send it back once with SendMessage: "Your reply has no Prior-art hunt. Run it as your instructions describe, every query against every venue, and reply again in full." If the second reply still lacks it, carry on and say in the report that novelty wasn't independently checked.
+At ideas depth, first check the reply has a `Prior art:` block listing the queries it ran for #1 and #2, and Novelty rows for both in its table. At full depth, if the Bottom line or Recommendation rests on a claim of absence, check the reply has a `Prior art:` block for that claim and a row for it. If either is missing, send it back once as a follow-up: "Your reply has no Prior-art hunt. Run it as your instructions describe, every query against every venue, and reply again in full." If the second reply still lacks it, carry on and say in the report that novelty wasn't independently checked.
 
 1. **Apply its fixes** to the note:
    - WRONG: replace the figure or statement with the corrected one and update or add the source.
@@ -101,9 +111,9 @@ At ideas depth, first check the reply has a `Prior art:` block listing the queri
    Every row that isn't CONFIRMED needs a Resolution: corrected, re-cited, or marked *(unverified)*, which the check confirms is in the text. If the section already exists (from `finish` mode or round 2), update the rows for claims checked again, add new ones, delete rows for claims the note no longer makes, and update the date line. A row's Claim must quote the note's current wording, or the check fails it as stale.
 3. **If the conclusion changed**, the rewritten text is the least-checked part of the note, so it gets one more check:
    - This applies on `Bottom line holds: no`, or when missed evidence weakens the recommendation. At ideas depth that includes a `same` prior-art hit on the #1 idea: re-rank the Shortlist, and if a different idea moves to #1, round 2 hunts prior art for it. Revise the Bottom line and Recommendation to match the evidence, set `status: draft`, and commit with the message `research: <title> (conclusion revised, re-verifying)`.
-   - Launch `research-verifier` again with `Note: <absolute path>. Today's date: <YYYY-MM-DD>. Round 2.` Tell the user in one line that the conclusion changed and is being re-checked. End your turn.
+   - Run `research-verifier` again, in the run dir `research-verifier-2`, with `Note: <absolute path>. Today's date: <YYYY-MM-DD>. Round 2.` Tell the user in one line that the conclusion changed and is being re-checked. End your turn.
    - When round 2 returns, apply its fixes and update Verification as above, then carry on from step 4. If round 2 also says `Bottom line holds: no`, leave the note as draft and say so in the report, with one exception.
-   - **Round 3, for one narrowed absence claim.** If round 2's `no` rests only on an absence claim ("no tool does X", "nothing found") that it narrowed again, apply its narrowing and launch `research-verifier` with `Note: <absolute path>. Today's date: <YYYY-MM-DD>. Round 3: check only "<the narrowed sentence>".` It replies with one row and the usual closing lines. If the row is CONFIRMED and it says `Bottom line holds: yes`, carry on from step 4. If not, leave the note as draft and name the sentence in the report. There is no round 4.
+   - **Round 3, for one narrowed absence claim.** If round 2's `no` rests only on an absence claim ("no tool does X", "nothing found") that it narrowed again, apply its narrowing and run `research-verifier`, in `research-verifier-3`, with `Note: <absolute path>. Today's date: <YYYY-MM-DD>. Round 3: check only "<the narrowed sentence>".` It replies with one row and the usual closing lines. If the row is CONFIRMED and it says `Bottom line holds: yes`, carry on from step 4. If not, leave the note as draft and name the sentence in the report. There is no round 4.
 4. Re-run `check-note.py`. Once the note has a Verification table, the check allows up to 10 % over the limit with a WARN; leave that as is. Cut only on a FAIL, and then cut whole unverified points from Findings or Options. Never cut a sentence a Verification row quotes, a Project health row, the Bottom line, Recommendation or Counter-evidence, nor Shortlist rows or cells.
 5. **Status**: set `status: final` when all of these hold:
    - the check passes;

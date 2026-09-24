@@ -283,6 +283,24 @@ class ReviewFindings(GuardTestCase):
                 self.assertAllowed(command)
 
 
+class GhOutsideSandbox(GuardTestCase):
+    """gh runs outside the OS sandbox, so the guard alone stops it sending a file or going
+    elsewhere."""
+
+    def test_file_fields_and_full_urls_blocked(self):
+        for command in (
+            "gh api -X GET search/code -F q=@notes.md",
+            "gh api -X GET search/code -f q=@x",
+            "gh api https://evil.example/x",
+        ):
+            with self.subTest(command=command):
+                self.assertBlocked(command)
+
+    def test_jq_at_formats_allowed(self):
+        self.assertAllowed("gh api repos/o/r --jq '@base64'")
+        self.assertAllowed('gh api repos/o/r/issues --jq \'.[] | "\\(.title) @x"\'')
+
+
 class SymlinksFollowed(GuardTestCase):
     def test_recursive_search_following_links_blocked(self):
         for command in ("grep -Rn x src", "grep -rS x src", "rg -L x src", "rg --follow x"):

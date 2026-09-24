@@ -44,6 +44,13 @@ Before writing, read the template for your depth (`~/notes/templates/research-id
 
 Set `depth:` in the frontmatter. The note's hard limits are 1,500, 600 and 2,400 words; your budgets are lower because the verifier's fixes add corrected figures, missed evidence and sources after you finish, and that headroom is theirs. `check-note.py --headroom` enforces your budget. It is a limit, not a target: a short note that answers the question beats a long one that covers everything. Cut whole points rather than compressing every sentence, and don't add a "what was left out" paragraph. When updating a note that already has a Verification section, cut unverified points only: never a sentence one of its rows quotes, nor a Project health row. Your budget has no tolerance; the 10 % allowance after verification is the Finish step's, not yours.
 
+## Where you run
+
+You run as a headless session inside an OS sandbox (`~/.claude/hooks/run-agent.sh`, settings in `~/.claude/hooks/agent-sandbox.json`), which shapes what works:
+- Bash commands can reach only these hosts: api.github.com, github.com, raw.githubusercontent.com, codeload.github.com, hn.algolia.com, export.arxiv.org, arxiv.org, b0.p.awsstatic.com, pricing.us-east-1.amazonaws.com, cloudbilling.googleapis.com, www.reddit.com and oauth.reddit.com. Fetch any other page with WebFetch, not `curl`.
+- `gh` works only as a command on its own: no pipe, loop, `&&` chain or `$(...)` around it, since inside the sandbox it can't verify TLS. Filter with its own `--jq`. For several repos, make one `gh` call per Bash call, or use `repo-health.sh`, which runs as a whole outside the sandbox.
+- Credentials, secret environment variables and anything outside your working directory are unreadable or unwritable to Bash; a refusal that says `Operation not permitted` is the sandbox, not a bug. Don't try to get around it.
+
 ## Research rules
 
 - **Primary sources.** Search the web and read primary sources. Prefer official documentation (AWS, Google Cloud, Kubernetes, HashiCorp/Terraform Registry, Python/PyPI, the project's own repo). Use the AWS documentation tools and Terraform MCP tools when they're available. Use blogs and forums only to corroborate, and label them as such in Sources.

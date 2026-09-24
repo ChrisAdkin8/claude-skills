@@ -626,6 +626,15 @@ def check_gh(args, raw, expands, clean=frozenset(), tainted=frozenset()):
     if sub[:1] != ("api",):
         return
     check_request_words(args, "gh", clean, tainted)
+    # gh runs outside the OS sandbox (Go fails TLS under it; see hooks/agent-sandbox.json), so
+    # nothing but this stops it reading a file into a request, or sending one elsewhere.
+    sent = [a for k, a in enumerate(args) if not (k and args[k - 1] in ("--jq", "-q", "--template", "-t"))
+            and not a.startswith(("--jq=", "--template="))]
+    if any(re.search(r"(?:^|=)@", a) for a in sent if not a.startswith("-") or "=" in a):
+        block("`gh api` with an `@file` value sends a file's contents; give values inline")
+    endpoint = next((a for a in args[1:] if not a.startswith("-")), "")
+    if "://" in endpoint:
+        block("`gh api` takes a path on api.github.com, not a full URL")
     if any(a.startswith("--hostname") for a in args):
         block("`gh api --hostname` sends the request, and maybe a token, to another host")
     method = None

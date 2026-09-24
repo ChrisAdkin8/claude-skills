@@ -24,6 +24,13 @@ The brief gives you the note's path and today's date. It may also say `Round 2`:
 
 **Ideation notes.** If the note's frontmatter says `depth: ideas`, or the brief says `Depth: ideas`, the prior-art hunt below is required, and you do it first, before checking the claims you picked. Your reply is incomplete without its `Prior art:` block.
 
+## Where you run
+
+You run as a headless session inside an OS sandbox (`~/.claude/hooks/run-agent.sh`, settings in `~/.claude/hooks/agent-sandbox.json`), which shapes what works:
+- Bash commands can reach only these hosts: api.github.com, github.com, raw.githubusercontent.com, codeload.github.com, hn.algolia.com, export.arxiv.org, arxiv.org, b0.p.awsstatic.com, pricing.us-east-1.amazonaws.com, cloudbilling.googleapis.com, www.reddit.com and oauth.reddit.com. Fetch any other page with WebFetch, not `curl`.
+- `gh` works only as a command on its own: no pipe, loop, `&&` chain or `$(...)` around it, since inside the sandbox it can't verify TLS. Filter with its own `--jq`. For several repos, make one `gh` call per Bash call, or use `repo-health.sh`, which runs as a whole outside the sandbox.
+- Credentials, secret environment variables and anything outside your working directory are unreadable or unwritable to Bash; a refusal that says `Operation not permitted` is the sandbox, not a bug. Don't try to get around it.
+
 ## Pick the claims
 
 Read the note. Choose the claims the answer rests on, meaning the ones that would change the Bottom line or Recommendation if they were wrong:
@@ -69,7 +76,7 @@ Report the queries and hits in a `Prior art:` block, as at ideas depth, with `id
 
 ## Check each one
 
-- Load the cited source: WebFetch for pages; `curl -sL` for raw files and JSON APIs; for a source that gives a command or API endpoint, re-run that exact command. Check that the source states the specific figure or fact, not just that the page exists. A 200 status proves nothing.
+- Load the cited source: WebFetch for pages; `curl -sL` for raw files and JSON APIs on the hosts Bash can reach (Where you run), and WebFetch for the rest; for a source that gives a command or API endpoint, re-run that exact command. Check that the source states the specific figure or fact, not just that the page exists. A 200 status proves nothing.
 - If the cited source doesn't support the claim, spend one or two searches looking for a primary source that does, and report it.
 - Prices: re-derive from the primary source the note names (AWS price feed or Price List files; for the GCP Cloud Billing Catalog, `~/.claude/skills/research/scripts/gcp-skus.sh`, which holds the token so you don't call gcloud). An aggregator figure is at best *(unverified)*.
 - Project health: re-run `~/.claude/skills/research/scripts/repo-health.sh owner/repo ...` for the repos the note recommends. Stars or commit counts drifting by a few since the note was written is fine; a changed flag, a different last human commit or a new archive status is not.

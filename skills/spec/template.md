@@ -49,14 +49,10 @@ Estimated from reading the code, not from doing the work, so trust the ordering 
 
 Questions reading can't settle, each with the cheapest experiment that would answer it. Write "None." if there are none.
 
-Number each question and keep its experiment in the question text. Step 7 of `/spec` adds indented lines under each one. A question it runs as a spike gets `Route: spike`, `Changes:`, `Expect:` and `Box:`, then one `Answered:`, `Partly answered:` or `Open:` line citing `<spec dir>/spikes/<basename>-results.md`. A question it routes elsewhere gets `Route: research`, `Route: decision` or `Open: <why>`. For example:
+Number each question and keep its experiment in the question text. Step 7 of `/spec` adds one indented line under a question it answers or defers: `Answered:`, `Partly answered:` or `Open:`, citing `<spec dir>/spikes/<basename>-results.md` when a spike ran. Its routing (`Route`, `Changes`, `Expect`, `Box`) goes in the record, `<spec dir>/records/<basename>-record.md`, not here. For example:
 
 ```
 1. <the question>? Experiment: <the cheapest experiment that answers it>.
-   Route: spike
-   Changes: <the work items and quoted claims that change with the answer>
-   Expect: <what the experiment should show, written before it runs>
-   Box: $2, 60 turns; hosts: none
    Answered: <the answer> (spike S1, `docs/specs/spikes/<basename>-results.md`)
 ```
 
@@ -65,5 +61,7 @@ Number each question and keep its experiment in the question text. Step 7 of `/s
 -
 
 ## Open questions
+
+Questions still open about the plan. Review history, verifier rounds, `Not reviewed:` changes and implementation notes go in the record, `<spec dir>/records/<basename>-record.md`.
 
 -

@@ -22,7 +22,7 @@ Your job is the objective half of review: does each citation, number and borrowe
 
 ## What to check
 
-1. **Citations.** Check every `path:line` or `path:start-end` in the spec, in the cite repo, except in a `## Cold review` section at the end: that is the cold reviewer's reply, saved unchanged as a record, not the spec's claims, so skip it entirely. `(:48)` after a full citation in the same paragraph means the same file. Check the lines say what the spec claims, not just that they exist.
+1. **Citations.** Check every `path:line` or `path:start-end` in the spec, in the cite repo, except in a `## Cold review` section at the end of an older spec: that is the cold reviewer's reply, saved unchanged as a record, not the spec's claims, so skip it entirely. For the same reason, don't check the spec's record, `records/<basename>-record.md` beside it; it isn't part of the plan. `(:48)` after a full citation in the same paragraph means the same file. Check the lines say what the spec claims, not just that they exist.
    - Judge each citation against the file as it was at read-at (`git -C <cite repo> show <read-at>:<path> | sed -n '<start>,<end>p'`), because that's what the spec describes. If the content is real but sits at other lines, the verdict is MISCITED and you give the right lines.
    - Then check drift: if the file has changed since (`git -C <cite repo> diff --stat <read-at> -- <file>`), say in Evidence whether the current tree still says it. A claim that was true at read-at but no longer is, where a work item depends on it, goes under Other problems, since the plan may need to change.
    - With read-at "none", or for a file that didn't exist at read-at, use the working tree.

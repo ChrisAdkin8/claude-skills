@@ -21,13 +21,17 @@ in `~/notes`; specs live in the repo they describe.
      borrowed claim, and reports what doesn't hold;
    - a `cold-reviewer` agent gives it one adversarial cold read, from the same prompt skeleton as
      `/cold-review`, looking for assumptions stated as facts and costs nobody counted. Its table is
-     saved in the spec, unchanged, as a record. Changes made after it are logged as `Not
+     saved unchanged in the spec's record, `records/<spec>-record.md` beside it, which holds the
+     spec's history (verifier rounds, the review, spike routing, implementation notes) so the
+     spec itself stays the plan. Changes made after the review are logged there as `Not
      reviewed:` lines, and `/cold-review <spec>` gives them one delta review before
      implementation.
 4. **Spikes** answer what reading can't settle. Each runs as a sandboxed, cost-capped `claude -p`
    session in a scratch copy of the code, writes a verdict with its raw output, and has that folded
    back into the spec. Spikes run at the end of `/spec`, or later with `/spec spike <spec>`.
 5. **Implementation** happens in a fresh session, from the spec. This repo's skills write no code.
+   Afterwards, `/spec done <spec>` writes down in the record where the build departed from the
+   spec, settles its status, and flags research the build overturned.
 
 `docs/specs/2026-09-17-spec-spike-phase.md` is a worked example of the output, with its spike
 results beside it in `docs/specs/spikes/`.
@@ -47,7 +51,7 @@ command run instead of guessing at output.
 - `skills/idea/`: `/idea`.
 - `skills/research/`: `/research`, with `scripts/check-note.py` and the helpers the `researcher`
   agent runs while gathering evidence (`repo-health.sh`, `gcp-skus.sh`, `reddit-search.sh`).
-- `skills/spec/`: `/spec`, with `scripts/check-spec.py` and `template.md`. Spikes add five files:
+- `skills/spec/`: `/spec`, with `scripts/check-spec.py`, `template.md` and `record-template.md`. Spikes add five files:
   `spike-step.md` (step 7, read only when spikes run), `spiker.md` (the rules a spike session runs
   under), `spike-settings.json` (its sandbox and permission settings), `scripts/prepare-spike.sh`
   (clears a scratch directory and exports the code into it, after checking its paths) and

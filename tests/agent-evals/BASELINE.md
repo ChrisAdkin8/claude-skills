@@ -186,3 +186,23 @@ second loaded. 3 turns, $0.05.
 A test spike (read-at none, hosts pypi.org and files.pythonhosted.org) confirmed the uv change:
 `uv cache dir` is `~/.cache/spec-spikes/.uv-cache`, `uv run --with six` ran, and `touch
 ~/.cache/uv/spike-probe` failed with "Operation not permitted". EXPECTED, 3 turns, $0.11.
+
+## After moving spec history to a record (2026-09-24)
+
+Seventh run on 2026-09-24, on the uncommitted working tree of branch `spec-plan-and-record`: a
+spec's review history (verifier rounds, cold and delta reviews, `Not reviewed:` changes, spike
+routing, implementation notes) moves to `records/<basename>-record.md`; `check-spec.py` holds the
+plan to 4,000 words until the spec is done; `/spec done` added; `spec-verifier.md` told to skip
+the record. The fixtures still keep their review in the spec, the older layout, which every
+skill still reads. All six cases in parallel, on the default model.
+
+| Case | Agent | Result | Turns | Cost |
+|---|---|---|---:|---:|
+| absence-claim | research-verifier | PASS | 11 | $0.20 |
+| cold-review-skip | spec-verifier | PASS | 6 | $0.12 |
+| delta-review | cold-reviewer | PASS | 4 | $0.13 |
+| spec-miscite | spec-verifier | PASS | 8 | $0.17 |
+| spike-inherited | spec-verifier | PASS | 7 | $0.12 |
+| wrong-figure | research-verifier | PASS | 4 | $0.07 |
+
+Total $0.82. `/spec done` is orchestration in the main session, so no eval covers it.

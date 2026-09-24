@@ -1,8 +1,8 @@
 ---
 name: spec
-description: Turn a /research note into an implementation spec inside the repo it changes, grounded in the code with file:line citations, then check it and give it a cold review. Use when the user runs /spec, or asks to write a spec, plan or prompt file for changing or enhancing a repo, especially from a research note. Accepts a research note path or a description of the change; "finish <spec>" re-checks and verifies a spec after editing; "spike <spec>" runs its spike questions in sandboxed headless sessions and folds the answers back in.
-argument-hint: <research note path> [direction] | <description of the change> | finish <spec path> | spike <spec path>
-allowed-tools: Read Grep Glob Edit(~/code/**) Edit(~/notes/**) Edit(~/.cache/spec-spikes/**) Bash(grep *) Bash(git rev-parse *) Bash(git status *) Bash(git ls-files *) Bash(git -C ~/notes status *) Bash(~/.claude/hooks/git-read.py *) Bash(git -C ~/notes add *) Bash(git -C ~/notes commit *) Bash(~/.claude/skills/spec/scripts/check-spec.py *) Bash(mkdir -p ~/code/*) Bash(~/.claude/skills/spec/scripts/prepare-spike.sh ~/.cache/spec-spikes/*) Bash(~/.claude/skills/spec/scripts/run-spike.sh ~/.cache/spec-spikes/*)
+description: Turn a /research note into an implementation spec inside the repo it changes, grounded in the code with file:line citations, then check it and give it a cold review. Use when the user runs /spec, or asks to write a spec, plan or prompt file for changing or enhancing a repo, especially from a research note. Accepts a research note path or a description of the change; "finish <spec>" re-checks and verifies a spec after editing; "spike <spec>" runs its spike questions in sandboxed headless sessions and folds the answers back in; "done <spec>" settles a spec after it has been built.
+argument-hint: <research note path> [direction] | <description of the change> | finish <spec path> | spike <spec path> | done <spec path>
+allowed-tools: Read Grep Glob Edit(~/code/**) Edit(~/notes/**) Edit(~/.cache/spec-spikes/**) Bash(grep *) Bash(git rev-parse *) Bash(git status *) Bash(git ls-files *) Bash(git -C ~/notes status *) Bash(~/.claude/hooks/git-read.py *) Bash(git -C ~/notes add *) Bash(git -C ~/notes commit *) Bash(~/.claude/skills/spec/scripts/check-spec.py *) Bash(~/.claude/skills/research/scripts/check-note.py *) Bash(mkdir -p ~/code/*) Bash(~/.claude/skills/spec/scripts/prepare-spike.sh ~/.cache/spec-spikes/*) Bash(~/.claude/skills/spec/scripts/run-spike.sh ~/.cache/spec-spikes/*)
 ---
 
 # Write an implementation spec
@@ -18,6 +18,9 @@ Research answers "what should we do?" A spec answers "what exactly changes in th
 5. **Finish** (here): apply its fixes, link the notes, commit the notes.
 6. **Cold review**: you write a review prompt for this spec from `/cold-review`'s skeleton, and the read-only `cold-reviewer` agent runs it. It looks for assumptions, uncounted costs and gaps a cold reader would hit, and grades each finding. It edits nothing; the user decides what to fold back in.
 7. **Spike**: the spike questions an experiment can answer locally each run as a sandboxed, cost-capped `claude -p` session in a scratch copy of the code, and their verdicts are folded back into the spec. Its steps are in `spike-step.md`, read only then.
+8. **Done** (after the build, often in another session): record what the build did differently, settle the spec's status, and flag research the build overturned.
+
+**The spec and its record.** The spec is the plan: what someone builds from. Everything that happens to it afterwards goes in its record, `<spec dir>/records/<basename>-record.md`, started from `~/.claude/skills/spec/record-template.md` the first time there's something to put in it: verifier rounds, the cold review and any delta review, the `Not reviewed:` log of changes since, spike routing lines, and implementation notes. `check-spec.py` holds the plan to its word limit until the spec is done, so history kept in the spec eventually fails it. An older spec that keeps its history inline (a `## Cold review` section at its end, `Not reviewed:` and `Verifier round 2 ran on` lines in Open questions, Route/Changes/Expect/Box lines under spike questions) is still read that way; move the history to a record when you next edit it.
 
 This skill writes no code in the repo (a spike's throwaway code stays in its scratch directory), and it doesn't branch or commit in the repo. Implementation happens in a separate session, working from the spec.
 
@@ -31,6 +34,7 @@ The checking rules live in `~/.claude/agents/spec-verifier.md`. Don't restate th
 - `/spec <description of the change>`: no research note. This is fine when the approach is already settled. If it isn't (several viable options, unknown cost, an unfamiliar tool), say so and suggest `/research` first. Continue only if the user wants to. Set `research: none`.
 - `/spec finish <spec path>`: skip to the check in step 3. Use it after editing a spec by hand, or when a session ended before verification.
 - `/spec spike <spec path>`: skip to step 7, for a spec whose cold review is done. Use it when step 7 wasn't run at the end of step 6.
+- `/spec done <spec path>`: step 8, after the work items have been built.
 
 ## 1. Frame (in the conversation)
 
@@ -82,8 +86,8 @@ Write the spec at the path from step 1, in the repo's house style or the templat
 - **Spike questions.** List what reading can't settle (a timing, a default, exact syntax, an interaction), each with the cheapest experiment that would answer it, or write "None."
 - **Diagram.** Add a mermaid diagram if the design changes the structure.
 - **No secrets.** Never copy secrets, credentials, account IDs, state file contents or tfvars values into the spec.
-- **Spec files only.** In the repo, create or change only the spec file, or the spec files when splitting, and in step 7 its spike results file, `<spec dir>/spikes/<basename>-results.md`.
-- **Length.** A draft template spec fails the check above 4,000 words. Past about 3,000, or past about seven work items, split it: one spec per phase, each landing on its own, named `<date>-<slug>-1-<phase>.md`, `-2-<phase>.md` and so on, the later ones naming the earlier as a prerequisite. A spec nobody can review in one sitting doesn't get reviewed, and the verifier only samples citations past about 40. Check, verify and link each part separately: steps 3–5 run once per file, with one verifier launched per part, all in the same message. A spec whose status is past `reviewed` is a record; the check only warns about its length.
+- **Spec files only.** In the repo, create or change only the spec file, or the spec files when splitting, its record, `<spec dir>/records/<basename>-record.md`, and in step 7 its spike results file, `<spec dir>/spikes/<basename>-results.md`.
+- **Length.** A template spec fails the check above 4,000 words until it is done; review history in the record doesn't count. Past about 3,000, or past about seven work items, split it: one spec per phase, each landing on its own, named `<date>-<slug>-1-<phase>.md`, `-2-<phase>.md` and so on, the later ones naming the earlier as a prerequisite. A spec nobody can review in one sitting doesn't get reviewed, and the verifier only samples citations past about 40. Check, verify and link each part separately: steps 3–5 run once per file, with one verifier launched per part, all in the same message. A spec that is done or superseded is a record; the check only warns about its length.
 
 Then run `~/.claude/skills/spec/scripts/check-spec.py <spec> --repo <repo root> --read-at <commit>`, adding `--cite-repo <path>` for a new repo that cites another. Fix every FAIL line and re-run until it prints `RESULT: PASS`. WARN lines are judgement calls: fix the ones that are real.
 
@@ -102,11 +106,12 @@ Today's date: <YYYY-MM-DD>
 
 Tell the user in one line that the spec is written and being verified. End your turn.
 
-In `finish` mode, start here. Take the repo from the spec's location, and `cite-repo` and `read-at` from its frontmatter; for a house-style spec with no frontmatter, use its "Read at `<sha>`" line, or `HEAD` if it has none (and say that drift can't be measured). Run the check, fix any FAIL lines yourself, then launch the verifier. If the spec already ends in a `## Cold review` section, finish mode stops after step 5's items 1 to 4: it re-checks, re-verifies and links, and launches no second cold review.
+In `finish` mode, start here. Take the repo from the spec's location, and `cite-repo` and `read-at` from its frontmatter; for a house-style spec with no frontmatter, use its "Read at `<sha>`" line, or `HEAD` if it has none (and say that drift can't be measured). Run the check, fix any FAIL lines yourself, then launch the verifier. If the spec already has a saved cold review (in its record, or at its end in an older spec), finish mode stops after step 5's items 1 to 5: it re-checks, re-verifies and links, and launches no second cold review.
 
 ## 5. When the verifier finishes
 
-1. **Apply its fixes** to the spec:
+1. **Record the round.** Create the record from the record template if it doesn't exist, and add a line to its `## Verification`: the date, `Confirmed: N of M` as the verifier gave it, and its `Plan holds` answer.
+2. **Apply its fixes** to the spec:
    - MISCITED or WRONG: correct the citation or the statement, as given.
    - UNSUPPORTED: find a citation that does support it, or mark it *(assumption)*. If a work item depends on it, add a spike question.
    - UNVERIFIED: mark the borrowed claim *(unverified)*. If a work item depends on it, add a spike question, or suggest `/research finish <note> "<claim>"`, which asks the research verifier to check that claim by name.
@@ -114,17 +119,17 @@ In `finish` mode, start here. Take the repo from the spec's location, and `cite-
    - UNTESTABLE: rewrite that Done when so it can be observed.
    - Missed files: add them to the work item, and to Effort if they change the size.
    - `Plan holds: no`: revise the affected work items.
-2. **Re-run** `check-spec.py` until it passes.
-   - **If you revised work items for `Plan holds: no`**, they haven't been checked at all. Launch `spec-verifier` once more with the same brief plus `Round 2: <Wn, Wm> were revised after verification; re-check them.`, and add `- Verifier round 2 ran on <YYYY-MM-DD>: after verification.` to the spec's `## Open questions` (or the house equivalent), so step 7 knows there's no round left. Tell the user in one line what changed and that it's being re-checked. End your turn.
-   - When round 2 returns, apply its fixes, re-run the check and carry on from step 3. There is no round 3: if round 2 also says `Plan holds: no`, say so plainly in the report and in the spec's Open questions.
-3. **Status**: leave `status: draft`, or the house equivalent. The user moves it on once they've dealt with the cold review, not this skill.
-4. **Link the notes.**
+3. **Re-run** `check-spec.py` until it passes.
+   - **If you revised work items for `Plan holds: no`**, they haven't been checked at all. Launch `spec-verifier` once more with the same brief plus `Round 2: <Wn, Wm> were revised after verification; re-check them.`, and add `- Verifier round 2 ran on <YYYY-MM-DD>: after verification.` to the record's `## Verification`, so step 7 knows there's no round left. Tell the user in one line what changed and that it's being re-checked. End your turn.
+   - When round 2 returns, apply its fixes, re-run the check and carry on from item 4. There is no round 3: if round 2 also says `Plan holds: no`, say so plainly in the report and in the spec's Open questions.
+4. **Status**: leave `status: draft`, or the house equivalent. The user moves it on once they've dealt with the cold review, not this skill.
+5. **Link the notes.**
    - In the research note, add the spec's path (with `~`) to `related`. Don't change its status; `final` there means the research was verified, which is a separate question.
    - If there's an idea note, set `status: adopted` and add the spec's path to its `related`.
    - If there's an accepted decision, add the spec's path to its `related`.
    - Commit only those files: `git -C ~/notes add <files>`, then `git -C ~/notes commit` with the message `spec: <title>`, following this session's commit attribution rules. Don't push.
-   - Leave the spec itself uncommitted in the repo. The user reviews it and commits it under the repo's own rules.
-5. **Write the cold-review prompt and launch it,** unless the spec already has a `## Cold review` section: one full adversarial round per spec (step 6, item 5). The verifier checked citations and numbers. Judging assumptions and costs needs a reader who didn't write the spec.
+   - Leave the spec and its record uncommitted in the repo. The user reviews them and commits them under the repo's own rules.
+6. **Write the cold-review prompt and launch it,** unless the spec already has a saved cold review, in its record or, in an older spec, as a `## Cold review` section at its end: one full adversarial round per spec (step 6, item 5). The verifier checked citations and numbers. Judging assumptions and costs needs a reader who didn't write the spec.
 
    Read `~/.claude/skills/cold-review/SKILL.md` and build the prompt as its steps 3 and 4 say, for the kind `Implementation spec`, with that kind's extra lines. It is the same skeleton `/cold-review` uses, so a spec reviewed here and a document reviewed there answer the same question. Fill it in with:
    - the repo root, and the cite repo its `path:line` citations point into;
@@ -154,19 +159,33 @@ In `finish` mode, start here. Take the repo from the spec's location, and `cite-
    - If it says `Cold read: no`, say where it had to stop.
    - If you think a finding is wrong, say so and why in one line, but leave it in the list. The user decides.
    - Rows its `Needs a run` line names become spike questions: add each to `## Spike questions` with the experiment its "What would settle it" cell gives.
-   - Then save the review in the spec: append the reviewer's table and its closing lines unchanged at the very end, under `## Cold review`, after a line "Reviewed on <YYYY-MM-DD> by cold-reviewer. Saved unchanged; not acted on." It's the record of the one adversarial round, and it stops a later `/spec finish` from launching another. `check-spec.py` leaves the section out of its word count and its citation, link and template checks, and the spec verifier skips it. Saving the record isn't acting on it, so item 1 stands.
+   - Then save the review in the record: add the reviewer's table and its closing lines unchanged under `## Cold review`, after a line "Reviewed on <YYYY-MM-DD> by cold-reviewer. Saved unchanged; what was folded in is logged under Changes since the review." It's the record of the one adversarial round, and it stops a later `/spec finish` from launching another. Saving it isn't acting on it, so item 1 stands.
 4. **Repo-prescribed review.** If the repo prescribes its own review that a subagent doesn't satisfy (for example, `k8s-ai-observability`'s `docs/development-method.md` wants assumptions and costs reviewed by a cold session outside this one), say so, and give the user this prompt to paste into a fresh session:
 
    > Review `<spec path>` adversarially. Find assumptions presented as facts, costs not counted (files, checks that will go red, migrations), and anything a cold reader can't work through without redoing the research. Grade each finding by whether it affects correctness or a stated requirement, and say which don't. Don't edit the file.
 
-5. **Next.** Offer to fold in the findings that affect correctness or a requirement. If the user says yes, fold in those they pick, re-run `check-spec.py` until it passes, and if a fold adds or changes a citation or number, launch `spec-verifier` with the Round 2 line naming the work items changed, and add `- Verifier round 2 ran on <YYYY-MM-DD>: after the cold review.` to the spec's Open questions. When it returns, apply its fixes and re-run the check, then report in one line; the notes are already linked.
+5. **Next.** Offer to fold in the findings that affect correctness or a requirement. If the user says yes, fold in those they pick, re-run `check-spec.py` until it passes, and if a fold adds or changes a citation or number, launch `spec-verifier` with the Round 2 line naming the work items changed, and add `- Verifier round 2 ran on <YYYY-MM-DD>: after the cold review.` to the record's `## Verification`. When it returns, apply its fixes and re-run the check, then report in one line; the notes are already linked.
 
-   Each fold is a change nobody has reviewed: the review found the problem, not the fix. For every fold, and every later change to a work item, a Done when, the Design or the Decision (a spike answer, a user decision, a hand edit), add a line to `## Open questions`: `- Not reviewed: <what changed>, from <cold review row n, spike S<n> or the user>, on <YYYY-MM-DD>.` `check-spec.py` counts them. Don't run a second full cold review: after one adversarial round the remaining risk is mostly empirical, which is what the spikes are for. The exception is the one **delta review**: before implementation, if `Not reviewed:` lines exist, offer `/cold-review <spec>` in one line. It reviews only those changes, once.
+   Each fold is a change nobody has reviewed: the review found the problem, not the fix. For every fold, and every later change to a work item, a Done when, the Design or the Decision (a spike answer, a user decision, a hand edit), add a line to the record's `## Changes since the review`: `- Not reviewed: <what changed>, from <cold review row n, spike S<n> or the user>, on <YYYY-MM-DD>.` `check-spec.py` counts them. Don't run a second full cold review: after one adversarial round the remaining risk is mostly empirical, which is what the spikes are for. The exception is the one **delta review**: before implementation, if `Not reviewed:` lines exist, offer `/cold-review <spec>` in one line. It reviews only those changes, once.
 
    Once the fold-in is done (or declined), and unless `## Spike questions` says "None.", offer step 7 in one line, and go to it if the user says yes.
 
-   After that, the order is: step 7 (or `/spec spike <spec>` later), then `/spec finish <spec>` only after hand edits (with a Cold review saved, it launches no second review), then `/cold-review <spec>` for the delta review if there are `Not reviewed:` lines, then implement. Implement in a fresh session on a branch, starting in plan mode: "implement `<spec path>`, W1 first".
+   After that, the order is: step 7 (or `/spec spike <spec>` later), then `/spec finish <spec>` only after hand edits (with a Cold review saved, it launches no second review), then `/cold-review <spec>` for the delta review if there are `Not reviewed:` lines, then implement. Implement in a fresh session on a branch, starting in plan mode: "implement `<spec path>`, W1 first". When the work items have landed, run `/spec done <spec>` (step 8).
 
 ## 7. Spike
 
 Some spike questions can be answered by an experiment. Each runs as a headless `claude -p` session, sandboxed and capped at $2 and 60 turns, in a scratch copy of the code at read-at, and its verdict is folded back into the spec. The steps for this live in `~/.claude/skills/spec/spike-step.md`, read only when a spike round runs: read it now and follow it. In `spike` mode, start there.
+
+## 8. Done
+
+Run after the work items are built, from the repo, as `/spec done <spec>`. The build is the last and hardest test of a spec: it finds what reading, review and spikes didn't. This step writes that down, so the spec, its record and the research it came from say what is now true.
+
+1. **Read** the spec, its record, and the research note in its frontmatter (if any). Take the repo, `read-at` and `cite-repo` as `finish` mode does.
+2. **Find the build.** List the commits since the spec was first committed: `~/.claude/hooks/git-read.py log --reverse --format='%h %ad %s' --date=short <first commit of the spec>..HEAD`, where the first commit comes from `~/.claude/hooks/git-read.py log --diff-filter=A --format=%h -- <spec>`. Read the messages, and the diffs of the files each work item lists, enough to tell which work items landed and where the build departed from the spec: a value, an approach, a dependency, a file, a Done when that changed or was dropped. Don't run the build or the tests; the user can.
+3. **Ask** in one AskUserQuestion call, with up to four questions, only what the commits can't settle: whether a work item that shows no commit landed some other way, and whether any cold review was run outside `/cold-review` or `/spec` (a pasted prompt) whose reply should be saved.
+4. **Write the implementation notes** under the record's `## Implementation`, one line per departure: `- <YYYY-MM-DD>, <Wn> (<commit>): <what the build did differently, and why>`. Take the why from the commit message; if it gives none, say so. Save any review the user pastes under `## Cold review` (a full one) or `### Delta review, <date>` (a delta), unchanged, as step 6 would have. Don't rewrite the plan: once done, the spec is the record of what was planned, and the record says how it went.
+5. **Status.** Set the spec's `status: done` if every work item landed, `in-progress` if some haven't (name them in the report), or `superseded` if the user says another spec replaced it. Leave the idea note's status alone.
+6. **The research.** If a departure contradicts the research note's Recommendation or a Finding the Decision rests on (the build chose another option, a figure turned out wrong, a tool was dropped), say which, in one line each. Suggest `/research` to update the note, or `status: outdated` if the question itself has moved on. That call is the user's; change the note only if they say so, and then commit it in `~/notes` with the message `research: <title> (outdated by <spec basename>)`.
+7. **Check.** Run `check-spec.py` on the spec, and `~/.claude/skills/research/scripts/check-note.py` on the research note: a `related` path to a file the build deleted fails it. Fix those links in the note, and commit only that note.
+8. **Report** in five lines or fewer: the status, the work items landed, the number of implementation notes and the most important one, any research the build contradicts, and that the spec and record are left for the user to commit.
+

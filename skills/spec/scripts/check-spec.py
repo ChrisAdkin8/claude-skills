@@ -12,6 +12,13 @@ Citations are checked against the files as they were at read-at, because that's 
 describes; drift since then is reported separately. `(:48)` after a full citation in the same
 paragraph means the same file. Prints FAIL, WARN and INFO lines and exits 1 if anything failed.
 
+A spec holds the plan; its review history lives in its record, `records/<spec basename>-record.md`
+beside it: the cold review and any delta review, the `Not reviewed:` changes since, verifier
+rounds, spike routing and implementation notes. The plan is held to the word limit until the spec
+is done. Older specs that keep that history in the spec itself (a `## Cold review` section, `Not
+reviewed:` lines in Open questions, Route/Changes/Expect/Box lines under spike questions) are
+still read, with a WARN to move it to the record.
+
 Checks only what can be checked mechanically: that every citation points at a file and at lines
 that existed, whether cited files have changed since, work items and acceptance criteria, and,
 for specs written from the skill template, sections and leftover template text. Whether a cited
@@ -35,6 +42,9 @@ REQUIRED = [
 ]
 STATUSES = ("draft", "reviewed", "in-progress", "done", "superseded")
 WORD_WARN, WORD_FAIL = 3000, 4000  # template specs
+# Statuses where the spec is still the plan someone works from, so the limit holds. Once done or
+# superseded it's a record, and length only warns.
+LIVE = ("draft", "reviewed", "in-progress")
 HOUSE_WORD_WARN = 5000  # house-format specs follow their repo's own norms
 # `path/to/file.py:12` or `file.py:12-20`. The lookbehind stops matches starting mid-URL
 # (https://host/x.py:1) or mid-token; the lookahead stops `:1.2` version strings but lets a
@@ -72,6 +82,8 @@ SPIKE_FOLD = re.compile(
 RESULTS_PATH = re.compile(r"(?<![\w./~-])[\w.-][\w./-]*/spikes/[\w.-]+-results\.md")
 # The ledger of changes made after the cold review, and the delta review of them.
 NOT_REVIEWED = re.compile(r"\s*[-*]\s+Not reviewed:")
+ROUND_LINE = re.compile(r"\s*[-*]\s+Verifier round 2 ran on")
+IMPLEMENTATION = "## Implementation"
 DELTA_REVIEW = re.compile(r"###\s+Delta review")
 WORK_ITEM = re.compile(r"^#{2,3}\s+W(\d+)\b")
 DONE_WHEN = re.compile(r"done when", re.IGNORECASE)
@@ -160,6 +172,25 @@ def split_cold_review(lines, warns):
             "so it goes at the end"
         )
     return lines[:at] + lines[end:], lines[at:end]
+
+
+def record_path(spec):
+    """Where a spec's record lives: records/<basename>-record.md beside it."""
+    return spec.parent / "records" / f"{spec.stem}-record.md"
+
+
+def read_record(path):
+    """(lines, cold review lines, Not reviewed lines, implementation entries) of a record, or
+    empty values if there isn't one."""
+    if not path.is_file():
+        return [], [], [], []
+    lines = path.read_text(errors="replace").splitlines()
+    review = section(lines, "## Cold review") or []
+    changes = [l for l in lines if NOT_REVIEWED.match(l)]
+    implemented = [
+        l for l in section(lines, IMPLEMENTATION) or [] if re.match(r"\s*[-*]\s+\S", l)
+    ]
+    return lines, review, changes, implemented
 
 
 def template_prompts():
@@ -370,9 +401,12 @@ def check_work_items(body, templated, fails, warns):
                 + ("" if templated else f", and there's no '{ACCEPTANCE}' section")
             )
     nums = [n for _, n in items]
-    if templated and nums and nums != list(range(1, len(nums) + 1)):
+    # A later part of a split spec keeps its numbers (W4..W7), so commits naming them still
+    # match; what matters is that they run on in order.
+    if templated and nums and nums != list(range(nums[0], nums[0] + len(nums))):
         warns.append(
-            f"work items are numbered {nums}; expected W1..W{len(nums)} in order"
+            f"work items are numbered {nums}; expected W{nums[0]}..W{nums[0] + len(nums) - 1} "
+            "in order"
         )
     if templated and not items:
         fails.append("'## Work items' has no '### W1' items")
@@ -412,7 +446,10 @@ def main():
         print("RESULT: FAIL")
         return 1
     fails, warns, infos = [], [], []
-    lines, review = split_cold_review(lines, warns)
+    lines, legacy_review = split_cold_review(lines, warns)
+    record = record_path(spec)
+    record_lines, record_review, record_changes, implemented = read_record(record)
+    review = legacy_review + record_review
     fields, start = frontmatter(lines)
     body = strip_code(lines[start:])
     # A template spec has the template's frontmatter or its Work items section; a renamed
@@ -572,8 +609,12 @@ def main():
 
     # Secrets and account IDs.
     for pattern, what in SECRETS:
-        if pattern.search("\n".join([text, *review])):
+        if pattern.search("\n".join([text, *legacy_review])):
             fails.append(f"contains what looks like {what}")
+        if pattern.search("\n".join(record_lines)):
+            fails.append(f"its record {record.name} contains what looks like {what}")
+    if ACCOUNT_ID.search("\n".join(record_lines)):
+        warns.append(f"its record {record.name} contains a 12-digit number: make sure it isn't an AWS account ID")
     if ACCOUNT_ID.search("\n".join(body)):
         warns.append("contains a 12-digit number: make sure it isn't an AWS account ID")
     # Spike results are raw command output, committed beside the spec, so they get the same
@@ -599,12 +640,13 @@ def main():
         len(l.split()) for l in body if not SEPARATOR.fullmatch(l) and l not in folded
     )
     status = fields.get("status", "draft")
-    if templated and words > WORD_FAIL and status in ("draft", "reviewed"):
-        # A saved cold review doesn't lift the limit: what grows a spec past it is usually
-        # what was folded in after the review, which is the part nobody has reviewed.
+    if templated and words > WORD_FAIL and status in LIVE:
+        # Neither a saved review nor starting work lifts the limit: what grows a spec past it is
+        # usually what was folded in or learnt since, and someone still has to work from it.
         fails.append(
-            f"{words} words; the limit is {WORD_FAIL}. Split it into specs that each land on "
-            "their own"
+            f"{words} words; the limit is {WORD_FAIL} while the spec is {status}. Move review "
+            f"history and implementation notes to its record ({record.parent.name}/{record.name}), "
+            "and if it's still over, split it into specs that each land on their own"
             + (
                 ", keeping the saved cold review with the part whose work items it covers"
                 if review
@@ -620,8 +662,30 @@ def main():
         warns.append(f"{words} words: long for a spec. Could it be two?")
     # Changes folded in after the cold review are logged in Open questions as `Not reviewed:`
     # lines. One delta review, of just those changes, is allowed before implementation.
-    unreviewed = [l for l in section(body, "## Open questions") or [] if NOT_REVIEWED.match(l)]
+    open_questions = section(body, "## Open questions") or []
+    legacy_changes = [l for l in open_questions if NOT_REVIEWED.match(l)]
+    unreviewed = legacy_changes + record_changes
     delta = any(DELTA_REVIEW.match(l) for l in review)
+    residue = []
+    if legacy_review:
+        residue.append("the '## Cold review' section")
+    if legacy_changes:
+        residue.append(f"{len(legacy_changes)} 'Not reviewed:' lines")
+    if any(ROUND_LINE.match(l) for l in open_questions):
+        residue.append("the 'Verifier round 2 ran on' line")
+    routing = [l for l in folded if not SPIKE_ANSWER.match(l)]
+    if routing:
+        residue.append(f"{len(routing)} Route/Changes/Expect/Box lines under spike questions")
+    if residue and status in LIVE:
+        warns.append(
+            "review history kept in the spec: " + "; ".join(residue) + ". It belongs in the "
+            f"record, {record.parent.name}/{record.name}, so the spec stays the plan"
+        )
+    if implemented and status in ("draft", "reviewed"):
+        warns.append(
+            f"its record has {len(implemented)} implementation notes but the spec is still "
+            f"{status}: run `/spec done` to settle its status"
+        )
     if review and unreviewed and not delta:
         warns.append(
             f"{len(unreviewed)} changes since the cold review are marked 'Not reviewed:'; "

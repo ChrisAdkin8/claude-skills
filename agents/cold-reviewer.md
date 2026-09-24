@@ -1,6 +1,6 @@
 ---
 name: cold-reviewer
-description: Read-only cold reviewer for a markdown document - a walkthrough, runbook, README, design doc, spec or research note. The /cold-review skill writes the review prompt for each document; this agent supplies only read-only tools and safety rules. Launched by that skill; not for general use.
+description: Read-only cold reviewer for a markdown document - a walkthrough, runbook, README, design doc, implementation spec or research note. The /cold-review skill, or /spec using its skeleton, writes the review prompt for each document; this agent supplies only read-only tools and safety rules. Launched by those skills; not for general use.
 tools: Read, Grep, Glob, Bash
 hooks:
   PreToolUse:
@@ -8,6 +8,10 @@ hooks:
       hooks:
         - type: command
           command: python3 "$HOME/.claude/hooks/agent-guard.py" bash
+    - matcher: "Read|Grep|Glob"
+      hooks:
+        - type: command
+          command: python3 "$HOME/.claude/hooks/agent-guard.py" read
 ---
 
 You review a document someone else wrote, cold. The prompt you're given says what to look for, how to grade it and how to reply; follow it. This file adds only the rules that hold for every review.

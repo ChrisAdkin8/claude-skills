@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""PreToolUse guard for the /research and /spec agents (researcher, research-verifier,
-spec-verifier, spec-reviewer).
+"""PreToolUse guard for the /research, /spec and /cold-review agents (researcher,
+research-verifier, spec-verifier, cold-reviewer).
 
 Their safety rules say: no cloud CLIs, GitHub and git read-only, and (for the researcher) write
 only notes in ~/notes/research. This makes those rules hold when a fetched page carries
@@ -12,6 +12,11 @@ gh, git or one of the skill scripts, and those have per-command limits (GET only
 writes). It's a guard against injected instructions, not a sandbox: data can still leave in a
 GET request's URL.
 
+So credentials are kept out of reach instead (see SECRET_HOME): no command word may name them,
+nor may grep -r or rg search a directory that holds them, and the `read` mode refuses them to
+the Read, Grep and Glob tools. For Bash this is best effort, since a path built at run time from
+variables gets past it; for the tools it is exact, since the path arrives whole.
+
 Environment variables are checked too, because they change what an allowed command runs: git
 runs GIT_EXTERNAL_DIFF through a shell, bash sources BASH_ENV, Python reads PYTHONPATH. A
 `NAME=value` word before a command (or after `env` and the other wrappers) exports NAME to it,
@@ -22,6 +27,7 @@ too and get the same check.
 
 Usage, from an agent's frontmatter hooks:
   agent-guard.py bash            Bash tool
+  agent-guard.py read            Read, Grep and Glob tools: no credentials
   agent-guard.py write <dir>     Write/Edit tools: allow only files under <dir>
 
 Reads the hook's JSON on stdin. Exit 0 allows; exit 2 blocks and tells the agent why on stderr.
@@ -147,6 +153,38 @@ CURL_BLOCK_LONG = (
     "--stderr", "--etag-save", "--hsts", "--alt-svc",
 )  # fmt: skip
 PUNCT = set("();<>|&")
+# Credentials no agent needs to read. A fetched page can still make an agent send data out in a
+# GET request's URL, so the data it can reach is what has to be limited. Keep the home entries in
+# step with `denyRead` in ~/.claude/skills/spec/spike-settings.json, which can't take all of
+# ~/.config: git and uv read their own config there.
+SECRET_HOME = tuple(
+    HOME / p
+    for p in (
+        ".ssh", ".aws", ".kube", ".gnupg", ".docker", ".azure", ".config", ".netrc",
+        ".git-credentials", ".npmrc", ".pypirc", ".claude.json", ".claude/.credentials.json",
+    )
+)  # fmt: skip
+# The same directories and files anywhere, e.g. a relative `.aws/credentials` read from ~.
+SECRET_NAMES = {
+    ".ssh",
+    ".aws",
+    ".kube",
+    ".gnupg",
+    ".azure",
+    ".netrc",
+    ".git-credentials",
+}
+# Files that hold credentials or Terraform state wherever they are. `.env.example` and its
+# kin are templates, so they're readable.
+SECRET_FILE = re.compile(
+    r"(?:^|/)(?:\.env(?:\.(?!example$|sample$|template$|dist$)[\w.-]+)?"
+    r"|[^/]*\.tfvars(?:\.json)?|[^/]*\.tfstate(?:\.backup)?|[^/]*\.(?:pem|p12|pfx)"
+    r"|id_(?:rsa|dsa|ecdsa|ed25519))$"
+)
+# curl reads local files through file:// URLs; other URLs are fetched, not read.
+FILE_URL = re.compile(r"^file://(?:localhost)?(?=[/~$])")
+URL = re.compile(r"[a-zA-Z][\w+.-]*://")
+CWD = os.getcwd()  # replaced by the hook input's cwd in main()
 
 
 def block(reason) -> NoReturn:
@@ -517,14 +555,138 @@ def check_reader(name, args):
         block("`rg --pre` runs another program")
 
 
+def expand_home(text):
+    """`~`, `$HOME` and `${HOME}` at the start of a path, as the shell would expand them."""
+    for prefix in ("~/", "$HOME/", "${HOME}/"):
+        if text.startswith(prefix):
+            return str(HOME) + "/" + text[len(prefix) :]
+    return str(HOME) if text in ("~", "$HOME", "${HOME}") else text
+
+
+def absolute(text):
+    """The path a word names, made absolute against the hook's working directory."""
+    path = expand_home(FILE_URL.sub("", text))
+    return os.path.normpath(os.path.join(CWD, path))
+
+
+def under(path, parent):
+    return path == parent or path.startswith(parent.rstrip("/") + "/")
+
+
+def secret_path(path):
+    """Why an absolute path is a secret, or None."""
+    for secret in SECRET_HOME:
+        if under(path, str(secret)):
+            return f"{secret} holds credentials"
+    if hidden := next((p for p in Path(path).parts if p in SECRET_NAMES), None):
+        return f"`{hidden}` holds credentials"
+    if SECRET_FILE.search(path):
+        return f"`{Path(path).name}` is a credentials or state file"
+    return None
+
+
+def secret_word(word):
+    """Why a command word names a secret file or directory, or None.
+
+    Only words that look like paths count: they contain `/` or start with `~` or `$HOME`, or
+    they name a file that exists. Anything else is a pattern or a value (`grep '.env' f`). A
+    path built from other variables can't be read here, which is why this is best effort."""
+    for text in (word, word.split("=", 1)[1] if "=" in word else None):
+        text = FILE_URL.sub("", text or "")
+        if not text or URL.match(text):
+            continue
+        if "$" in text and not text.startswith(("$HOME", "${HOME}")):
+            continue
+        pathlike = "/" in text or text.startswith(("~", "$HOME", "${HOME}"))
+        glob_at = next((i for i, ch in enumerate(text) if ch in "*?["), None)
+        if glob_at is not None:
+            if not pathlike:
+                continue
+            # `~/.a*/credentials` reaches a secret if the part before the glob could.
+            stem = absolute(text[:glob_at]) if glob_at else CWD
+            stem += "/" if text[glob_at - 1 : glob_at] in ("/", "") else ""
+            if any(str(s).startswith(stem) for s in SECRET_HOME):
+                return f"`{text}` can expand to a credentials directory"
+            text = text[:glob_at]
+        path = absolute(text)
+        if not pathlike and not os.path.lexists(path):
+            continue
+        if reason := secret_path(path):
+            return reason
+    return None
+
+
+def ancestor_of_secret(path):
+    """True if a directory holds a credentials directory, so a recursive read reaches it."""
+    return any(
+        under(str(secret), path) and str(secret) != path for secret in SECRET_HOME
+    )
+
+
+def check_secrets(raw, argv):
+    """Block a command that reads a credentials file, or searches a tree that holds one.
+
+    `raw` is the simple command as written, assignments included (`f=~/.aws/credentials` is
+    as bad as reading it); `argv` is the command after unwrap. A grep or rg pattern is a
+    pattern, not a path, so `grep -n '.env' f` is fine even where a `.env` exists."""
+    name, args = (os.path.basename(argv[0]), argv[1:]) if argv else ("", [])
+    searcher = name in ("grep", "egrep", "fgrep", "rg")
+    operands = [a for a in args if not a.startswith("-")]
+    pattern = None
+    explicit = any(a.startswith(("-e", "--regexp", "-f", "--file")) for a in args)
+    if searcher and operands and not explicit:
+        pattern, operands = operands[0], operands[1:]
+    for word in raw:
+        if word is pattern:
+            continue
+        if reason := secret_word(word):
+            block(
+                f"{reason}. These agents read untrusted content, so they may not read "
+                "secrets, which could leave in a request URL"
+            )
+    recursive = name == "rg" or (
+        searcher
+        and any(
+            a in ("--recursive", "--dereference-recursive")
+            or re.fullmatch(r"-[a-zA-Z]*[rR][a-zA-Z]*", a)
+            for a in args
+        )
+    )
+    if not recursive:
+        return
+    for root in operands or ["."]:
+        if ancestor_of_secret(absolute(root)):
+            block(
+                f"`{name}` over {absolute(root)} would read the credentials directories "
+                "inside it; search a narrower directory"
+            )
+
+
+def check_read(tool_name, tool_input):
+    """Read, Grep and Glob: the same secrets, from the tool's own path argument. Glob lists
+    names only, so it's refused only inside a credentials directory, not above one."""
+    path = tool_input.get("file_path") or tool_input.get("path") or ""
+    if not path:
+        return
+    target = absolute(path)
+    if reason := secret_path(target):
+        block(f"{reason}. These agents may not read secrets")
+    if tool_name == "Grep" and ancestor_of_secret(target):
+        block(
+            f"Grep over {target} would read the credentials directories inside it; "
+            "search a narrower directory"
+        )
+
+
 def check_command(command, depth=0):
     if depth > 4:
         block("commands nested too deeply to check")
     subs, expands = substitutions(command)
     for sub in subs:
         check_command(sub, depth + 1)
-    for argv in simple_commands(tokens(command)):
-        argv = unwrap(argv)
+    for raw in simple_commands(tokens(command)):
+        argv = unwrap(raw)
+        check_secrets(raw, argv)
         if not argv or argv[0].startswith("#"):
             continue
         if argv[0] in ("for", "select"):
@@ -589,8 +751,12 @@ def main():
     except json.JSONDecodeError:
         block("couldn't read the hook input")
     tool_input = event.get("tool_input", {})
+    global CWD
+    CWD = event.get("cwd") or CWD
     if mode == "bash":
         check_command(tool_input.get("command", ""))
+    elif mode == "read":
+        check_read(event.get("tool_name", ""), tool_input)
     elif mode == "write" and len(sys.argv) > 2:
         check_write(tool_input.get("file_path", ""), sys.argv[2])
     else:

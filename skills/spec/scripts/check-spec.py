@@ -70,6 +70,9 @@ SPIKE_FOLD = re.compile(
     r"\s+(?:Route|Changes|Expect|Box|Answered|Partly answered|Open):"
 )
 RESULTS_PATH = re.compile(r"(?<![\w./~-])[\w.-][\w./-]*/spikes/[\w.-]+-results\.md")
+# The ledger of changes made after the cold review, and the delta review of them.
+NOT_REVIEWED = re.compile(r"\s*[-*]\s+Not reviewed:")
+DELTA_REVIEW = re.compile(r"###\s+Delta review")
 WORK_ITEM = re.compile(r"^#{2,3}\s+W(\d+)\b")
 DONE_WHEN = re.compile(r"done when", re.IGNORECASE)
 ACCEPTANCE = "## Acceptance criteria"
@@ -551,7 +554,9 @@ def main():
     # Leftover template text.
     if templated:
         leftovers = [p for p in template_prompts() if p in text]
-        if "{{" in text:
+        # Outside code only: Argo, Helm, Jinja and GitHub Actions write their own expressions
+        # as {{ ... }}, and a spec quotes them in backticks.
+        if "{{" in INLINE_CODE.sub("", "\n".join(lines[:start] + body)):
             leftovers.append("{{placeholder}}")
         if any(line.strip() == "-" for line in body):
             leftovers.append("empty '-' bullet")
@@ -571,6 +576,21 @@ def main():
             fails.append(f"contains what looks like {what}")
     if ACCOUNT_ID.search("\n".join(body)):
         warns.append("contains a 12-digit number: make sure it isn't an AWS account ID")
+    # Spike results are raw command output, committed beside the spec, so they get the same
+    # check: this spec's own results file, and any other its answer lines cite.
+    results = {spec.parent / "spikes" / f"{spec.stem}-results.md"} | {
+        repo / p for line in body if SPIKE_ANSWER.match(line) for p in RESULTS_PATH.findall(line)
+    }
+    for path in sorted(r for r in results if r.is_file()):
+        content = path.read_text(errors="replace")
+        for pattern, what in SECRETS:
+            if pattern.search(content):
+                fails.append(f"spike results {path.name} contain what looks like {what}")
+        if ACCOUNT_ID.search(content):
+            warns.append(
+                f"spike results {path.name} contain a 12-digit number: make sure it isn't an "
+                "AWS account ID"
+            )
 
     folded = [
         l for l in section(body, "## Spike questions") or [] if SPIKE_FOLD.match(l)
@@ -579,20 +599,17 @@ def main():
         len(l.split()) for l in body if not SEPARATOR.fullmatch(l) and l not in folded
     )
     status = fields.get("status", "draft")
-    if (
-        templated
-        and words > WORD_FAIL
-        and status in ("draft", "reviewed")
-        and not review
-    ):
+    if templated and words > WORD_FAIL and status in ("draft", "reviewed"):
+        # A saved cold review doesn't lift the limit: what grows a spec past it is usually
+        # what was folded in after the review, which is the part nobody has reviewed.
         fails.append(
-            f"{words} words; the limit is {WORD_FAIL}. Split it into specs that each land on their own"
-        )
-    elif templated and words > WORD_FAIL and review:
-        # Reviewed already: splitting now would orphan the review. Spikes and hand edits since
-        # still get `/spec finish`.
-        warns.append(
-            f"{words} words, over the {WORD_FAIL} limit; a cold review is saved, so left as is"
+            f"{words} words; the limit is {WORD_FAIL}. Split it into specs that each land on "
+            "their own"
+            + (
+                ", keeping the saved cold review with the part whose work items it covers"
+                if review
+                else ""
+            )
         )
     elif templated and words > WORD_FAIL:
         # In progress, done or superseded: a record, not something to split now.
@@ -601,6 +618,17 @@ def main():
         )
     elif words > (WORD_WARN if templated else HOUSE_WORD_WARN):
         warns.append(f"{words} words: long for a spec. Could it be two?")
+    # Changes folded in after the cold review are logged in Open questions as `Not reviewed:`
+    # lines. One delta review, of just those changes, is allowed before implementation.
+    unreviewed = [l for l in section(body, "## Open questions") or [] if NOT_REVIEWED.match(l)]
+    delta = any(DELTA_REVIEW.match(l) for l in review)
+    if review and unreviewed and not delta:
+        warns.append(
+            f"{len(unreviewed)} changes since the cold review are marked 'Not reviewed:'; "
+            "`/cold-review <spec>` runs the one delta review of them, before implementation"
+        )
+    elif unreviewed:
+        infos.append(f"{len(unreviewed)} changes marked 'Not reviewed:' in Open questions")
     marks = len(re.findall(r"\*\((?:assumption|inferred|unverified)[^)]*\)\*", text))
     where = "" if cite_repo == repo else f" in {cite_repo.name}"
     infos.append(

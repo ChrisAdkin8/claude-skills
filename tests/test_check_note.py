@@ -100,6 +100,25 @@ class LimitAfterVerification(unittest.TestCase):
         self.assertEqual(result, "RESULT: FAIL", out)
 
 
+class Placeholders(unittest.TestCase):
+    def test_expression_in_inline_code_passes(self):
+        text = padded(FIXTURE.read_text(), 0).replace(
+            "### Counter-evidence",
+            "Helm renders `{{ .Values.image }}` at install time.\n\n### Counter-evidence",
+            1,
+        )
+        out, result = check(text)
+        self.assertEqual(result, "RESULT: PASS", out)
+
+    def test_placeholder_in_prose_fails(self):
+        text = FIXTURE.read_text().replace(
+            "### Counter-evidence", "Owned by {{owner}}.\n\n### Counter-evidence", 1
+        )
+        out, result = check(text)
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("{{placeholder}}", out)
+
+
 class PoolRowsAreNotStale(unittest.TestCase):
     """A Verification row may quote a Candidate pool line, which sits after Sources."""
 

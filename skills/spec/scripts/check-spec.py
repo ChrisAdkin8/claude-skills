@@ -401,9 +401,12 @@ def check_work_items(body, templated, fails, warns):
                 + ("" if templated else f", and there's no '{ACCEPTANCE}' section")
             )
     nums = [n for _, n in items]
-    if templated and nums and nums != list(range(1, len(nums) + 1)):
+    # A later part of a split spec keeps its numbers (W4..W7), so commits naming them still
+    # match; what matters is that they run on in order.
+    if templated and nums and nums != list(range(nums[0], nums[0] + len(nums))):
         warns.append(
-            f"work items are numbered {nums}; expected W1..W{len(nums)} in order"
+            f"work items are numbered {nums}; expected W{nums[0]}..W{nums[0] + len(nums) - 1} "
+            "in order"
         )
     if templated and not items:
         fails.append("'## Work items' has no '### W1' items")

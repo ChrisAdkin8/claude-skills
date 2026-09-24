@@ -1,6 +1,6 @@
 ---
 name: cold-reviewer
-description: Read-only cold reviewer for a markdown document - a walkthrough, runbook, README, design doc, spec or research note. The /cold-review skill writes the review prompt for each document; this agent supplies only read-only tools and safety rules. Launched by that skill; not for general use.
+description: Read-only cold reviewer for a markdown document - a walkthrough, runbook, README, design doc, implementation spec or research note. The /cold-review skill, or /spec using its skeleton, writes the review prompt for each document; this agent supplies only read-only tools and safety rules. Launched by those skills; not for general use.
 tools: Read, Grep, Glob, Bash
 hooks:
   PreToolUse:

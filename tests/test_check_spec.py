@@ -25,15 +25,19 @@ Reviewed on 2026-09-15 by spec-reviewer.
 """
 
 
-def check(text, results=None):
+def check(text, results=None, record=None):
     """(output, result line) from check-spec.py on a spec with this text, and with this text
-    in its spike results file, `spikes/spec-results.md` beside it, if given."""
+    in its spike results file, `spikes/spec-results.md` beside it, and in its record,
+    `records/spec-record.md`, if given."""
     with tempfile.TemporaryDirectory() as tmp:
         spec = Path(tmp) / "spec.md"
         spec.write_text(text)
         if results is not None:
             (Path(tmp) / "spikes").mkdir()
             (Path(tmp) / "spikes" / "spec-results.md").write_text(results)
+        if record is not None:
+            (Path(tmp) / "records").mkdir()
+            (Path(tmp) / "records" / "spec-record.md").write_text(record)
         run = subprocess.run(
             [sys.executable, str(CHECKER), str(spec), "--repo", str(ROOT)],
             capture_output=True,
@@ -80,11 +84,18 @@ class ColdReview(unittest.TestCase):
             out, r"FAIL: \d+ words; the limit is 4000.*keeping the saved cold review"
         )
 
-    def test_long_spec_in_progress_warns(self):
+    def test_long_spec_in_progress_fails(self):
+        # Someone is working from it, so it's still the plan and the limit holds.
         text = self.long().replace("status: draft", "status: in-progress")
         out, result = check(with_review(text))
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertRegex(out, r"FAIL: \d+ words; the limit is 4000 while the spec is in-progress")
+
+    def test_long_spec_done_warns(self):
+        text = self.long().replace("status: draft", "status: done")
+        out, result = check(with_review(text))
         self.assertEqual(result, "RESULT: PASS", out)
-        self.assertRegex(out, r"WARN: \d+ words, over the 4000 limit; status in-progress")
+        self.assertRegex(out, r"WARN: \d+ words, over the 4000 limit; status done")
 
     def test_review_is_not_checked(self):
         # Its bad citation and missing note would FAIL anywhere else in the spec.
@@ -289,6 +300,71 @@ class SpikeResults(unittest.TestCase):
         out, result = check(text)
         self.assertEqual(result, "RESULT: PASS", out)
         self.assertNotIn("more than one", out)
+
+
+RECORD = """# Record: a spec
+
+""" + REVIEW
+
+
+class Record(unittest.TestCase):
+    """Review history lives in records/<basename>-record.md beside the spec."""
+
+    def setUp(self):
+        self.base = FIXTURE.read_text()
+
+    def test_spec_with_record_passes_quietly(self):
+        out, result = check(self.base, record=RECORD)
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertNotIn("review history kept in the spec", out)
+
+    def test_changes_logged_in_record_warn_until_delta(self):
+        record = RECORD + "\n## Changes since the review\n\n- Not reviewed: W1 changed, on 2026-09-24.\n"
+        out, _ = check(self.base, record=record)
+        self.assertRegex(out, r"WARN: 1 changes since the cold review .*delta review")
+        out, _ = check(self.base, record=RECORD + DELTA + record[len(RECORD):])
+        self.assertNotIn("WARN: 1 changes", out)
+
+    def test_history_in_spec_warns(self):
+        out, result = check(with_review(self.base))
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertIn("review history kept in the spec: the '## Cold review' section", out)
+
+    def test_spike_routing_in_spec_warns(self):
+        entry = f"   Route: spike\n   Box: $2\n   Answered: it runs (spike S1, `{EXISTING_RESULTS}`)\n"
+        out, _ = check(with_spikes(self.base, entry))
+        self.assertIn("2 Route/Changes/Expect/Box lines under spike questions", out)
+
+    def test_history_in_done_spec_is_left_alone(self):
+        out, _ = check(with_review(self.base.replace("status: draft", "status: done")))
+        self.assertNotIn("review history kept in the spec", out)
+
+    def test_implemented_but_draft_warns(self):
+        record = RECORD + "\n## Implementation\n\n- 2026-09-24, W1 (abc1234): it differed.\n"
+        out, result = check(self.base, record=record)
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertIn("1 implementation notes but the spec is still draft", out)
+
+    def test_secrets_checked_in_record(self):
+        token = "gh" + "p_" + "A" * 36
+        out, result = check(self.base, record=RECORD + f"\nleaked {token}\n")
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("its record spec-record.md contains what looks like a GitHub token", out)
+
+
+class Numbering(unittest.TestCase):
+    def test_later_part_keeps_its_numbers(self):
+        base = FIXTURE.read_text()
+        self.assertIn("### W1", base)
+        out, result = check(base.replace("### W1", "### W4"))
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertNotIn("numbered", out)
+
+    def test_gap_warns(self):
+        base = FIXTURE.read_text()
+        text = base.replace("## Spike questions", "### W3: another\n\n- **Change:** x\n- **Files:** y\n- **Done when:** `true` exits 0\n\n## Spike questions", 1)
+        out, _ = check(text)
+        self.assertIn("work items are numbered [1, 3]", out)
 
 
 if __name__ == "__main__":

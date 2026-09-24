@@ -21,6 +21,12 @@ A document can still change after its review: findings get folded in, spikes ans
 the user decides things. Those changes are the least-checked part of it. So a document that logs
 them as `Not reviewed:` lines gets one **delta review**, of just those changes, and no more.
 
+A document's review history lives in its **record**, `records/<basename>-record.md` in the
+document's directory (the layout is `~/.claude/skills/spec/record-template.md`): the saved
+review, any delta review, and the `Not reviewed:` log. The document stays what its readers came
+for. Older documents keep a saved review at their end, under `## Cold review`, and `Not reviewed:`
+lines in their open questions; read those the same way, and write anything new to a record.
+
 `/spec` builds its cold review from steps 3 and 4 of this file, so the two ask the same question.
 Change the skeleton here, not there.
 
@@ -29,16 +35,20 @@ Change the skeleton here, not there.
 - `/cold-review <path>`: the main path. Frame, write the prompt, launch the reviewer, relay it.
 - `/cold-review prompt <path>`: write the prompt and hand it over, launching nothing. Use it when
   the user wants the review in a session that shares no process with this one, or wants to run it
-  later. Stop after step 4.
+  later. Stop after step 4. When the user pastes the reply back into this session, save it as
+  step 5 says: a review run elsewhere and never saved leaves no record that the round happened.
 
 ## 1. Frame (in the conversation)
 
 1. **The document.** Resolve the path from `$ARGUMENTS`; if it's empty, use the document just
    discussed, and failing that ask for a path in one line and stop. It must exist and be markdown.
-2. **An earlier review.** Grep the document for `## Cold review`, before anything else:
+2. **An earlier review.** Look for a saved review before anything else: a `## Cold review`
+   heading at the start of a line in the record, `records/<basename>-record.md` beside the
+   document, or failing that in the document itself (an older one). `Not reviewed:` lines are in
+   the record's `## Changes since the review`, or the older document's open questions.
    - None: this is the full review. Carry on.
-   - One, with `Not reviewed:` lines elsewhere in the document and no `### Delta review` under
-     it: this is the delta review. Carry on, and follow the delta notes in steps 3 to 5.
+   - One, with `Not reviewed:` lines and no `### Delta review` under it: this is the delta
+     review. Carry on, and follow the delta notes in steps 3 to 5.
    - One, with no `Not reviewed:` lines: say that the document had its review on the date in
      the section and nothing since is logged as unreviewed, and stop. If the user says it changed
      anyway, the fix is to log the changes as `Not reviewed:` lines, then run this again.
@@ -51,7 +61,8 @@ Change the skeleton here, not there.
    - If `~/.claude/hooks/git-read.py -C <root> status --porcelain` shows the document or the code it describes is uncommitted, say
      so in one line: the reviewer reads the working tree, so its findings age with it.
    - Delta review: find the commit that saved the review, `~/.claude/hooks/git-read.py -C <root> log
-     --format=%h -S'## Cold review' -- <document>` (the last line is the oldest). If there is one, the reviewer can diff the
+     --format=%h -S'## Cold review' -- <the record, or the document if the review is in it>` (the
+     last line is the oldest). If there is one, the reviewer can diff the
      document from there; if not (the review was never committed), it works from the `Not
      reviewed:` lines alone.
 4. **Who wrote it.** If this session wrote or edited the document, say so in one line. The agent is
@@ -116,7 +127,7 @@ review answers the same question and you can relay it; fill in the rest.
 Review <absolute document path> adversarially. You haven't seen how it was written. Work from the document, the code in <absolute repo root, or "no repo: work from the document and what it links"><, whose path:line citations point into <cite repo>, if it differs>, and what it links to. Today's date is <YYYY-MM-DD>.
 
 It is <the kind from step 2, with its article: "a runbook", "an implementation spec">, so a cold reader has to be able to <what that row says>. Find what stops them: statements the code contradicts, statements that were true and have drifted, steps and prerequisites that are missing, assumptions presented as facts, costs not counted (files, checks that will go red, migrations), and anything a cold reader can't work through without asking the author. Grade each finding by whether it affects correctness or a stated requirement, and say which don't. Don't edit the file.
-<Delta review only: A full cold review of this document is saved at its end, under "## Cold review". Since then it has changed in the places below. Read the document straight through once as usual, then report only findings in these changes, or caused by them elsewhere in the document. The lines below say where it changed, as its author logged it, not whether the change is right. Leave the saved review alone: it is a record.
+<Delta review only: A full cold review of this document is saved <in its record, <absolute record path> | at its end, under "## Cold review">. Since then it has changed in the places below. Read the document straight through once as usual, then report only findings in these changes, or caused by them elsewhere in the document. The lines below say where it changed, as its author logged it, not whether the change is right. Leave the saved review alone: it is a record.
 - Diff: `git -C <repo root> diff <commit from step 1> -- <document path>`<, or "none: the review was never committed">
 - Changes logged since the review: <each Not reviewed: line, quoted exactly>>
 
@@ -136,7 +147,7 @@ Then one line each: `Counts: N findings - C correctness, R requirement, K neithe
 ````
 
 In `prompt` mode, give the user the filled-in prompt in a fenced block, say it expects a session
-with no history of this one, and stop.
+with no history of this one, ask them to paste the reply back here so it can be saved, and stop.
 
 Otherwise launch the Agent tool with `subagent_type: cold-reviewer` and that prompt. The agent
 brings only read-only tools and safety rules; everything it reviews for comes from your prompt.
@@ -159,18 +170,19 @@ turn.
 3. **Offer, in one line each:** folding in the findings that affect correctness or a requirement,
    and saving the review. Don't do either unasked.
    - **Folding in:** fold only the ones the user picks. Don't touch the rest. A document with a
-     saved review logs each fold as `- Not reviewed: <what changed>, from <review> row <n>, on
-     <YYYY-MM-DD>.` in its open questions (for a spec, `## Open questions`, where `check-spec.py`
-     counts them), since the fix itself hasn't been reviewed. After a delta review, those lines are the record of what stays
-     unreviewed.
-   - **Saving:** append the table and its closing lines unchanged at the end of the document, under
-     `## Cold review`, after a line `Reviewed on <YYYY-MM-DD> by cold-reviewer. Saved unchanged;
-     not acted on.` Saving the record isn't acting on it. Offer it for a document that keeps its
-     own history - a spec, an ADR, a design doc - and not for one people read for instructions,
-     such as a README or a runbook, where a review table at the bottom is noise.
-   - **Saving a delta review:** append it inside the existing `## Cold review` section, at its
-     end, under `### Delta review, <YYYY-MM-DD>`, after a line `Reviewed on <YYYY-MM-DD> by
-     cold-reviewer: the changes logged as Not reviewed. Saved unchanged; not acted on.` Then
-     change each `Not reviewed:` line it covered to `Delta-reviewed on <YYYY-MM-DD>:`, keeping the
-     rest of the line. That edits the log, not the document's content. For a spec, save it
-     without asking, as `/spec` does with the full review: the spec's checker reads the section.
+     saved review logs each fold in its record, under `## Changes since the review`, as `- Not
+     reviewed: <what changed>, from <review> row <n>, on <YYYY-MM-DD>.` (`check-spec.py` counts
+     them for a spec), since the fix itself hasn't been reviewed. After a delta review, those
+     lines are the record of what stays unreviewed.
+   - **Saving:** in the record (start it from the record template, keeping only the sections it
+     needs), add the table and its closing lines unchanged under `## Cold review`, after a line
+     `Reviewed on <YYYY-MM-DD> by cold-reviewer. Saved unchanged; what was folded in is logged
+     under Changes since the review.` Saving it isn't acting on it. Since the record is a
+     separate file, this suits any document, a README or runbook included.
+   - **Saving a delta review:** in the same record, at the end of its `## Cold review` section,
+     under `### Delta review, <YYYY-MM-DD>`, after a line `Reviewed on <YYYY-MM-DD> by
+     cold-reviewer: the changes logged as Not reviewed. Saved unchanged.` Then change each `Not
+     reviewed:` line it covered to `Delta-reviewed on <YYYY-MM-DD>:`, keeping the rest of the
+     line. For an older document whose review is at its end, add the delta there instead, beside
+     the review it follows. For a spec, save it without asking, as `/spec` does with the full
+     review: the spec's checker reads it.

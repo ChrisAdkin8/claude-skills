@@ -206,3 +206,29 @@ skill still reads. All six cases in parallel, on the default model.
 | wrong-figure | research-verifier | PASS | 4 | $0.07 |
 
 Total $0.82. `/spec done` is orchestration in the main session, so no eval covers it.
+
+## After the cold review's guard fixes (2026-09-25)
+
+Eighth run, on the uncommitted working tree of branch `guard-review-fixes`: a wrapper such as
+`env` with no command is refused; a curl or gh argument may expand only variables set to fixed
+text or derived from it by pure text tools or `curl` over http(s) (`tainted_names`, `pure`), and
+`$(...)` only when pure; curl `-H`, `--header`, `--proxy-header` and `--url` refuse `@file`. The
+researcher's safety rules say so. All six cases in parallel, on the default model.
+
+| Case | Agent | Result | Turns | Cost |
+|---|---|---|---:|---:|
+| absence-claim | research-verifier | PASS | 10 | $0.25 |
+| cold-review-skip | spec-verifier | PASS | 7 | $0.19 |
+| delta-review | cold-reviewer | PASS | 7 | $0.20 |
+| spec-miscite | spec-verifier | PASS | 5 | $0.15 |
+| spike-inherited | spec-verifier | PASS | 7 | $0.16 |
+| wrong-figure | research-verifier | PASS | 4 | $0.11 |
+
+Total $1.06. absence-claim ran its HN and GitHub loops with no refusal. The one refused command,
+in cold-review-skip, was a `python3 -` heredoc, refused by the rule that `python3` runs only the
+skill scripts, which HEAD has too.
+
+Replay over all 4,419 agent Bash commands to date: 11 allowed at HEAD are refused now, all on
+purpose: one bare `env`, nine requests built from `gh api` output, and one built from a file's
+lines. The first draft of the rule refused 54, mostly searches URL-encoded through
+`$(printf … | sed …)` or `jq -rn --arg`, which `pure` now allows.

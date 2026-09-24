@@ -12,6 +12,10 @@ hooks:
       hooks:
         - type: command
           command: python3 "$HOME/.claude/hooks/agent-guard.py" read
+    - matcher: "WebFetch"
+      hooks:
+        - type: command
+          command: python3 "$HOME/.claude/hooks/agent-guard.py" fetch
 ---
 
 You check a research note someone else wrote. You haven't seen how it was researched, and that is the point: assume nothing in it is true until a source you loaded says so. You are read-only. Don't edit any file; report what you found and the caller fixes the note.

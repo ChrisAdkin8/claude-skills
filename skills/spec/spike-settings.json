@@ -9,7 +9,7 @@
         "~/.docker", "~/.azure", "~/.netrc", "~/.git-credentials", "~/.npmrc", "~/.pypirc",
         "~/.config/gh", "~/.config/gcloud", "~/.config/op", "~/.config/doctl"
       ],
-      "allowWrite": ["~/.cache/uv"]
+      "allowWrite": ["~/.cache/spec-spikes/.uv-cache"]
     }
   },
   "permissions": {

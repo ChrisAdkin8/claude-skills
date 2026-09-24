@@ -2,7 +2,7 @@
 name: cold-review
 description: Give a markdown file one adversarial cold read by an agent that never saw this conversation, then relay what it found. Use when the user runs /cold-review, or asks for a cold, fresh-eyes or adversarial review of a document - a walkthrough, runbook, README, design doc, spec or research note. Accepts the path to a markdown file; "prompt <path>" writes the review prompt for the user to run in a fresh session instead of launching an agent. On a document that already has a saved review, it runs the one delta review of the changes logged since.
 argument-hint: <path to a markdown file> | prompt <path to a markdown file>
-allowed-tools: Read, Grep, Glob, Bash(git rev-parse *), Bash(git -C * rev-parse *), Bash(git status *), Bash(git -C * status *), Bash(git log *), Bash(git -C * log *), Bash(git ls-files *), Bash(git -C * ls-files *), Bash(grep *), Bash(ls *), Edit(~/code/**), Edit(~/notes/**)
+allowed-tools: Read, Grep, Glob, Bash(git rev-parse *), Bash(git status *), Bash(git ls-files *), Bash(~/.claude/hooks/git-read.py *), Bash(grep *), Bash(ls *), Edit(~/code/**), Edit(~/notes/**)
 ---
 
 # Cold-review a document
@@ -45,13 +45,13 @@ Change the skeleton here, not there.
    - One that already has a `### Delta review`: say that the document had its full review and
      its delta review, name any `Not reviewed:` lines left, and stop. They stay listed as
      unreviewed; that's the record, not a reason for a third round.
-3. **Its repo.** `git rev-parse --show-toplevel` from the document's directory. Record the root and
-   `git rev-parse --short HEAD`. A document outside a repo (a note in `~/notes`) is fine: the
+3. **Its repo.** `~/.claude/hooks/git-read.py -C <the document's directory> rev-parse --show-toplevel`. Record the root and
+   `~/.claude/hooks/git-read.py -C <root> rev-parse --short HEAD`. A document outside a repo (a note in `~/notes`) is fine: the
    review then works from the document and whatever it links.
-   - If `git status --porcelain` shows the document or the code it describes is uncommitted, say
+   - If `~/.claude/hooks/git-read.py -C <root> status --porcelain` shows the document or the code it describes is uncommitted, say
      so in one line: the reviewer reads the working tree, so its findings age with it.
-   - Delta review: find the commit that saved the review, `git log --format=%h -S'## Cold review'
-     -- <document>` (the last line is the oldest). If there is one, the reviewer can diff the
+   - Delta review: find the commit that saved the review, `~/.claude/hooks/git-read.py -C <root> log
+     --format=%h -S'## Cold review' -- <document>` (the last line is the oldest). If there is one, the reviewer can diff the
      document from there; if not (the review was never committed), it works from the `Not
      reviewed:` lines alone.
 4. **Who wrote it.** If this session wrote or edited the document, say so in one line. The agent is

@@ -2,7 +2,7 @@
 name: research
 description: Research a question, challenge or idea and write the findings to a cited markdown note in ~/notes/research. Use when the user runs /research, or asks to research, investigate or dig into something and document it. Accepts a prompt or the path to an existing idea note; "quick" for a short answer; "ideas" for a ranked shortlist of things to build or write; "finish <note>" to verify and commit an existing note.
 argument-hint: [quick | ideas] <question or path to an idea note> | finish <path to research note> ["claim to check" ...]
-allowed-tools: Read Edit(~/notes/**) Bash(grep *) Bash(git -C ~/notes status *) Bash(git -C ~/notes log *) Bash(git -C ~/notes diff *) Bash(git -C ~/notes add *) Bash(git -C ~/notes commit *) Bash(~/.claude/skills/research/scripts/check-note.py *)
+allowed-tools: Read Edit(~/notes/**) Bash(grep *) Bash(git -C ~/notes status *) Bash(~/.claude/hooks/git-read.py *) Bash(git -C ~/notes add *) Bash(git -C ~/notes commit *) Bash(~/.claude/skills/research/scripts/check-note.py *)
 ---
 
 # Research and document
@@ -15,6 +15,8 @@ The work happens in background agents so the user can keep working:
 2. **Research**: the `researcher` agent writes the note and self-checks it with `check-note.py`.
 3. **Verify**: the `research-verifier` agent, which has not seen the research, checks the claims the recommendation rests on against their sources.
 4. **Finish** (here): apply the verifier's fixes, record what was checked in the note, re-verify once if the conclusion changed, set the status, link the idea, commit. At `ideas` depth, also merge the new attention data into the shared evidence note and file the top three ideas as idea notes.
+
+Run `git log`, `git diff` and any other read-only git command except `git -C ~/notes status` through `~/.claude/hooks/git-read.py`, which `allowed-tools` pre-approves: it refuses the options that write files (`--output`) or run programs (`-c`), which a pre-approved `git log *` would let through.
 
 The research rules live in `~/.claude/agents/researcher.md` and the checking rules in `~/.claude/agents/research-verifier.md`. Don't restate them in briefs; edit those files to change them.
 
@@ -65,7 +67,7 @@ In `finish` mode, start here:
 2. Collect the claims to name in the brief:
    - any claims passed as arguments;
    - claims the check reports as no longer matching;
-   - claims changed since the last verification: find the last `research:` commit that touched the note (`git -C ~/notes log --format='%h %s' -- <note>`), then `git -C ~/notes diff <that commit> -- <note>` shows every edit since, committed or not. If the note has never been committed (a session ended before its first verification), skip this: the verifier checks it as a new note.
+   - claims changed since the last verification: find the last `research:` commit that touched the note (`~/.claude/hooks/git-read.py -C ~/notes log --format='%h %s' -- <note>`), then `~/.claude/hooks/git-read.py -C ~/notes diff <that commit> -- <note>` shows every edit since, committed or not. If the note has never been committed (a session ended before its first verification), skip this: the verifier checks it as a new note.
 3. Launch the verifier with the brief above, plus `Also check: "<claim>"; "<claim>"` if there are any.
 
 A note verified before the `## Verification` section existed gets one from this run.

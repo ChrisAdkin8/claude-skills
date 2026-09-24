@@ -648,7 +648,8 @@ def main():
 
     text = "\n".join(lines)
     leftovers = [p for p in template_prompts(depth) if p in text]
-    if "{{" in text:
+    # Outside code only: a note may quote Argo, Helm or Jinja expressions, which use {{ ... }}.
+    if "{{" in INLINE_CODE.sub("", "\n".join(lines[:start] + body)):
         leftovers.append("{{placeholder}}")
     if any(line.strip() == "-" for line in prose):
         leftovers.append("empty '-' bullet")

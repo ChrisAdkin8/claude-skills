@@ -25,11 +25,15 @@ Reviewed on 2026-09-15 by spec-reviewer.
 """
 
 
-def check(text):
-    """(output, result line) from check-spec.py on a spec with this text."""
+def check(text, results=None):
+    """(output, result line) from check-spec.py on a spec with this text, and with this text
+    in its spike results file, `spikes/spec-results.md` beside it, if given."""
     with tempfile.TemporaryDirectory() as tmp:
         spec = Path(tmp) / "spec.md"
         spec.write_text(text)
+        if results is not None:
+            (Path(tmp) / "spikes").mkdir()
+            (Path(tmp) / "spikes" / "spec-results.md").write_text(results)
         run = subprocess.run(
             [sys.executable, str(CHECKER), str(spec), "--repo", str(ROOT)],
             capture_output=True,
@@ -68,12 +72,19 @@ class ColdReview(unittest.TestCase):
         self.assertEqual(result, "RESULT: FAIL", out)
         self.assertRegex(out, r"FAIL: \d+ words; the limit is 4000")
 
-    def test_long_draft_with_review_warns(self):
+    def test_long_draft_with_review_fails(self):
+        # A saved review doesn't lift the limit: folds after the review are what grow a spec.
         out, result = check(with_review(self.long()))
-        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertEqual(result, "RESULT: FAIL", out)
         self.assertRegex(
-            out, r"WARN: \d+ words, over the 4000 limit; a cold review is saved"
+            out, r"FAIL: \d+ words; the limit is 4000.*keeping the saved cold review"
         )
+
+    def test_long_spec_in_progress_warns(self):
+        text = self.long().replace("status: draft", "status: in-progress")
+        out, result = check(with_review(text))
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertRegex(out, r"WARN: \d+ words, over the 4000 limit; status in-progress")
 
     def test_review_is_not_checked(self):
         # Its bad citation and missing note would FAIL anywhere else in the spec.
@@ -98,6 +109,96 @@ class ColdReview(unittest.TestCase):
         out, result = check(with_review(self.base, REVIEW + f"\nleaked {token}\n"))
         self.assertEqual(result, "RESULT: FAIL", out)
         self.assertIn("GitHub token", out)
+
+
+class Placeholders(unittest.TestCase):
+    def setUp(self):
+        self.base = FIXTURE.read_text()
+
+    def with_background(self, extra):
+        return self.base.replace(
+            "Nothing to cite, because read-at is none.",
+            f"Nothing to cite, because read-at is none. {extra}",
+        )
+
+    def test_expression_in_inline_code_passes(self):
+        # Argo, Helm and Jinja write expressions as {{ ... }}; a spec quotes them in code.
+        out, result = check(
+            self.with_background("Argo passes `{{tasks.run-id.outputs.result}}` on.")
+        )
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertNotIn("placeholder", out)
+
+    def test_expression_in_fenced_code_passes(self):
+        text = self.with_background("Like this:\n\n```yaml\nvalue: {{ .Values.x }}\n```\n")
+        out, result = check(text)
+        self.assertEqual(result, "RESULT: PASS", out)
+
+    def test_placeholder_in_prose_fails(self):
+        out, result = check(self.with_background("Owned by {{owner}}."))
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("{{placeholder}}", out)
+
+    def test_placeholder_in_frontmatter_fails(self):
+        out, result = check(self.base.replace("idea: none", "idea: {{idea note path}}"))
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("{{placeholder}}", out)
+
+
+class SpikeResultSecrets(unittest.TestCase):
+    """Spike results are raw command output, committed beside the spec."""
+
+    def setUp(self):
+        self.base = FIXTURE.read_text()
+
+    def test_clean_results_pass(self):
+        out, result = check(self.base, results="# Spike results\n\nExit 0.\n")
+        self.assertEqual(result, "RESULT: PASS", out)
+
+    def test_token_in_results_fails(self):
+        token = "gh" + "p_" + "A" * 36  # split, so this file doesn't look like a secret
+        out, result = check(self.base, results=f"# Spike results\n\n{token}\n")
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("spike results spec-results.md contain what looks like a GitHub token", out)
+
+    def test_account_id_in_results_warns(self):
+        out, result = check(self.base, results="account 123456789012 owns it\n")
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertIn("spike results spec-results.md contain a 12-digit number", out)
+
+
+DELTA = """
+### Delta review, 2026-09-16
+
+| # | Kind | Where | Finding | Affects | Evidence | What would settle it |
+|---|---|---|---|---|---|---|
+"""
+
+
+class ChangesSinceReview(unittest.TestCase):
+    """Changes folded in after the cold review are logged as `Not reviewed:` lines, and get
+    one delta review."""
+
+    def setUp(self):
+        self.base = FIXTURE.read_text().replace(
+            "- Nothing is open.",
+            "- Nothing is open.\n- Not reviewed: W1 now does something, on 2026-09-16.",
+        )
+
+    def test_unreviewed_changes_warn(self):
+        out, result = check(with_review(self.base))
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertRegex(out, r"WARN: 1 changes since the cold review .*delta review")
+
+    def test_delta_review_quiets_the_warning(self):
+        out, result = check(with_review(self.base, REVIEW + DELTA))
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertNotIn("WARN: 1 changes", out)
+        self.assertIn("INFO: 1 changes marked 'Not reviewed:'", out)
+
+    def test_no_warning_without_a_review(self):
+        out, _ = check(self.base)
+        self.assertNotIn("WARN: 1 changes", out)
 
 
 EXISTING_RESULTS = "docs/specs/spikes/2026-09-17-spec-spike-phase-results.md"

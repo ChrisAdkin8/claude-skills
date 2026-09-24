@@ -1,0 +1,29 @@
+{
+  "sandbox": {
+    "enabled": true,
+    "allowUnsandboxedCommands": false,
+    "excludedCommands": ["gh", "gh *", "~/.claude/skills/research/scripts/gcp-skus.sh *", "~/.claude/skills/research/scripts/reddit-search.sh *", "~/.claude/skills/research/scripts/repo-health.sh *"],
+    "network": {
+      "strictAllowlist": true,
+      "allowedDomains": ["api.github.com", "github.com", "raw.githubusercontent.com", "codeload.github.com", "hn.algolia.com", "export.arxiv.org", "arxiv.org", "b0.p.awsstatic.com", "pricing.us-east-1.amazonaws.com", "cloudbilling.googleapis.com", "www.reddit.com", "oauth.reddit.com"]
+    },
+    "filesystem": {
+      "denyRead": ["~/.ssh", "~/.aws", "~/.kube", "~/.gnupg", "~/.docker", "~/.azure", "~/.netrc", "~/.git-credentials", "~/.npmrc", "~/.pypirc", "~/.config/gh", "~/.config/gcloud", "~/.config/op", "~/.config/doctl", "~/.claude.json", "~/.claude/.credentials.json", "~/.zsh_history", "~/.bash_history", "~/Library/Keychains", "~/Library/Application Support/Google/Chrome", "~/Library/Cookies"]
+    },
+    "credentials": {
+      "envVars": [
+        {"name": "CLAUDE_CODE_MESSAGING_TOKEN", "mode": "deny"},
+        {"name": "ANTHROPIC_API_KEY", "mode": "deny"},
+        {"name": "GH_TOKEN", "mode": "deny"},
+        {"name": "GITHUB_TOKEN", "mode": "deny"},
+        {"name": "TFE_TOKEN", "mode": "deny"},
+        {"name": "AWS_ACCESS_KEY_ID", "mode": "deny"},
+        {"name": "AWS_SECRET_ACCESS_KEY", "mode": "deny"},
+        {"name": "AWS_SESSION_TOKEN", "mode": "deny"}
+      ]
+    }
+  },
+  "permissions": {
+    "deny": ["Read(~/.ssh/**)", "Read(~/.aws/**)", "Read(~/.kube/**)", "Read(~/.gnupg/**)", "Read(~/.docker/**)", "Read(~/.netrc)", "Read(~/.git-credentials)", "Read(~/.config/gh/**)", "Read(~/.config/gcloud/**)", "Read(~/.claude.json)", "Read(~/.claude/.credentials.json)"]
+  }
+}

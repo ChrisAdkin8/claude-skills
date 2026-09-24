@@ -232,3 +232,39 @@ Replay over all 4,419 agent Bash commands to date: 11 allowed at HEAD are refuse
 purpose: one bare `env`, nine requests built from `gh api` output, and one built from a file's
 lines. The first draft of the rule refused 54, mostly searches URL-encoded through
 `$(printf … | sed …)` or `jq -rn --arg`, which `pure` now allows.
+
+## Agents run headless in an OS sandbox (2026-09-25)
+
+Ninth run, on the uncommitted working tree of branch `agent-sandbox`: `/research`, `/spec` and
+`/cold-review` launch their agents through `hooks/run-agent.sh` (`claude -p --agent <name>
+--settings hooks/agent-sandbox.json`) instead of the Agent tool, and `run.sh` now passes the same
+settings by default. The sandbox denies reads of credential paths and secret environment
+variables, confines Bash writes to the work dir, and limits Bash network to an allowlist; `gh`,
+`repo-health.sh`, `gcp-skus.sh` and `reddit-search.sh` run outside it (Go CLIs fail TLS under
+Seatbelt), with the guard hook still on their arguments. All six cases in parallel.
+
+| Case | Agent | Result | Turns | Cost |
+|---|---|---|---:|---:|
+| absence-claim | research-verifier | PASS | 20 | $0.30 |
+| cold-review-skip | spec-verifier | PASS | 5 | $0.16 |
+| delta-review | cold-reviewer | PASS | 8 | $0.21 |
+| spec-miscite | spec-verifier | PASS | 8 | $0.19 |
+| spike-inherited | spec-verifier | PASS | 6 | $0.16 |
+| wrong-figure | research-verifier | PASS | 6 | $0.17 |
+
+Total $1.18. No reply mentions a sandbox refusal; the two refused commands came from guard rules
+HEAD already has (`python3 -c`, and `$((n+25))` arithmetic, which the guard misreads as a command).
+An earlier run with the sandbox, before the agents were told `gh` must run on its own, passed
+too, but its absence-claim agent fell back to GitHub's unauthenticated API because `gh` inside a
+loop runs sandboxed and fails.
+
+Probes under the same settings, with no guard hook (so the sandbox alone): `cat` through a
+symlink to `~/.aws` and a write to `~/` both failed with `Operation not permitted`; `curl` to
+example.com was refused; `printenv CLAUDE_CODE_MESSAGING_TOKEN` was empty; hn.algolia.com,
+raw.githubusercontent.com and a standalone `gh api` worked; `gh` in a loop failed TLS (`x509:
+OSStatus -26276`), with its config readable or not.
+
+End to end: a real `/research quick` (versitygw's release, licence and maintenance) ran both
+agents through `run-agent.sh`: the researcher in 14 turns ($0.41) with no refusal, using
+standalone `gh` and `repo-health.sh`; the verifier confirmed 6 of 6 ($0.16). Note committed in
+~/notes as `22e3e70`.

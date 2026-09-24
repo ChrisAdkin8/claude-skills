@@ -352,5 +352,20 @@ class Record(unittest.TestCase):
         self.assertIn("its record spec-record.md contains what looks like a GitHub token", out)
 
 
+class Numbering(unittest.TestCase):
+    def test_later_part_keeps_its_numbers(self):
+        base = FIXTURE.read_text()
+        self.assertIn("### W1", base)
+        out, result = check(base.replace("### W1", "### W4"))
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertNotIn("numbered", out)
+
+    def test_gap_warns(self):
+        base = FIXTURE.read_text()
+        text = base.replace("## Spike questions", "### W3: another\n\n- **Change:** x\n- **Files:** y\n- **Done when:** `true` exits 0\n\n## Spike questions", 1)
+        out, _ = check(text)
+        self.assertIn("work items are numbered [1, 3]", out)
+
+
 if __name__ == "__main__":
     unittest.main()

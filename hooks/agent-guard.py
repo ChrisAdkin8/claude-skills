@@ -33,7 +33,12 @@ itself (by assignment, `for`, `read` or `printf -v`) and a few harmless ones the
 Paths are compared after resolving symlinks too, so a link that points into ~/.aws is refused
 like ~/.aws itself.
 
-Request URLs are limited in size, since a GET request's URL is where data would leave: a host
+Request URLs are limited in size, since a GET request's URL is where data would leave. The limits
+apply to what curl or gh actually sends, so a curl or gh argument may not expand anything whose
+size the guard can't see: no $(...), backticks, or variable whose value came from a command's
+output or from input (see `tainted_names`); a variable set to fixed words, such as a `for` loop
+over a literal list, is fine. Nor may curl read a header or URL from a file (`-H @file`). Then: a
+host
 name of at most MAX_HOST characters, at most MAX_AFTER_HOST after it, no user name or password
 in the URL, and no curl or gh argument over MAX_ARG characters. Real requests stay well inside
 these (the longest in the agents' transcripts to 2026-09-24 had a 43-character host and 206
@@ -313,6 +318,145 @@ def assigned_names(command, depth=0):
     return names
 
 
+def assignment_values(command):
+    """(name, value text) for every `NAME=value` in a command, `for`/`select` lists included,
+    read from the raw text so a value keeps its $(...) and quotes. Generous on purpose: a match
+    inside a quoted string only makes more variables count as tainted."""
+    out = []
+    for m in re.finditer(r"(?:^|(?<=[\s;&|(`{]))([A-Za-z_]\w*)\+?=", command):
+        i, quote, depth = m.end(), None, 0
+        while i < len(command):
+            ch = command[i]
+            if quote == "'":
+                quote = None if ch == "'" else quote
+            elif ch == "\\":
+                i += 1
+            elif ch in "'\"" and quote is None:
+                quote = ch
+            elif ch == '"' and quote == '"':
+                quote = None
+            elif quote is None and ch == "(":
+                depth += 1
+            elif quote is None and ch == ")":
+                if not depth:
+                    break
+                depth -= 1
+            elif quote is None and not depth and (ch.isspace() or ch in ";&|"):
+                break
+            i += 1
+        out.append((m.group(1), command[m.end() : i]))
+    for m in re.finditer(
+        r"\b(?:for|select)\s+([A-Za-z_]\w*)\s+in\b(.*?)(?:;|\n|\bdo\b|$)", command, re.DOTALL
+    ):
+        out.append((m.group(1), m.group(2)))
+    return out
+
+
+# Text tools that, given no files, only transform what they're handed: a $(...) built from them
+# over fixed words and untainted variables brings in nothing private. SCRIPTED take a script
+# or pattern as their first operand; any other operand of any of them is a file.
+PURE = {"echo", "printf", "tr", "sed", "jq", "grep", "cut", "head", "tail", "sort", "uniq",
+        "wc", "base64", "paste", "fold", "rev", "curl"}  # fmt: skip
+SCRIPTED = {"sed", "jq", "grep"}
+DATA_OPERANDS = {"echo", "printf", "tr"}  # their operands are text, never files
+FILE_OPTS = ("-f", "--file", "--from-file", "--rawfile", "--slurpfile", "--args", "--jsonargs")
+# Options whose values are text, not files: name -> how many words follow.
+VALUE_OPTS = {"--arg": 2, "--argjson": 2, "--indent": 1, "-e": 1, "--expression": 1,
+              "--regexp": 1, "-d": 1, "-c": 1, "-n": 0}  # fmt: skip
+
+
+def simple_commands_or_none(command):
+    """simple_commands(tokens(command)), or None where the text doesn't parse on its own."""
+    lexer = shlex.shlex(
+        command.replace("\\\n", " ").replace("\n", " ; "), posix=True, punctuation_chars=True
+    )
+    lexer.whitespace_split = True
+    lexer.commenters = ""
+    try:
+        toks = list(lexer)
+    except ValueError:
+        return None
+    try:
+        return simple_commands(toks)
+    except SystemExit:  # a redirection simple_commands refuses: not pure either
+        return None
+
+
+def pure(sub, tainted, depth=0):
+    """True if a $(...) can only transform fixed text: every command in it is in PURE with no
+    file operand or file option, it redirects nothing in, it expands no tainted variable, and
+    any $(...) inside it is pure too."""
+    if depth > 4 or "<" in sub or "`" in sub or set(VAR_REF.findall(sub)) & tainted:
+        return False
+    if not all(pure(inner, tainted, depth + 1) for inner in substitutions(sub)[0]):
+        return False
+    commands = simple_commands_or_none(sub)
+    if commands is None:
+        return False
+    for raw in commands:
+        words = [w for w in raw if w not in KEYWORDS and not ASSIGNMENT.fullmatch(w)]
+        if not words:
+            continue
+        name, args = os.path.basename(words[0]), words[1:]
+        if name not in PURE or any(a.startswith(FILE_OPTS) and a not in VALUE_OPTS for a in args):
+            return False
+        if name in DATA_OPERANDS:
+            continue
+        if name == "curl":
+            # Over http(s) curl returns only what the web holds; file:// would read a local file.
+            if any("://" in a and not a.lower().startswith(("http://", "https://")) for a in args):
+                return False
+            continue
+        operands, k, scripted = [], 0, False
+        while k < len(args):
+            if args[k] in VALUE_OPTS:
+                scripted = scripted or args[k] in ("-e", "--expression", "--regexp")
+                k += 1 + VALUE_OPTS[args[k]]
+                continue
+            if not args[k].startswith("-"):
+                operands.append(args[k])
+            k += 1
+        if operands[1 if name in SCRIPTED and not scripted else 0 :]:
+            return False
+    return True
+
+
+def tainted_names(command, depth=0):
+    """Variables whose value comes from a command's output or from input: assigned from
+    a $(...) that reads a file, input or the network (see `pure`), backticks or another tainted
+    variable; looped over a list that does; or filled by `read` or `printf -v`. A request may not carry them (check_request_words), since their
+    size and content can't be seen here."""
+    if depth > 4:
+        return set()
+    tainted = set()
+    for sub in substitutions(command)[0]:
+        tainted |= tainted_names(sub, depth + 1)
+    for raw in simple_commands_or_none(command) or []:
+        words = [w for w in raw if w not in KEYWORDS and not ASSIGNMENT.fullmatch(w)]
+        if not words:
+            continue
+        name, args = os.path.basename(words[0]), words[1:]
+        if name == "read":
+            tainted.update(read_variables(args))
+        elif name == "printf":
+            tainted.update(args[k + 1] for k, a in enumerate(args[:-1]) if a == "-v")
+    values = assignment_values(command)
+    changed = True
+    while changed:
+        changed = False
+        for name, value in values:
+            if name in tainted:
+                continue
+            if (
+                "`" in value
+                or set(VAR_REF.findall(value)) & tainted
+                or not all(pure(sub, tainted) for sub in substitutions(value)[0])
+            ):
+                tainted.add(name)
+                changed = True
+    return tainted
+
+
 def check_variables(command, local):
     """Refuse expanding a variable the command didn't set: it may hold a token."""
     names, indirect = variable_refs(command)
@@ -443,6 +587,10 @@ def unwrap(argv):
         if name == "timeout" and rest:
             rest = rest[1:]  # the duration
         argv = rest
+    if wrapped and not argv:
+        # `env` alone prints the environment, tokens included; the other wrappers do nothing
+        # useful without a command.
+        block("a wrapper like `env` with no command after it prints the environment; not allowed")
     command = os.path.basename(argv[0]) if argv else None
     check_assignments(assigned, command, bare=not argv and not wrapped)
     return argv
@@ -471,13 +619,13 @@ def read_variables(args):
     return names
 
 
-def check_gh(args, raw, expands):
+def check_gh(args, raw, expands, clean=frozenset(), tainted=frozenset()):
     sub = tuple(a for a in args[:2] if not a.startswith("-"))
     if not any(sub[: len(allowed)] == allowed for allowed in GH_READ):
         block(f"`gh {' '.join(sub)}` can change GitHub; only read commands are allowed")
     if sub[:1] != ("api",):
         return
-    check_request_words(args, "gh")
+    check_request_words(args, "gh", clean, tainted)
     if any(a.startswith("--hostname") for a in args):
         block("`gh api --hostname` sends the request, and maybe a token, to another host")
     method = None
@@ -579,15 +727,32 @@ def check_url(url):
         )
 
 
-def check_request_words(args, tool):
-    """Size limits on every word of a curl or gh command, and on each URL in it. gh's --jq
-    and --template values are exempt: gh applies them to the reply, they're never sent."""
-    local = {"--jq", "-q", "--template", "-t"} if tool == "gh" else set()
+def check_request_words(args, tool, clean=frozenset(), tainted=frozenset()):
+    """Size limits on every word of a curl or gh command, and on each URL in it, and no
+    expansion the limits can't see: only `$name` for a variable in `clean` (set in this
+    command to fixed words) or SAFE_VARS. gh's --jq and --template values are exempt: gh
+    applies them to the reply, they're never sent."""
+    exempt = {"--jq", "-q", "--template", "-t"} if tool == "gh" else set()
     for k, arg in enumerate(args):
         if arg.startswith(("--jq=", "--template=")) and tool == "gh":
             continue
-        if k and args[k - 1] in local:
+        if k and args[k - 1] in exempt:
             continue
+        rest = arg
+        for inner in substitutions(arg)[0]:
+            if pure(inner, tainted):
+                rest = rest.replace(f"$({inner})", "")
+        rest = re.sub(
+            r"\$\{?([A-Za-z_]\w*)\}?",
+            lambda m: "" if m.group(1) in clean or m.group(1) in SAFE_VARS else m.group(0),
+            rest,
+        )
+        if "$" in rest or "`" in rest:
+            block(
+                f"a {tool} argument expands something whose size and content can't be checked "
+                f"here ({arg[:60]!r}): no $(...), backticks, or variables set from a command's "
+                "output or from input. Put the literal value in the command"
+            )
         if len(arg) > MAX_ARG:
             block(
                 f"a {tool} argument of {len(arg)} characters, over the {MAX_ARG} allowed: "
@@ -599,8 +764,8 @@ def check_request_words(args, tool):
             check_url(arg)
 
 
-def check_curl(args):
-    check_request_words(args, "curl")
+def check_curl(args, clean=frozenset(), tainted=frozenset()):
+    check_request_words(args, "curl", clean, tainted)
     if any(
         (a.startswith("--write-out") or re.fullmatch(r"-[a-zA-Z]*w.*", a) or a == "-w")
         and "%output{" in " ".join(args)
@@ -626,6 +791,10 @@ def check_curl(args):
                 )
             if name == "--request":
                 method = value or (args[i + 1] if i + 1 < len(args) else "")
+            if name in ("--header", "--proxy-header", "--url") and (
+                value or (args[i + 1] if i + 1 < len(args) else "")
+            ).startswith("@"):
+                block(f"`curl {name} @file` sends a file's contents; give the value inline")
         elif arg.startswith("-") and len(arg) > 1:
             letters = arg[1:]
             for j, letter in enumerate(letters):
@@ -638,6 +807,10 @@ def check_curl(args):
                     block(
                         f"`curl -{letter}` writes a file or sends data; these agents only read"
                     )
+                if letter == "H" and (
+                    letters[j + 1 :] or (args[i + 1] if i + 1 < len(args) else "")
+                ).startswith("@"):
+                    block("`curl -H @file` sends a file's contents; give the header inline")
                 if letter == "X":
                     method = letters[j + 1 :] or (
                         args[i + 1] if i + 1 < len(args) else ""
@@ -876,15 +1049,18 @@ def check_read(tool_name, tool_input):
         )
 
 
-def check_command(command, depth=0, local=None):
+def check_command(command, depth=0, local=None, clean=None):
     if depth > 4:
         block("commands nested too deeply to check")
     if local is None:
         local = assigned_names(command)
+    if clean is None:
+        clean = local - tainted_names(command)
+    tainted = local - clean
     check_variables(command, local)
     subs, expands = substitutions(command)
     for sub in subs:
-        check_command(sub, depth + 1, local)
+        check_command(sub, depth + 1, local, clean)
     for raw in simple_commands(tokens(command)):
         argv = unwrap(raw)
         check_secrets(raw, argv)
@@ -903,13 +1079,19 @@ def check_command(command, depth=0, local=None):
             continue
         if name in ("python3", "python", "bash", "sh", "zsh") and args:
             if args[0] == "-c" and name in ("bash", "sh", "zsh") and len(args) > 1:
-                check_command(args[1], depth + 1, local | assigned_names(args[1]))
+                inner = args[1]
+                check_command(
+                    inner,
+                    depth + 1,
+                    local | assigned_names(inner),
+                    (clean | assigned_names(inner)) - tainted_names(inner),
+                )
                 continue
             if Path(args[0]).expanduser().resolve() in SCRIPTS:
                 continue
             block(f"`{name}` may only run the /research and /spec skill scripts")
         if name == "eval":
-            check_command(" ".join(args), depth + 1, local)
+            check_command(" ".join(args), depth + 1, local, clean)
             continue
         if "/" in word and path.parent not in (
             Path("/bin"),
@@ -924,11 +1106,11 @@ def check_command(command, depth=0, local=None):
                 "run. Read docs, charts and modules from GitHub or the registry instead"
             )
         if name == "gh":
-            check_gh(args, command, expands)
+            check_gh(args, command, expands, clean, tainted)
         elif name == "git":
             check_git(args)
         elif name == "curl":
-            check_curl(args)
+            check_curl(args, clean, tainted)
         elif name in READERS:
             check_reader(name, args)
         else:

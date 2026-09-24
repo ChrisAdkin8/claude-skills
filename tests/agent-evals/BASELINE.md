@@ -123,3 +123,35 @@ through `run-spike.sh`:
 S6 came within $0.36 of its $2 cap, at 57 of 60 turns, because it had to work around the
 sandbox's TLS failure for `helm` and assemble the chart's subcharts by hand. A spike that fetches
 anything should be assumed to cost near the cap.
+
+## After the credentials guard and the shared review skeleton (2026-09-24)
+
+Fifth run on 2026-09-24, on the uncommitted working tree of branch
+`review-fixes-security-delta-review`: agent-guard's credentials check and its new `read` mode,
+hooked into every agent for Read, Grep and Glob; `spec-reviewer` merged into `cold-reviewer`;
+`/spec`'s step 7 moved to `spike-step.md`; and the delta review in `/cold-review`. All five cases
+in parallel, on the default model.
+
+| Case | Agent | Result | Turns | Cost |
+|---|---|---|---:|---:|
+| wrong-figure | research-verifier | PASS | 3 | $0.11 |
+| absence-claim | research-verifier | PASS | 17 | $0.32 |
+| spec-miscite | spec-verifier | PASS | 8 | $0.19 |
+| cold-review-skip | spec-verifier | PASS | 6 | $0.16 |
+| spike-inherited | spec-verifier | PASS | 7 | $0.16 |
+
+Total $0.93. No case's reply reports a guard block, so the new `read` hook didn't refuse any read
+these agents needed.
+
+No case covered `cold-reviewer` or `researcher`, so two things were added the same day:
+
+- `delta-review`, a new case for `cold-reviewer`: a spec with a saved review and one `Not
+  reviewed:` change. The brief is `/cold-review`'s skeleton filled in for a delta review of an
+  implementation spec. A defect is planted in the change (W2's Done when runs a flag nothing
+  parses) and a decoy outside it (Background's wrong word limit). It passed first time, 5 turns,
+  $0.14: the defect reported as correctness, the decoy left out, and one more correctness row that
+  the change causes elsewhere (W1's example stops holding once W2 lowers the budget), which the
+  prompt's scope allows.
+- `replay_guard.py` now also replays every Read, Grep and Glob call the guarded agents have made,
+  from all their transcripts, through the `read` mode. It covers the researcher without a paid
+  run: 262 unique calls, none refused.

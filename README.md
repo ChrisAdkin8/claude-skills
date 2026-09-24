@@ -19,8 +19,11 @@ in `~/notes`; specs live in the repo they describe.
      secrets or template text got left in;
    - a `spec-verifier` agent, which never saw the conversation, checks every citation, number and
      borrowed claim, and reports what doesn't hold;
-   - a `spec-reviewer` agent gives it one adversarial cold read, looking for assumptions stated as
-     facts and costs nobody counted. Its table is saved in the spec, unchanged, as a record.
+   - a `cold-reviewer` agent gives it one adversarial cold read, from the same prompt skeleton as
+     `/cold-review`, looking for assumptions stated as facts and costs nobody counted. Its table is
+     saved in the spec, unchanged, as a record. Changes made after it are logged as `Not
+     reviewed:` lines, and `/cold-review <spec>` gives them one delta review before
+     implementation.
 4. **Spikes** answer what reading can't settle. Each runs as a sandboxed, cost-capped `claude -p`
    session in a scratch copy of the code, writes a verdict with its raw output, and has that folded
    back into the spec. Spikes run at the end of `/spec`, or later with `/spec spike <spec>`.
@@ -33,7 +36,8 @@ Outside that flow, **`/cold-review <markdown file>`** hands a document - a walkt
 README, design doc, spec or research note - to a `cold-reviewer` agent that has seen none of the
 conversation that produced it. The skill works out what kind of document it is and what a cold
 reader has to be able to do with it, writes the prompt, and relays the findings; the reviewer edits
-nothing and neither does the skill. `/cold-review prompt <file>` writes the prompt for a fresh
+nothing and neither does the skill. On a document with a saved review, it runs one delta review
+of the changes logged since as `Not reviewed:` lines, and no more. `/cold-review prompt <file>` writes the prompt for a fresh
 session instead of launching an agent. The reviewer is read-only, so it settles what it can by
 reading the Taskfile, CLI and config a document points at, and names the findings that need a
 command run instead of guessing at output.
@@ -43,16 +47,20 @@ command run instead of guessing at output.
 - `skills/idea/`: `/idea`.
 - `skills/research/`: `/research`, with `scripts/check-note.py` and the helpers the `researcher`
   agent runs while gathering evidence (`repo-health.sh`, `gcp-skus.sh`, `reddit-search.sh`).
-- `skills/spec/`: `/spec`, with `scripts/check-spec.py` and `template.md`. Spikes add three files:
-  `spiker.md` (the rules a spike session runs under), `spike-settings.json` (its sandbox and
-  permission settings) and `scripts/run-spike.sh` (the launcher).
+- `skills/spec/`: `/spec`, with `scripts/check-spec.py` and `template.md`. Spikes add five files:
+  `spike-step.md` (step 7, read only when spikes run), `spiker.md` (the rules a spike session runs
+  under), `spike-settings.json` (its sandbox and permission settings), `scripts/prepare-spike.sh`
+  (clears a scratch directory and exports the code into it, after checking its paths) and
+  `scripts/run-spike.sh` (the launcher).
 - `skills/cold-review/`: `/cold-review`. One file, and no script: the review is a prompt and an
-  agent.
-- `agents/`: `researcher`, `research-verifier`, `spec-verifier`, `spec-reviewer`, `cold-reviewer`.
-- `hooks/agent-guard.py`: the PreToolUse guard those subagents' Bash and Write calls go through. The
-  spiker isn't a subagent and doesn't run under it; its sandbox settings contain it instead.
+  agent. `/spec` builds its cold review from this file's prompt skeleton.
+- `agents/`: `researcher`, `research-verifier`, `spec-verifier`, `cold-reviewer`.
+- `hooks/agent-guard.py`: the PreToolUse guard those subagents' Bash, Read, Grep, Glob and Write
+  calls go through. It keeps credentials out of their reach, since a fetched page could get them
+  sent out in a request URL. The spiker isn't a subagent and doesn't run under it; its sandbox
+  settings contain it instead.
 - `tests/`: deterministic tests for the guard and both checkers, a transcript replay for the guard,
-  and `agent-evals/`, which runs the verifier agents against planted defects.
+  and `agent-evals/`, which runs the verifier and cold-reviewer agents against planted defects.
 
 ## Requirements
 
@@ -82,7 +90,7 @@ agents run.
 
 ```
 python3 -m unittest discover -s ~/code/github.com/claude-skills/tests   # seconds, free
-python3 ~/code/github.com/claude-skills/tests/replay_guard.py           # guard vs real commands
+python3 ~/code/github.com/claude-skills/tests/replay_guard.py           # guard vs real commands and reads
 ~/code/github.com/claude-skills/tests/agent-evals/run.sh                # minutes, costs tokens
 ```
 

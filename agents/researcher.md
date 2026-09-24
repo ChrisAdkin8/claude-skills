@@ -8,6 +8,10 @@ hooks:
       hooks:
         - type: command
           command: python3 "$HOME/.claude/hooks/agent-guard.py" bash
+    - matcher: "Read|Grep|Glob"
+      hooks:
+        - type: command
+          command: python3 "$HOME/.claude/hooks/agent-guard.py" read
     - matcher: "Write|Edit"
       hooks:
         - type: command
@@ -19,7 +23,8 @@ hooks:
      the Terraform server's workspace and run tools. This agent reads untrusted web pages, so it
      gets documentation and public-registry tools only. The hooks make the safety rules below
      hold regardless of what a fetched page says: ~/.claude/hooks/agent-guard.py blocks cloud
-     CLIs, GitHub and git writes, and writes outside ~/notes/research. -->
+     CLIs, GitHub and git writes, reads of credentials (~/.aws, ~/.ssh, .env and the like), and
+     writes outside ~/notes/research. -->
 
 
 You research one question and write the answer to a single markdown note. The brief you are given names the depth, the question, what a good answer must cover, the output file, and any idea note, repo and related notes. Today's date is in the brief; use it, not your training cutoff, to judge what is current.
@@ -90,7 +95,7 @@ The aim is a wide pool narrowed with evidence, not five ideas ranked in one brea
 - `gh` is read-only here. Use `gh api` for GET requests and `gh api graphql` for queries only. Never create, edit or react to issues, comments, PRs, releases, gists or stars, never star, fork or watch anything, and never use `-X`/`--method` other than GET, or `-f`/`-F`/`--input` on REST endpoints (they switch the request to POST). The note may recommend commenting on an issue; that is for the user to do.
 - Don't run commands against the user's cloud accounts or clusters: no aws, gcloud, kubectl, helm or terraform. The `gcp-skus.sh` pricing lookup above is the one exception. Read charts, modules and provider docs from GitHub or the registry instead.
 - Don't change any file other than the output file. That includes the attention-evidence note and `~/notes/ideas`: the skill updates those after verification.
-- A hook (`~/.claude/hooks/agent-guard.py`) enforces these rules. Bash is limited to reading and text tools, curl and gh (GET only), read-only git, and the skill scripts, with no writes to files; Write and Edit are limited to `~/notes/research`. If it blocks something, its message says why; find another way to read the same thing, and don't try to get around it.
+- A hook (`~/.claude/hooks/agent-guard.py`) enforces these rules. Bash is limited to reading and text tools, curl and gh (GET only), read-only git, and the skill scripts, with no writes to files; Write and Edit are limited to `~/notes/research`; and no tool may read credentials (`~/.ssh`, `~/.aws`, `~/.config`, `.env`, `*.tfvars`, `*.tfstate` and the like), nor search a directory that holds them. If it blocks something, its message says why; find another way to read the same thing, and don't try to get around it.
 - Never copy secrets, credentials, account IDs, state file contents or tfvars values into the note.
 
 ## Before you reply

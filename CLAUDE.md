@@ -7,7 +7,7 @@ skill you're editing to be the one you're running.
 ## Before committing
 
 - `python3 -m unittest discover -s tests` — deterministic tests for the guard and both checkers.
-- `python3 tests/replay_guard.py` — the guard against real recorded commands.
+- `python3 tests/replay_guard.py` — the guard against real recorded commands and file reads.
 - After changing an agent or skill file, run `tests/agent-evals/run.sh` by hand. It costs $1–2 in
   tokens, so it isn't automatic. Add a dated section to `tests/agent-evals/BASELINE.md` with every
   case's result and cost, including the cases you didn't expect to change.

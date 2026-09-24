@@ -183,5 +183,112 @@ class StaysBlocked(GuardTestCase):
         self.assertBlocked("export GIT_EXTERNAL_DIFF=x")
 
 
+def hook(mode, event):
+    """(exit code, stderr) from the guard for one hook event, in the given mode."""
+    run = subprocess.run(
+        [sys.executable, str(GUARD), mode],
+        input=json.dumps(event),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return run.returncode, run.stderr
+
+
+class Secrets(unittest.TestCase):
+    """Credentials stay out of reach: an injected instruction can still send data out in a
+    GET request's URL, so what the agents can read is what's limited."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.cwd = tmp.name
+        for name in (".env", ".env.example", "notes.md"):
+            Path(self.cwd, name).write_text("x\n")
+
+    def bash(self, command):
+        return hook("bash", {"tool_input": {"command": command}, "cwd": self.cwd})
+
+    def assertBashBlocked(self, command, mentions="credentials"):
+        code, err = self.bash(command)
+        self.assertEqual(code, 2, f"expected blocked: {command!r}")
+        self.assertIn(mentions, err)
+
+    def assertBashAllowed(self, command):
+        code, err = self.bash(command)
+        self.assertEqual(code, 0, f"expected allowed: {command!r}\n{err}")
+
+    def tool(self, tool_name, **tool_input):
+        event = {"tool_name": tool_name, "tool_input": tool_input, "cwd": self.cwd}
+        return hook("read", event)[0]
+
+    def test_home_credentials_blocked(self):
+        for command in (
+            "cat ~/.aws/credentials",
+            "head -5 $HOME/.ssh/id_ed25519",
+            "jq . ${HOME}/.config/gh/hosts.yml",
+            "sed -n 1p ~/.claude.json",
+            "grep -h token ~/.netrc",
+            "cat ~/.kube/config | head",
+        ):
+            with self.subTest(command=command):
+                self.assertBashBlocked(command)
+
+    def test_hidden_routes_blocked(self):
+        for command in (
+            'f=~/.aws/credentials; cat "$f"',  # an assignment, read later
+            "cat ~/.a*/credentials",  # a glob that expands to it
+            "cat ~/.*/credentials",
+            "curl -s file://$HOME/.aws/credentials",  # curl reads local files
+            "echo $(cat ~/.docker/config.json)",  # inside a substitution
+            "cat .aws/credentials",  # relative, from ~
+            "grep --file=~/.ssh/config x notes.md",  # a --flag=value
+        ):
+            with self.subTest(command=command):
+                self.assertBashBlocked(command)
+
+    def test_secret_files_anywhere_blocked(self):
+        for command in (
+            "cat .env",  # exists in the working directory
+            "cat infra/prod.tfvars",
+            "grep -c resource infra/terraform.tfstate",
+            "cat certs/server.pem",
+        ):
+            with self.subTest(command=command):
+                self.assertBashBlocked(command)
+
+    def test_recursive_search_over_home_blocked(self):
+        for command in ("grep -rn token ~", "grep -R token $HOME/", "rg token ~"):
+            with self.subTest(command=command):
+                self.assertBashBlocked(command, "narrower directory")
+
+    def test_ordinary_reads_allowed(self):
+        for command in (
+            "cat .env.example",  # a template
+            "grep -n '.env' notes.md",  # a pattern, not a path
+            "grep -E 'a.*b' notes.md",
+            "curl -s https://example.com/.env",  # a URL, fetched not read
+            "grep -rn token src",
+            "rg token ~/code/github.com/o/r",
+            "cat ~/notes/research/2026-09-24-x.md",
+            "ls ~/code/*",
+        ):
+            with self.subTest(command=command):
+                self.assertBashAllowed(command)
+
+    def test_read_tools(self):
+        home = str(Path.home())
+        self.assertEqual(self.tool("Read", file_path=f"{home}/.aws/config"), 2)
+        self.assertEqual(self.tool("Read", file_path="~/.ssh/id_rsa"), 2)
+        self.assertEqual(self.tool("Read", file_path=f"{self.cwd}/.env"), 2)
+        self.assertEqual(self.tool("Grep", pattern="token", path=home), 2)
+        self.assertEqual(self.tool("Glob", pattern="*", path=f"{home}/.ssh"), 2)
+        self.assertEqual(self.tool("Read", file_path=f"{home}/notes/x.md"), 0)
+        self.assertEqual(self.tool("Read", file_path=f"{self.cwd}/.env.example"), 0)
+        self.assertEqual(self.tool("Grep", pattern="x", path=f"{home}/code"), 0)
+        self.assertEqual(self.tool("Glob", pattern="*", path=home), 0)  # names only
+        self.assertEqual(self.tool("Grep", pattern="x"), 0)  # no path: the project
+
+
 if __name__ == "__main__":
     unittest.main()

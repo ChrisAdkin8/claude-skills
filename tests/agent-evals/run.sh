@@ -5,6 +5,9 @@
 # Usage: run.sh [case ...]        all cases by default; cases run in parallel
 #   EVAL_MAX_USD   per-case cost ceiling, passed as --max-budget-usd (default 5)
 #   EVAL_MODEL     model to run the agents on (default: your default model)
+#   EVAL_SETTINGS  the settings file passed as --settings (default: hooks/agent-sandbox.json, the
+#                  sandbox run-agent.sh uses, so the evals run the agents as the skills do;
+#                  set it empty to run without a sandbox)
 #
 # Each case directory in cases/ holds a fixture, agent.txt (the subagent), brief.txt (the brief,
 # with {{CASE}}, {{HOME}}, {{REPO}} and {{DATE}} filled in) and expect.txt: one Python regex per line that
@@ -25,6 +28,7 @@ stamp=$(date +%Y%m%d-%H%M%S)
 out="$here/results/$stamp"
 today=$(date +%Y-%m-%d)
 max_usd=${EVAL_MAX_USD:-5}
+settings=${EVAL_SETTINGS-$repo/hooks/agent-sandbox.json}
 mkdir -p "$out"
 
 cases=("$@")
@@ -43,7 +47,8 @@ run_case() {
   (cd "$work" && claude -p --agent "$agent" --output-format json --max-turns 40 \
     --allowedTools "$tools" --add-dir "$HOME/.claude" "$HOME/notes" "$repo" \
     --strict-mcp-config --no-session-persistence \
-    --max-budget-usd "$max_usd" ${EVAL_MODEL:+--model "$EVAL_MODEL"} "$brief") \
+    --max-budget-usd "$max_usd" ${EVAL_MODEL:+--model "$EVAL_MODEL"} \
+    ${settings:+--settings "$settings"} "$brief") \
     > "$out/$c.json" 2> "$out/$c.err"
   rm -rf "$work"
 }

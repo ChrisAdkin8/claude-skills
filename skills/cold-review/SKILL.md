@@ -2,7 +2,7 @@
 name: cold-review
 description: Give a markdown file one adversarial cold read by an agent that never saw this conversation, then relay what it found. Use when the user runs /cold-review, or asks for a cold, fresh-eyes or adversarial review of a document - a walkthrough, runbook, README, design doc, spec or research note. Accepts the path to a markdown file; "prompt <path>" writes the review prompt for the user to run in a fresh session instead of launching an agent. On a document that already has a saved review, it runs the one delta review of the changes logged since.
 argument-hint: <path to a markdown file> | prompt <path to a markdown file>
-allowed-tools: Read, Grep, Glob, Bash(git rev-parse *), Bash(git status *), Bash(git ls-files *), Bash(~/.claude/hooks/git-read.py *), Bash(grep *), Bash(ls *), Edit(~/code/**), Edit(~/notes/**)
+allowed-tools: Read, Grep, Glob, Bash(git rev-parse *), Bash(git status *), Bash(git ls-files *), Bash(~/.claude/hooks/git-read.py *), Bash(grep *), Bash(ls *), Bash(~/.claude/hooks/run-agent.sh *), Edit(~/.cache/agent-runs/**), Edit(~/code/**), Edit(~/notes/**)
 ---
 
 # Cold-review a document
@@ -149,8 +149,14 @@ Then one line each: `Counts: N findings - C correctness, R requirement, K neithe
 In `prompt` mode, give the user the filled-in prompt in a fenced block, say it expects a session
 with no history of this one, ask them to paste the reply back here so it can be saved, and stop.
 
-Otherwise launch the Agent tool with `subagent_type: cold-reviewer` and that prompt. The agent
-brings only read-only tools and safety rules; everything it reviews for comes from your prompt.
+Otherwise run the `cold-reviewer` agent with that prompt. It runs as a headless, sandboxed
+session, since Claude Code can't sandbox a subagent on its own: with the Write tool, write the
+prompt to `~/.cache/agent-runs/<document basename>/cold-reviewer/brief.md` (`cold-reviewer-delta`
+for a delta review), then run `~/.claude/hooks/run-agent.sh cold-reviewer <repo root, or the
+document's directory> <that run dir>` with the Bash tool and `run_in_background: true`, paths
+written with `~`. When it finishes, read `<run dir>/reply.md`; if the script exited non-zero,
+`run.err` there says why. The agent brings only read-only tools and safety rules; everything it
+reviews for comes from your prompt.
 Tell the user in one line that the document is under cold review (or delta review), and end your
 turn.
 

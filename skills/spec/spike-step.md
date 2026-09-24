@@ -65,7 +65,7 @@ Tell the user in one line which spikes are running. End your turn. Each run's co
 ## 7d. Re-verify
 
 Run `~/.claude/skills/spec/scripts/check-spec.py <spec> --repo <repo root> --read-at <commit>` as in `SKILL.md`'s step 3, directly and with `~` paths, until it prints `RESULT: PASS`. If a fold changed a work item or a Background claim:
-- If the record (or, in an older spec, its `## Open questions`) has no `Verifier round 2 ran on` line, launch `spec-verifier` with `SKILL.md`'s step 4 brief plus `Round 2: <Wn, Wm> were revised after spikes; re-check them.` and `Spike results: <absolute path of <results>>`. Add `- Verifier round 2 ran on <YYYY-MM-DD>: after spikes.` to the record's `## Verification`. Tell the user in one line, and end your turn. When it returns, apply its fixes as `SKILL.md`'s step 5, item 2 says, and re-run the check. There is no round 3.
+- If the record (or, in an older spec, its `## Open questions`) has no `Verifier round 2 ran on` line, run `spec-verifier` as `SKILL.md`'s Running an agent says, in the run dir `spec-verifier-2`, with its step 4 brief plus `Round 2: <Wn, Wm> were revised after spikes; re-check them.` and `Spike results: <absolute path of <results>>`. Add `- Verifier round 2 ran on <YYYY-MM-DD>: after spikes.` to the record's `## Verification`. Tell the user in one line, and end your turn. When it returns, apply its fixes as `SKILL.md`'s step 5, item 2 says, and re-run the check. There is no round 3.
 - If a round 2 is already recorded, launch none, and tell the user to run `/spec finish <spec>` after reviewing the changes.
 
 ## 7e. Report

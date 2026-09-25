@@ -83,7 +83,9 @@ command run instead of guessing at output.
   runs), so a verifier or cold reviewer can't see how the document it checks was written. The spiker isn't a subagent and doesn't run under it; its sandbox
   settings contain it instead.
 - `tests/`: deterministic tests for the guard and both checkers, a transcript replay for the guard,
-  and `agent-evals/`, which runs the verifier and cold-reviewer agents against planted defects.
+  `agent-evals/`, which runs the verifier and cold-reviewer agents against planted defects and the
+  researcher at quick and ideas depth (its note graded with `check-note.py`), and `skill-evals/`,
+  which runs whole skills against throwaway repos.
 
 ## Requirements
 

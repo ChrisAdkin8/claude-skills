@@ -1,0 +1,3 @@
+/cold-review prompt docs/runbook.md
+
+You are running unattended, so AskUserQuestion won't reach anyone. Where the skill would ask or offer something, take the answer as no: don't log, fold or save anything, and don't edit any file.

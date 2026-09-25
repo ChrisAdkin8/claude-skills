@@ -383,3 +383,13 @@ sources through curl.
 Skill evals: `spec-done` PASS (11 turns, $0.35), with its unattended answers now saying W1's
 Done when passes, and it still leaves the spec in-progress for W2; `cold-review-delta` PASS
 (7 turns, $0.32). No skill eval covers `/idea`, or `/spec`'s step 6 round-2 guard.
+
+## Phase 4: review-state.py, /spec quick, concurrent /research, trims (2026-09-25)
+
+`/cold-review` step 1 now reads `skills/cold-review/scripts/review-state.py` instead of working
+out the review commit and diff base by hand; `/spec quick` added; commits in `~/notes` name
+their files; the three largest skills trimmed by about 330 words. No agent file changed, so
+the agent cases above stand.
+
+Skill evals: `cold-review-delta` PASS (3 turns, $0.27, down from 7 turns with the script),
+`spec-done` PASS (11 turns, $0.34). No eval runs `/spec quick` or two `/research` runs at once.

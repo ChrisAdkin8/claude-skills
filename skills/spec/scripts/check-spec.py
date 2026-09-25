@@ -34,8 +34,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "research" / "scripts"))
 from mdcheck import (  # noqa: E402  shared with check-note.py
-    INLINE_CODE, SECRETS, SEPARATOR, count_words, frontmatter, has_account_id, section,
-    strip_code,
+    INLINE_CODE, NOT_REVIEWED, SECRETS, SEPARATOR, count_words, frontmatter, has_account_id,
+    section, strip_code,
 )
 import mdcheck  # noqa: E402
 
@@ -88,9 +88,6 @@ SPIKE_FOLD = re.compile(
 )
 RESULTS_PATH = re.compile(r"(?<![\w./~-])[\w.-][\w./-]*/spikes/[\w.-]+-results\.md")
 # The ledger of changes made after the cold review, and the delta review of them.
-# `- Not reviewed:`, and the same in bold, italics or lower case, with or without the bullet:
-# the delta-review gate counts these, so a hand-written variant mustn't slip past it.
-NOT_REVIEWED = re.compile(r"\s*(?:[-*]\s+)?[*_]*not reviewed[*_]*\s*:", re.IGNORECASE)
 ROUND_LINE = re.compile(r"\s*[-*]\s+Verifier round 2 ran on")
 IMPLEMENTATION = "## Implementation"
 DELTA_REVIEW = re.compile(r"###\s+Delta review")

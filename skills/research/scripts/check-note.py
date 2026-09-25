@@ -212,6 +212,26 @@ def cited_numbers(line):
     return nums
 
 
+def cited_claims(prose):
+    """How many claims above Sources carry a citation: each table row with one counts once, and
+    in running text each sentence with one. An estimate, but a fixed one, so the Verification
+    line can say what share of the note the verifier sampled."""
+    count, text = 0, []
+    for line in prose + [""]:
+        stripped = line.strip()
+        if stripped.startswith("|"):
+            count += bool(cited_numbers(stripped))
+        elif stripped and not stripped.startswith("#"):
+            text.append(stripped)
+            continue
+        if text:
+            joined = INLINE_CODE.sub("", " ".join(text))
+            sentences = re.split(r"(?<=[.!?])\s+(?=[A-Z*`(\[])|(?:^|\s)[-*]\s+", joined)
+            count += sum(bool(cited_numbers(s)) for s in sentences)
+            text = []
+    return count
+
+
 def template_prompts(depth):
     """Prose lines from the depth's template that should never survive into a finished note."""
     template = TEMPLATE.get(depth, TEMPLATES / "research.md")
@@ -348,6 +368,17 @@ def check_verification(body, prose, status, fails, warns, pool=()):
                 f"has {confirmed} CONFIRMED of {len(rows)} rows. Record every row the verifier "
                 "returned, and give the table's counts first in the 'Checked on' line"
             )
+        # The verifier checks a sample. Say so, with the note's size, so a final note isn't
+        # read as every claim checked. A warning, so notes verified before this still pass.
+        claims = cited_claims(prose)
+        if said[1] < claims:
+            sample = re.search(r"sample of (?:the note's )?(\d+) cited claims", header)
+            if not sample or int(sample.group(1)) != claims:
+                warns.append(
+                    f"Verification checked {said[1]} claims of about {claims} cited in the note; "
+                    f"say so in the 'Checked on' line: '{said[0]} of {said[1]} claims "
+                    f"confirmed, a sample of the note's {claims} cited claims'"
+                )
     else:
         warns.append(
             "Verification's 'Checked on' line doesn't say 'N of M claims confirmed'; give the "

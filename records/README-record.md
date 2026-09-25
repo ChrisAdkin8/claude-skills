@@ -45,3 +45,4 @@ Needs a run: 1, 3, 9, 10
 - Not reviewed: a workflow diagram, `docs/workflow.png` (source `docs/workflow.svg`), added after the opening paragraphs, with alt text describing it, on 2026-09-25.
 - Not reviewed: the workflow diagram is now drawn by `docs/diagram/workflow.py` in a wide and a narrow layout, each light and dark; the README shows the narrow one, switching to dark with the viewer's theme, and links the full-size ones; arrowheads are drawn along their lines, on 2026-09-25.
 - Not reviewed: the diagram loses its title; it now sits under a new heading, The workflow at a glance, after the glossary, with a short paragraph saying how to read it, on 2026-09-25.
+- Not reviewed: the heading now sits directly above the diagram, and the paragraph on reading it becomes a short list below it, on 2026-09-25.

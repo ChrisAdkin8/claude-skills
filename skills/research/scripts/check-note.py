@@ -20,7 +20,14 @@ checked mechanically; whether the sources support the claims is the verifier age
 
 import argparse
 import re
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from mdcheck import (  # noqa: E402  shared with check-spec.py
+    ACCOUNT_ID, INLINE_CODE, SECRETS, SEPARATOR, frontmatter, level, section, strip_code,
+)
+import mdcheck  # noqa: E402
 
 TEMPLATES = Path.home() / "notes" / "templates"
 TEMPLATE = {"ideas": TEMPLATES / "research-ideas.md"}  # any other depth: research.md
@@ -76,74 +83,7 @@ EVIDENCE_NOTE = "attention-evidence.md"
 # [12], [1, 7], [8-9] or [8–9], but not a markdown link [12](url).
 CITE = re.compile(r"\[(\d+(?:\s*[,–-]\s*\d+)*)\](?!\()")
 SOURCE = re.compile(r"^(\d+)\.\s")
-INLINE_CODE = re.compile(r"`[^`]*`")  # jq like `.[0]` is not a citation
-SEPARATOR = re.compile(r"\s*\|?[\s:|-]*\|?\s*")  # table rule rows and blank lines
 UNVERIFIED_MARK = re.compile(r"\*\((?:inferred|unverified)[^)]*\)\*")
-# Keep in step with SECRETS in ~/.claude/skills/spec/scripts/check-spec.py.
-SECRETS = [
-    (re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"), "an AWS access key ID"),
-    (
-        re.compile(r"aws_secret_access_key\s*[=:]\s*\S{20,}", re.IGNORECASE),
-        "an AWS secret key",
-    ),
-    (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"), "a private key"),
-    (re.compile(r"\bgh[pousr]_[A-Za-z0-9]{36,}\b"), "a GitHub token"),
-    (re.compile(r"\bgithub_pat_[A-Za-z0-9_]{22,}\b"), "a GitHub token"),
-    (re.compile(r"\bxox[abprs]-[A-Za-z0-9-]{10,}\b"), "a Slack token"),
-    (re.compile(r"\bsk-ant-[A-Za-z0-9_-]{20,}"), "an Anthropic API key"),
-    (re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b"), "a Google API key"),
-    (re.compile(r'"type"\s*:\s*"service_account"'), "a GCP service account key"),
-]
-ACCOUNT_ID = re.compile(r"(?<![\w.:-])\d{12}(?![\w-]|\.\d)")
-
-
-def frontmatter(lines):
-    """Return (fields, index of the first body line). Block lists (`key:` then `- item`) are
-    joined into a flow list, so `related` reads the same either way."""
-    if not lines or lines[0].strip() != "---":
-        return {}, 0
-    fields, key = {}, None
-    for i, line in enumerate(lines[1:], start=1):
-        if line.strip() == "---":
-            return fields, i + 1
-        item = re.match(r"\s+-\s+(.*)", line)
-        if item and key and not fields[key].startswith("["):
-            fields[key] = (fields[key] + ", " if fields[key] else "") + item.group(1)
-            continue
-        if ":" in line:
-            key, _, value = line.partition(":")
-            key = key.strip()
-            fields[key] = value.split(" #")[0].strip()
-    return fields, len(lines)
-
-
-def strip_code(lines):
-    """Drop fenced code blocks (mermaid diagrams, commands)."""
-    out, fenced = [], False
-    for line in lines:
-        if line.lstrip().startswith("```"):
-            fenced = not fenced
-            continue
-        if not fenced:
-            out.append(line)
-    return out
-
-
-def level(line):
-    return len(line) - len(line.lstrip("#"))
-
-
-def section(lines, heading):
-    """Lines under the first heading starting with `heading`, up to the next heading of its level or above."""
-    for i, line in enumerate(lines):
-        if line.startswith(heading):
-            body = []
-            for nxt in lines[i + 1 :]:
-                if nxt.startswith("#") and level(nxt) <= level(heading):
-                    break
-                body.append(nxt)
-            return body
-    return None
 
 
 def heading_index(lines, heading):
@@ -234,19 +174,7 @@ def cited_claims(prose):
 
 def template_prompts(depth):
     """Prose lines from the depth's template that should never survive into a finished note."""
-    template = TEMPLATE.get(depth, TEMPLATES / "research.md")
-    if not template.exists():
-        return []
-    prompts = []
-    for line in template.read_text().splitlines():
-        text = line.strip()
-        if (
-            len(text) > 20
-            and not text.startswith(("#", "|", "---"))
-            and ":" not in text[:12]
-        ):
-            prompts.append(text)
-    return prompts
+    return mdcheck.template_prompts(TEMPLATE.get(depth, TEMPLATES / "research.md"))
 
 
 def check_related(value, fails, warns):

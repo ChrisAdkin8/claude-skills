@@ -24,6 +24,20 @@ SECRETS = [
     (re.compile(r'"type"\s*:\s*"service_account"'), "a GCP service account key"),
 ]
 ACCOUNT_ID = re.compile(r"(?<![\w.:-])\d{12}(?![\w-]|\.\d)")
+# An ARN's account field, which ACCOUNT_ID's lookbehind skips: arn:aws:iam::123456789012:role/x.
+ARN_ACCOUNT = re.compile(r"\barn:aws[\w-]*:[\w-]*:[\w-]*:\d{12}(?::|/|$)", re.MULTILINE)
+FENCE = re.compile(r"\s*(`{3,}|~{3,})")
+CLOSE = re.compile(r"`{3,}|~{3,}")  # a closing fence has nothing after it
+
+
+def has_account_id(text):
+    """A bare 12-digit number or an ARN with an account ID in it."""
+    return bool(ACCOUNT_ID.search(text) or ARN_ACCOUNT.search(text))
+
+
+def count_words(line):
+    """Words in a line, not counting table pipes: `| a | b |` is two words, not five."""
+    return sum(1 for word in line.split() if word.strip("|"))
 
 
 def frontmatter(lines):
@@ -35,7 +49,7 @@ def frontmatter(lines):
     for i, line in enumerate(lines[1:], start=1):
         if line.strip() == "---":
             return fields, i + 1
-        item = re.match(r"\s+-\s+(.*)", line)
+        item = re.match(r"\s*-\s+(.*)", line)  # indented or not, YAML reads both
         if item and key and not fields[key].startswith("["):
             fields[key] = (fields[key] + ", " if fields[key] else "") + item.group(1)
             continue
@@ -52,14 +66,20 @@ def frontmatter(lines):
 
 
 def strip_code(lines):
-    """Drop fenced code blocks: commands, their output and diagrams."""
-    out, fenced = [], False
+    """Drop fenced code blocks: commands, their output and diagrams. A fence is ``` or ~~~, and
+    only a run of the same character at least as long closes it, so a ```` block can hold a
+    ``` one."""
+    out, fence = [], None
     for line in lines:
-        if line.lstrip().startswith("```"):
-            fenced = not fenced
-            continue
-        if not fenced:
-            out.append(line)
+        m = FENCE.match(line)
+        if fence is None:
+            if m:
+                fence = m.group(1)
+            else:
+                out.append(line)
+        elif m and CLOSE.fullmatch(line.strip()) and line.strip()[0] == fence[0]:
+            if len(line.strip()) >= len(fence):
+                fence = None
     return out
 
 

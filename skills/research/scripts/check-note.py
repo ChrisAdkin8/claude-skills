@@ -25,7 +25,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from mdcheck import (  # noqa: E402  shared with check-spec.py
-    ACCOUNT_ID, INLINE_CODE, SECRETS, SEPARATOR, frontmatter, level, section, strip_code,
+    INLINE_CODE, SECRETS, SEPARATOR, count_words, frontmatter, has_account_id, level, section,
+    strip_code,
 )
 import mdcheck  # noqa: E402
 
@@ -210,7 +211,7 @@ def check_related(value, fails, warns):
             warns.append(
                 f"related entry {entry!r} isn't a ~ path; skills grep for ~ paths"
             )
-        elif not Path(entry).expanduser().exists():
+        if entry.startswith(("~/", "/")) and not Path(entry).expanduser().exists():
             fails.append(
                 f"related entry {entry} doesn't exist: fix the path, or remove it if the "
                 "file was deleted"
@@ -611,7 +612,7 @@ def main():
             warns,
         )
 
-    words = sum(len(line.split()) for line in prose if not SEPARATOR.fullmatch(line))
+    words = sum(count_words(line) for line in prose if not SEPARATOR.fullmatch(line))
     budget = (HEADROOM_BUDGET if args.headroom else WORD_BUDGET)[depth]
     kind = (
         "researcher's budget, leaving headroom for verification"
@@ -648,7 +649,7 @@ def main():
     for pattern, what in SECRETS:
         if pattern.search(text):
             fails.append(f"contains what looks like {what}")
-    if ACCOUNT_ID.search("\n".join(body)):
+    if has_account_id(text):
         warns.append("contains a 12-digit number: make sure it isn't an AWS account ID")
 
     marked = sum(len(UNVERIFIED_MARK.findall(line)) for line in prose)

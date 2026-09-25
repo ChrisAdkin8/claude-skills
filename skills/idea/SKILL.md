@@ -20,5 +20,5 @@ Capture should be fast. File the note, don't interrogate the user or start devel
    - `related`: if the current working directory is a repo under `~/code`, add its path (e.g. `~/code/github.com/org/repo`).
    - "The idea": the user's own words, tidied but not reinterpreted.
    - Other sections: fill only with what the user said or the conversation established. Leave the rest as the template's prompts. Never invent content.
-5. **Commit** only that note: `git -C ~/notes add <path>`, then `git -C ~/notes commit` with the message `idea: <title>`, following this session's commit attribution rules. Don't push.
+5. **Commit** only that note: `git -C ~/notes add <path>`, then `git -C ~/notes commit -m 'idea: <title>' -- <path>`, naming the path again so nothing another session staged comes with it, following this session's commit attribution rules. Don't push.
 6. **Report** the file path in one line. Optionally add one sharp open question worth thinking about, and mention that `/research <path>` will dig into it.

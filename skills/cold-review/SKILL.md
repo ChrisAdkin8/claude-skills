@@ -49,9 +49,13 @@ Change the skeleton here, not there.
    - None: this is the full review. Carry on.
    - One, with `Not reviewed:` lines and no `### Delta review` under it: this is the delta
      review. Carry on, and follow the delta notes in steps 3 to 5.
-   - One, with no `Not reviewed:` lines: say that the document had its review on the date in
-     the section and nothing since is logged as unreviewed, and stop. If the user says it changed
-     anyway, the fix is to log the changes as `Not reviewed:` lines, then run this again.
+   - One, with no `Not reviewed:` lines: check whether the document changed anyway (step 3,
+     the review commit). If its diff is empty, say that the document had its review on the date
+     in the section and hasn't changed since, and stop. If it isn't, the changes were never
+     logged: say so, show the diff's `--stat` and the headings it touches, and draft one `Not
+     reviewed:` line per change from the diff. Once the user confirms them, add them to the
+     record and carry on as a delta review. If there's no review commit to diff from, say that
+     unlogged changes can't be found, and stop.
    - One that already has a `### Delta review`: say that the document had its full review and
      its delta review, name any `Not reviewed:` lines left, and stop. They stay listed as
      unreviewed; that's the record, not a reason for a third round.
@@ -60,11 +64,23 @@ Change the skeleton here, not there.
    review then works from the document and whatever it links.
    - If `~/.claude/hooks/git-read.py -C <root> status --porcelain` shows the document or the code it describes is uncommitted, say
      so in one line: the reviewer reads the working tree, so its findings age with it.
-   - Delta review: find the commit that saved the review, `~/.claude/hooks/git-read.py -C <root> log
-     --format=%h -S'## Cold review' -- <the record, or the document if the review is in it>` (the
-     last line is the oldest). If there is one, the reviewer can diff the
-     document from there; if not (the review was never committed), it works from the `Not
-     reviewed:` lines alone.
+   - **The review commit** (for a delta review, and for step 2's check): the oldest commit that
+     added the review's date line, which finds the original save even when the review was later
+     moved from the document into a record: `~/.claude/hooks/git-read.py -C <root> log
+     --format=%h -S'Reviewed on <the date in that line> by' -- <the record> <the document>`
+     (the last line is the oldest; with no date line, search for `## Cold review` instead). If
+     the review is in a record and that commit also changed a document that already existed
+     before it (`git-read.py -C <root> show --stat --format= <commit> -- <document>` lists it,
+     and `git-read.py -C <root> cat-file -e <commit>^:<document path from the root>` succeeds),
+     the base is `<commit>^`, so folds saved in the same commit aren't missed; otherwise the
+     base is the commit. The
+     diff is `git -C <root> diff <base> -- <document>`, which includes uncommitted edits.
+     No commit (the review was never committed): the reviewer works from the `Not reviewed:`
+     lines alone.
+   - **Unlogged changes** (delta review): read that diff against the `Not reviewed:` lines. If
+     it changes parts of the document none of them accounts for, name those headings in one
+     line. They're in the diff, so the reviewer covers them; offer to log them in the record
+     as `Not reviewed:` lines, so the record says what the delta review covered.
 4. **Who wrote it.** If this session wrote or edited the document, say so in one line. The agent is
    still cold - it has seen no part of this conversation - but you are not, and step 3 is where
    that leaks. If the user would rather have a reader that shares nothing at all with this
@@ -128,7 +144,7 @@ Review <absolute document path> adversarially. You haven't seen how it was writt
 
 It is <the kind from step 2, with its article: "a runbook", "an implementation spec">, so a cold reader has to be able to <what that row says>. Find what stops them: statements the code contradicts, statements that were true and have drifted, steps and prerequisites that are missing, assumptions presented as facts, costs not counted (files, checks that will go red, migrations), and anything a cold reader can't work through without asking the author. Grade each finding by whether it affects correctness or a stated requirement, and say which don't. Don't edit the file.
 <Delta review only: A full cold review of this document is saved <in its record, <absolute record path> | at its end, under "## Cold review">. Since then it has changed in the places below. Read the document straight through once as usual, then report only findings in these changes, or caused by them elsewhere in the document. The lines below say where it changed, as its author logged it, not whether the change is right. Leave the saved review alone: it is a record.
-- Diff: `git -C <repo root> diff <commit from step 1> -- <document path>`<, or "none: the review was never committed">
+- Diff: `git -C <repo root> diff <the base from step 1, item 3> -- <document path>`<, or "none: the review was never committed">
 - Changes logged since the review: <each Not reviewed: line, quoted exactly>>
 
 How to go about it:

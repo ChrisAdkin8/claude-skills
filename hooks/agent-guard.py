@@ -79,6 +79,12 @@ SCRIPTS = {
         ".claude/skills/spec/scripts/check-spec.py",
     )
 }
+# The scripts that send their arguments over the network, outside the sandbox and with the
+# user's gh, gcloud or Reddit credentials: their arguments get curl's and gh's size limits.
+NET_SCRIPTS = {
+    (HOME / ".claude/skills/research/scripts" / name).resolve()
+    for name in ("repo-health.sh", "gcp-skus.sh", "reddit-search.sh")
+}
 # Reading and text tools that can't run other programs or write files (the flags that would
 # are checked below).
 READERS = {
@@ -1123,6 +1129,8 @@ def check_command(command, depth=0, local=None, clean=None):
         path = Path(word).expanduser()
         name = os.path.basename(word)
         if "/" in word and path.resolve() in SCRIPTS:
+            if path.resolve() in NET_SCRIPTS:
+                check_request_words(args, name, clean, tainted)
             continue
         if name in ("python3", "python", "bash", "sh", "zsh") and args:
             if args[0] == "-c" and name in ("bash", "sh", "zsh") and len(args) > 1:
@@ -1134,7 +1142,10 @@ def check_command(command, depth=0, local=None, clean=None):
                     (clean | assigned_names(inner)) - tainted_names(inner),
                 )
                 continue
-            if Path(args[0]).expanduser().resolve() in SCRIPTS:
+            script = Path(args[0]).expanduser().resolve()
+            if script in SCRIPTS:
+                if script in NET_SCRIPTS:
+                    check_request_words(args[1:], script.name, clean, tainted)
                 continue
             block(f"`{name}` may only run the /research and /spec skill scripts")
         if name == "eval":

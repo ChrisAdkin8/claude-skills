@@ -147,11 +147,19 @@ row() {
   echo "| $repo | $stars | $commits ($human$plus) | $authors$plus | $last_human | $contribs | $rel_date${rel_kind:+ $rel_kind} | $issues_prs | $licence | ${flag_text:+⚠ $flag_text} |"
 }
 
+for repo in "$@"; do
+  # Only owner/repo: each name goes into a gh api path, outside the agents' sandbox.
+  [[ $repo =~ ^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$ && ${repo#*/} != . && ${repo#*/} != .. ]] || {
+    echo "repo-health: not owner/repo: $repo" >&2
+    exit 2
+  }
+done
+
 echo '| Repo | Stars | Commits 90d (human) | Human authors 90d | Last human commit | Contributors | Last release | Open issues / PRs | Licence | Flags |'
 echo '|---|---:|---:|---:|---|---:|---|---:|---|---|'
 
 # Fetch all repos in parallel, then print the rows in the order given.
-tmp=$(mktemp -d)
+tmp=$(mktemp -d) || exit 1
 trap 'rm -rf "$tmp"' EXIT
 i=0
 for repo in "$@"; do

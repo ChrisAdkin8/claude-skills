@@ -42,3 +42,4 @@ Needs a run: 1, 3, 9, 10
 - Not reviewed: Set up ~/notes says `/spec` needs `~/notes` and `/cold-review` doesn't, and that a missing `--add-dir` directory doesn't stop a run (checked on 2.1.282), from the README delta review (2026-09-25) row 4, on 2026-09-25.
 - Not reviewed: Layout adds `hooks/git-read.py` and lists every test file, from the README delta review (2026-09-25) row 5, on 2026-09-25.
 - Not reviewed: What things cost and Checks add the skill evaluations, their cost and command, from the README delta review (2026-09-25) row 6, on 2026-09-25.
+- Not reviewed: a workflow diagram, `docs/workflow.png` (source `docs/workflow.svg`), added after the opening paragraphs, with alt text describing it, on 2026-09-25.

@@ -35,3 +35,10 @@ Needs a run: 1, 3, 9, 10
 - Not reviewed: a new section, Set up ~/notes, lists what `~/notes` must hold, from README review row 3, on 2026-09-25.
 - Not reviewed: step 3 says `/spec` needs a git repo under `~/code`, from README review row 4, on 2026-09-25.
 - Not reviewed: `/cold-review`'s description says the skill edits for picked findings and saves reviews to a record, from README review row 5, on 2026-09-25.
+- Not reviewed: the README was restructured for readability: a plain summary and a short glossary open it; step 3 of the flow is split into checks and the record; `/cold-review` has its own section; Requirements, Install and Set up ~/notes come before Layout; the sandbox and guard detail moved out of Layout into a new section, How the agents are contained, which now names every tool the guard covers (adding WebFetch and Edit, from README review row 8's evidence); costs are gathered into What things cost, on 2026-09-25.
+- Not reviewed: How the agents are contained says no hook checks WebSearch or the researcher's MCP tools, and names which agents are granted them, from the README delta review (2026-09-25) row 1, on 2026-09-25.
+- Not reviewed: What things cost gives the agent evaluations' latest full run ($4.02, ten cases) and their $5-per-case cap, from the README delta review (2026-09-25) row 2, on 2026-09-25.
+- Not reviewed: Requirements drops the unsourced 2.1.187 figure and says no older version has been run; 2.1.282 checked with `claude --version`, from the README delta review (2026-09-25) row 3, on 2026-09-25.
+- Not reviewed: Set up ~/notes says `/spec` needs `~/notes` and `/cold-review` doesn't, and that a missing `--add-dir` directory doesn't stop a run (checked on 2.1.282), from the README delta review (2026-09-25) row 4, on 2026-09-25.
+- Not reviewed: Layout adds `hooks/git-read.py` and lists every test file, from the README delta review (2026-09-25) row 5, on 2026-09-25.
+- Not reviewed: What things cost and Checks add the skill evaluations, their cost and command, from the README delta review (2026-09-25) row 6, on 2026-09-25.

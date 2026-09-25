@@ -196,3 +196,65 @@ class PoolRowsAreNotStale(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StaleRows(unittest.TestCase):
+    """A Verification row vouches for a claim only while the note still says it, word for word."""
+
+    def test_edited_number_is_stale(self):
+        # "boxes of 12" still appears inside "boxes of 120"; the row must not vouch for it.
+        text = FIXTURE.read_text().replace("boxes of 12 [2]", "boxes of 120 [2]")
+        out, result = check(text)
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("no longer appears in the note", out)
+
+    def test_row_quoting_the_whole_sentence_matches(self):
+        # The note reads "each [1]."; a row that quotes "each." is the same claim.
+        text = FIXTURE.read_text().replace(
+            "| Widgets weigh 3 kg each | [1]", "| Widgets weigh 3 kg each. | [1]"
+        )
+        out, result = check(text)
+        self.assertEqual(result, "RESULT: PASS", out)
+
+    def test_claim_split_across_paragraphs_is_stale(self):
+        text = FIXTURE.read_text().replace(
+            "Widgets weigh 3 kg each [1]. Gadgets ship in boxes of 12 [2].",
+            "Widgets weigh 3 kg each [1]. Gadgets ship in boxes\n\nof 12 [2].",
+        ).replace(" and gadgets ship in boxes of 12 [2]", "")
+        out, result = check(text)
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("no longer appears in the note", out)
+
+
+class UnverifiedMarks(unittest.TestCase):
+    """A row resolved as marked (unverified) needs the mark in the claim's own sentence."""
+
+    def setUp(self):
+        self.text = (
+            FIXTURE.read_text()
+            .replace("1 of 2 claims confirmed", "0 of 2 claims confirmed")
+            .replace(
+                "| Widgets weigh 3 kg each | [1] | CONFIRMED | |",
+                "| Widgets weigh 3 kg each | [1] | UNREACHABLE | marked *(unverified)* |",
+            )
+        )
+
+    def test_mark_in_the_claims_sentence_passes(self):
+        text = self.text.replace("3 kg each [1]", "3 kg each [1] *(unverified)*")
+        out, result = check(text)
+        self.assertEqual(result, "RESULT: PASS", out)
+
+    def test_mark_after_the_full_stop_passes(self):
+        text = self.text.replace("3 kg each [1].", "3 kg each [1]. *(unverified)*").replace(
+            "3 kg each [1],", "3 kg each [1] *(unverified)*,"
+        )
+        out, result = check(text)
+        self.assertEqual(result, "RESULT: PASS", out)
+
+    def test_mark_on_another_sentence_fails(self):
+        text = self.text.replace("boxes of 12 [2].", "boxes of 12 [2] *(unverified)*.").replace(
+            "3 kg each [1],", "3 kg each [1] *(unverified)*,"
+        )
+        out, result = check(text)
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("isn't marked *(unverified)*", out)

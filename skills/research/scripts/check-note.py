@@ -140,6 +140,32 @@ def normalise(text):
     return " ".join(re.sub(r"[*`\\]", "", text).lower().split())
 
 
+CITE_MARK = re.compile(r"\s*\[\d+(?:\s*[,–-]\s*\d+)*\](?!\()")
+SENTENCE_END = re.compile(r"[.!?](?=\s|$)")
+
+
+def claim_text(text):
+    """A Verification row's claim as the note's text is compared with it: normalised, without
+    citation markers or a closing full stop, so quoting the sentence whole still matches."""
+    text = " ".join(CITE_MARK.sub("", normalise(text)).split())
+    return text.rstrip(" .,;:")
+
+
+def claim_spans(needle, para):
+    """Where the claim appears in a paragraph, as whole words: `boxes of 12` is not in
+    `boxes of 120`."""
+    pattern = r"(?<!\w)" + re.escape(needle) + r"(?!\w)"
+    return [m.span() for m in re.finditer(pattern, para)]
+
+
+def marked_unverified(para, span):
+    """Whether the sentence holding the claim carries an (unverified) mark, not just some
+    other sentence of the paragraph. The mark may follow the sentence's full stop."""
+    start = max((m.end() for m in SENTENCE_END.finditer(para, 0, span[0])), default=0)
+    end = next((m.end() for m in SENTENCE_END.finditer(para, span[1])), len(para))
+    return "(unverified" in para[start : end + len(" (unverified)")]
+
+
 def cited_numbers(line):
     nums = set()
     for group in CITE.findall(INLINE_CODE.sub("", line)):
@@ -312,8 +338,9 @@ def check_verification(body, prose, status, fails, warns, pool=()):
             "Verification's 'Checked on' line doesn't say 'N of M claims confirmed'; give the "
             "table's CONFIRMED count and row count"
         )
-    paras = paragraphs(prose + list(pool))
-    prose_text = " ".join(paras)
+    # Compared paragraph by paragraph, without citation markers, so a claim never matches
+    # across a paragraph break.
+    paras = [" ".join(CITE_MARK.sub("", para).split()) for para in paragraphs(prose + list(pool))]
     unresolved, stale, unmarked = [], [], []
     for row in rows:
         if len(row) < 3:
@@ -328,11 +355,12 @@ def check_verification(body, prose, status, fails, warns, pool=()):
             warns.append(f"Verification row {label} has verdict {row[2]!r}")
         if verdict != "CONFIRMED" and not resolution:
             unresolved.append(label)
-        needle = normalise(claim)
-        if needle and needle not in prose_text:
+        needle = claim_text(claim)
+        found = [(para, span) for para in paras for span in claim_spans(needle, para)]
+        if needle and not found:
             stale.append(label)
-        elif "unverified" in resolution.lower() and any(
-            "(unverified" not in para for para in paras if needle in para
+        elif "unverified" in resolution.lower() and not all(
+            marked_unverified(para, span) for para, span in found
         ):  # every place the claim appears must carry the mark
             unmarked.append(label)
     if unresolved:

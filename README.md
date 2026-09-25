@@ -20,12 +20,6 @@ A few terms used throughout:
 
 ## The workflow at a glance
 
-The diagram below follows one change from idea to merge. Each numbered stage shows the command
-you run, what it does and where its output lands; the purple boxes are the agents and scripts
-that check the work. The dashed lines are the routes off the main path, and the two bands at the
-bottom cover `/cold-review` and how every agent is kept contained. The sections after it explain
-each part in words.
-
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/workflow-narrow-dark.png">
   <img src="docs/workflow-narrow.png" alt="Workflow diagram. Six stages run in order: Capture with /idea, Research with /research,
@@ -37,6 +31,14 @@ band shows /cold-review's five steps for any markdown document, and another show
 is contained: its own headless session, an OS sandbox, a guard hook and cost
 caps.">
 </picture>
+
+How to read it:
+
+- It follows one change from idea to merged code, top to bottom.
+- Each numbered stage shows the command you run, what it does and where its output goes.
+- Purple boxes are the agents and scripts that check the work.
+- Dashed lines are shortcuts and loops off the main path.
+- The two bands at the bottom cover `/cold-review` and the limits every agent runs under.
 
 ## How a change flows through it
 

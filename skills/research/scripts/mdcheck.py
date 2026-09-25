@@ -42,7 +42,12 @@ def frontmatter(lines):
         if ":" in line:
             key, _, value = line.partition(":")
             key = key.strip()
-            fields[key] = value.split(" #")[0].strip()
+            value = value.split(" #")[0].strip()
+            # `status: "reviewed"` is YAML for reviewed; a checker comparing the raw text
+            # would miss it.
+            if len(value) > 1 and value[0] == value[-1] and value[0] in "\"'":
+                value = value[1:-1]
+            fields[key] = value
     return fields, len(lines)
 
 

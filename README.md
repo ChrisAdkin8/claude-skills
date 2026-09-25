@@ -38,9 +38,6 @@ is contained: its own headless session, an OS sandbox, a guard hook and cost
 caps.">
 </picture>
 
-Full size: [light](docs/workflow.png), [dark](docs/workflow-dark.png). To change the diagram,
-edit and run `docs/diagram/workflow.py`.
-
 ## How a change flows through it
 
 1. **`/idea <description>`** files a note in `~/notes/ideas`.

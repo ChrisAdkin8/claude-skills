@@ -17,15 +17,12 @@ One full adversarial round per document. The reviewer edits nothing, and neither
 findings are the user's to judge. A reviewer asked to find gaps finds some whether or not any
 exist, so chasing all of them produces defensive, over-qualified prose.
 
-A document can still change after its review: findings get folded in, spikes answer questions,
-the user decides things. Those changes are the least-checked part of it. So a document that logs
-them as `Not reviewed:` lines gets one **delta review**, of just those changes, and no more.
+Changes made after the review (folded findings, spike answers, the user's decisions) are logged
+as `Not reviewed:` lines and get one **delta review**, of just those changes, and no more.
 
-A document's review history lives in its **record**, `records/<basename>-record.md` in the
-document's directory (the layout is `~/.claude/skills/spec/record-template.md`): the saved
-review, any delta review, and the `Not reviewed:` log. The document stays what its readers came
-for. Older documents keep a saved review at their end, under `## Cold review`, and `Not reviewed:`
-lines in their open questions; read those the same way, and write anything new to a record.
+Review history lives in the document's **record**, `records/<basename>-record.md` beside it
+(layout: `~/.claude/skills/spec/record-template.md`), so the document stays what its readers
+came for. Older documents keep their review at their end; write anything new to a record.
 
 `/spec` builds its cold review from steps 3 and 4 of this file, so the two ask the same question.
 Change the skeleton here, not there.
@@ -157,22 +154,19 @@ Then one line each: `Counts: N findings - C correctness, R requirement, K neithe
 In `prompt` mode, give the user the filled-in prompt in a fenced block, say it expects a session
 with no history of this one, ask them to paste the reply back here so it can be saved, and stop.
 
-Otherwise run the `cold-reviewer` agent with that prompt. It runs as a headless, sandboxed
-session, since Claude Code can't sandbox a subagent on its own: with the Write tool, write the
-prompt to `<run dir>/brief.md`. The run dir is `~/.cache/agent-runs/<name>/cold-reviewer`
+Otherwise run the `cold-reviewer` agent, as a headless, sandboxed session: with the Write tool,
+write the prompt to `<run dir>/brief.md`. The run dir is `~/.cache/agent-runs/<name>/cold-reviewer`
 (`cold-reviewer-delta` for a delta review), where `<name>` is `<repo dir name>--<document
 basename>`, or for a document outside a repo its directory's name and basename, e.g.
-`claude-skills--README`: every repo has a README, and a run dir that's reused loses its replies.
+`claude-skills--README`, since a reused run dir loses its replies.
 Then run `~/.claude/hooks/run-agent.sh cold-reviewer <repo root, or the
 document's directory> <that run dir>` with the Bash tool and `run_in_background: true`, paths
-written with `~`. When it finishes, read `<run dir>/reply.md`. Exit 3 means the run finished
-but the reply lacks the table and closing lines the skeleton asks for (an API error such as
-"Request timed out", a budget stop, or a reply out of format): write `followup.md` in the run
+written with `~`. When it finishes, read `<run dir>/reply.md`. Exit 3 means the reply lacks
+the table and closing lines the skeleton asks for (an API error, a budget stop, or a reply out
+of format): write `followup.md` in the run
 dir asking for the reply again, in full, in that format, and run the same command with
 `--resume`; if that exits 3 too, tell the user and relay nothing. Any other non-zero exit means
-no reply, and `run.err` there says why. The agent brings only read-only tools and safety rules; everything it
-reviews for comes from your prompt.
-Tell the user in one line that the document is under cold review (or delta review), and end your
+no reply, and `run.err` there says why. Tell the user in one line that the document is under cold review (or delta review), and end your
 turn.
 
 ## 5. When the reviewer finishes
@@ -192,14 +186,12 @@ turn.
    and saving the review. Don't do either unasked.
    - **Folding in:** fold only the ones the user picks. Don't touch the rest. A document with a
      saved review logs each fold in its record, under `## Changes since the review`, as `- Not
-     reviewed: <what changed>, from <review> row <n>, on <YYYY-MM-DD>.` (`check-spec.py` counts
-     them for a spec), since the fix itself hasn't been reviewed. After a delta review, those
-     lines are the record of what stays unreviewed.
+     reviewed: <what changed>, from <review> row <n>, on <YYYY-MM-DD>.`, since the fix itself
+     hasn't been reviewed.
    - **Saving:** in the record (start it from the record template, keeping only the sections it
      needs), add the table and its closing lines unchanged under `## Cold review`, after a line
      `Reviewed on <YYYY-MM-DD> by cold-reviewer. Saved unchanged; what was folded in is logged
-     under Changes since the review.` Saving it isn't acting on it. Since the record is a
-     separate file, this suits any document, a README or runbook included.
+     under Changes since the review.` Saving it isn't acting on it.
    - **Saving a delta review:** in the same record, at the end of its `## Cold review` section,
      under `### Delta review, <YYYY-MM-DD>`, after a line `Reviewed on <YYYY-MM-DD> by
      cold-reviewer: the changes logged as Not reviewed. Saved unchanged.` Then change each `Not

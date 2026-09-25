@@ -30,11 +30,11 @@ The checking rules live in `~/.claude/agents/spec-verifier.md`; the cold review'
 
 ## Running an agent
 
-The spec verifier and the cold reviewer run as headless, sandboxed sessions through `~/.claude/hooks/run-agent.sh` (its header says what the sandbox holds and what it writes):
+The spec verifier and the cold reviewer run as headless, sandboxed sessions through `~/.claude/hooks/run-agent.sh`:
 
-1. With the Write tool, write the brief to `<run dir>/brief.md`, where `<run dir>` is `~/.cache/agent-runs/<repo dir name>--<spec basename>/<agent>`, e.g. `~/.cache/agent-runs/rag-forge--2026-09-24-x/spec-verifier`, so specs of the same name in two repos don't share one; a later round gets `<agent>-2`.
+1. With the Write tool, write the brief to `<run dir>/brief.md`, where `<run dir>` is `~/.cache/agent-runs/<repo dir name>--<spec basename>/<agent>`, e.g. `~/.cache/agent-runs/rag-forge--2026-09-24-x/spec-verifier`; a later round gets `<agent>-2`.
 2. Run `~/.claude/hooks/run-agent.sh <agent> <repo root> <run dir>` with `run_in_background: true`, paths written with `~`. For several at once (one per part of a split spec), one call per agent in the same message.
-3. When it finishes, read `<run dir>/reply.md`. Exit 3 means the run finished but the reply lacks the closing lines its agent file asks for: an API error such as "Request timed out", a budget stop, or a reply out of format. Send one follow-up (`--resume`) asking it to reply again, in full, in the format its instructions give; if that exits 3 too, tell the user and don't act on the reply. Any other non-zero exit means no reply: `run.err` and `run.json` there say why.
+3. When it finishes, read `<run dir>/reply.md`. Exit 3 means the reply lacks the closing lines its agent file asks for (an API error, a budget stop, or a reply out of format). Send one follow-up (`--resume`) asking it to reply again, in full, in the format its instructions give; if that exits 3 too, tell the user and don't act on the reply. Any other non-zero exit means no reply: `run.err` and `run.json` there say why.
 
 For a follow-up in the same session, Write `<run dir>/followup.md` and run the same command with `--resume` added.
 
@@ -83,10 +83,10 @@ Tell the user in one or two lines: the research note, the option, and where the 
 - **Mark assumptions** about unobserved behaviour *(assumption)*; if one matters, it becomes a spike question.
 - **Work items** W1, W2…, each a reviewable change that lands on its own, in order: what changes; the files touched, new ones marked; **Done when**, observable acceptance criteria (a command and its result, a test that goes red then green), written before any work.
 - **Effort** from reading the code, saying so. **Non-goals**: what the research covered that this leaves out. **Spike questions**: what reading can't settle, each with the cheapest experiment, or "None.". A mermaid **diagram** if the structure changes.
-- **Status.** A house-format spec with no frontmatter gets a `Status: draft` line near the top, unless its convention marks status some other way (a SHIPPED or SUPERSEDED banner is read as done or superseded). `check-spec.py` reads it; without one it can't hold the spec back from implementation (step 5, item 4).
+- **Status.** A house-format spec with no frontmatter gets a `Status: draft` line near the top, unless its convention marks status another way (a SHIPPED or SUPERSEDED banner). `check-spec.py` reads it, and warns without one.
 - **No secrets**: no credentials, account IDs, state or tfvars values.
 - **Spec files only**: in the repo, create or change only the spec (or its parts), its record and, in step 7, its spike results file.
-- **Length.** A template spec fails the check above 4,000 words while live. Past about 3,000 words or seven work items, split it into `<date>-<slug>-1-<phase>.md`, `-2-<phase>.md`…, each landing on its own and naming the earlier as a prerequisite. Steps 3–5 then run once per part, verifiers launched together.
+- **Length.** Past about 3,000 words or seven work items (the check fails a live template spec at 4,000), split it into `<date>-<slug>-1-<phase>.md`, `-2-<phase>.md`…, each landing on its own and naming the earlier as a prerequisite. Steps 3–5 then run once per part, verifiers launched together.
 
 Then run `~/.claude/skills/spec/scripts/check-spec.py <spec> --repo <repo root> --read-at <commit>` (`--cite-repo <path>` for a new repo citing another) until it prints `RESULT: PASS`. Fix the WARN lines that are real.
 

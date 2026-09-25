@@ -22,7 +22,8 @@ calls = os.environ["STUB_CALLS"]
 with open(calls, "a") as f:
     f.write(json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd()}) + "\\n")
 n = sum(1 for _ in open(calls))
-print(json.dumps({"session_id": "sess-1", "result": f"reply {n}", "subtype": "success"}))
+tail = os.environ.get("STUB_TAIL", "| # | Kind |\\nCounts: 0 findings\\nCold read: yes")
+print(json.dumps({"session_id": "sess-1", "result": f"reply {n}\\n{tail}", "subtype": "success"}))
 """
 
 
@@ -103,7 +104,7 @@ class RunAgent(unittest.TestCase):
         self.assertNotIn("--resume", argv)
         self.assertEqual(argv[-1], "Review this.")
         self.assertEqual(Path(call["cwd"]).resolve(), self.work.resolve())
-        self.assertEqual((run / "reply.md").read_text(), "reply 1\n")
+        self.assertTrue((run / "reply.md").read_text().startswith("reply 1\n"))
         self.assertEqual((run / "session_id").read_text(), "sess-1")
         (entry,) = (self.tmp / "sessions.log").read_text().splitlines()
         self.assertEqual(entry.split()[1:], ["cold-reviewer", "sess-1"])
@@ -112,8 +113,11 @@ class RunAgent(unittest.TestCase):
         run = self.run_dir("researcher")
         run.mkdir(parents=True)
         (run / "brief.md").write_text("Research this.\n")
+        self.env["STUB_TAIL"] = "RESULT: PASS"
         self.assertEqual(self.run_agent("researcher", self.work, run)[0], 0)
-        self.assertNotIn("--strict-mcp-config", self.calls_made()[0]["argv"])
+        argv = self.calls_made()[0]["argv"]
+        self.assertNotIn("--strict-mcp-config", argv)
+        self.assertEqual(argv[argv.index("--max-budget-usd") + 1], "10")
 
     def test_resume_sends_followup_to_same_session_and_keeps_old_reply(self):
         run = self.run_dir()
@@ -128,8 +132,32 @@ class RunAgent(unittest.TestCase):
         second = self.calls_made()[-1]["argv"]
         self.assertEqual(second[second.index("--resume") + 1], "sess-1")
         self.assertEqual(second[-1], "Send rows 3 to 5.")
-        self.assertEqual((run / "reply-1.md").read_text(), "reply 1\n")
-        self.assertEqual((run / "reply.md").read_text(), "reply 2\n")
+        self.assertTrue((run / "reply-1.md").read_text().startswith("reply 1\n"))
+        self.assertTrue((run / "reply.md").read_text().startswith("reply 2\n"))
+
+    def test_budget_cap(self):
+        run = self.run_dir()
+        run.mkdir(parents=True)
+        (run / "brief.md").write_text("Review this.\n")
+        self.assertEqual(self.run_agent("cold-reviewer", self.work, run)[0], 0)
+        self.env["RUN_AGENT_MAX_USD"] = "2"
+        self.assertEqual(self.run_agent("cold-reviewer", self.work, run)[0], 0)
+        first, second = (c["argv"] for c in self.calls_made())
+        self.assertEqual(first[first.index("--max-budget-usd") + 1], "5")
+        self.assertEqual(second[second.index("--max-budget-usd") + 1], "2")
+
+    def test_reply_without_its_shape_exits_3(self):
+        # A timed-out API call comes back as a "successful" run whose reply is the error text.
+        run = self.run_dir()
+        run.mkdir(parents=True)
+        (run / "brief.md").write_text("Review this.\n")
+        for tail in ("Request timed out", "| # | Kind |\nCounts: 3 findings"):
+            with self.subTest(tail=tail):
+                self.env["STUB_TAIL"] = tail
+                code, out = self.run_agent("cold-reviewer", self.work, run)
+                self.assertEqual(code, 3, out)
+                self.assertIn("isn't in the shape", out)
+                self.assertIn(tail.splitlines()[0], (run / "reply.md").read_text())
 
     def test_resume_needs_a_session(self):
         run = self.run_dir()

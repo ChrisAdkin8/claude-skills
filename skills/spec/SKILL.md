@@ -82,6 +82,7 @@ Tell the user in one or two lines: the research note, the option, and where the 
 - **Mark assumptions** about unobserved behaviour *(assumption)*; if one matters, it becomes a spike question.
 - **Work items** W1, W2…, each a reviewable change that lands on its own, in order: what changes; the files touched, new ones marked; **Done when**, observable acceptance criteria (a command and its result, a test that goes red then green), written before any work.
 - **Effort** from reading the code, saying so. **Non-goals**: what the research covered that this leaves out. **Spike questions**: what reading can't settle, each with the cheapest experiment, or "None.". A mermaid **diagram** if the structure changes.
+- **Status.** A house-format spec with no frontmatter gets a `Status: draft` line near the top, unless its convention marks status some other way (a SHIPPED or SUPERSEDED banner is read as done or superseded). `check-spec.py` reads it; without one it can't hold the spec back from implementation (step 5, item 4).
 - **No secrets**: no credentials, account IDs, state or tfvars values.
 - **Spec files only**: in the repo, create or change only the spec (or its parts), its record and, in step 7, its spike results file.
 - **Length.** A template spec fails the check above 4,000 words while live. Past about 3,000 words or seven work items, split it into `<date>-<slug>-1-<phase>.md`, `-2-<phase>.md`…, each landing on its own and naming the earlier as a prerequisite. Steps 3–5 then run once per part, verifiers launched together.

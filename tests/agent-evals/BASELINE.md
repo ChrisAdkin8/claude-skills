@@ -345,3 +345,41 @@ A new skill eval, `cold-review-delta`, runs `/cold-review prompt` on a runbook w
 saved in it, folded once, moved into a record, then edited without logging. PASS (4 turns,
 $0.30): the prompt diffs from the commit before the review (the rule's base), not from the move
 commit the old lookup found, quotes the logged change, and names the unlogged Rollback edit.
+
+## After the review fixes, phases 1-3 (2026-09-25)
+
+Run on branch `review-fixes`, after:
+- run-agent.sh (and these evals) pass `--setting-sources user`, so a reviewed repo's own
+  settings and CLAUDE.md don't load;
+- agent-sandbox.json denies Bash writes to `~/.claude`, `~/notes` and `~/code`, and reads of
+  all of `~/.config`;
+- the guard allows only a short list of git's top-level options and limits the arguments of
+  the scripts that run outside the sandbox;
+- the checker fixes;
+- `/spec`'s round-2 and finish run dirs, and `/spec done` asking whether Done when checks pass;
+- run dirs named `<repo>--<basename>` for `/spec` and `/cold-review`;
+- `/cold-review`'s research-note row;
+- `/idea`'s allowed-tools;
+- research-verifier checking figures past WebFetch's summary.
+
+| Case | Agent | Result | Turns | Cost |
+|---|---|---|---:|---:|
+| absence-claim | research-verifier | PASS | 16 | $0.37 |
+| cold-review-skip | spec-verifier | PASS | 6 | $0.21 |
+| delta-review | cold-reviewer | PASS | 6 | $0.22 |
+| delta-review-record | cold-reviewer | PASS | 8 | $0.26 |
+| record-skip | spec-verifier | PASS | 5 | $0.19 |
+| research-ideas | researcher | PASS | 50 | $1.86 |
+| research-quick | researcher | PASS | 11 | $0.33 |
+| spec-miscite | spec-verifier | PASS | 6 | $0.20 |
+| spike-inherited | spec-verifier | PASS | 5 | $0.20 |
+| wrong-figure | research-verifier | PASS | 6 | $0.18 |
+
+10 of 10, $4.02 in total. No reply mentions a sandbox or guard refusal (the three that name
+`agent-guard.py` are reviewing it), so the new write and `~/.config` denies didn't get in the way
+of any case. No case exercises the WebFetch rule: wrong-figure and absence-claim reach their
+sources through curl.
+
+Skill evals: `spec-done` PASS (11 turns, $0.35), with its unattended answers now saying W1's
+Done when passes, and it still leaves the spec in-progress for W2; `cold-review-delta` PASS
+(7 turns, $0.32). No skill eval covers `/idea`, or `/spec`'s step 6 round-2 guard.

@@ -70,6 +70,7 @@ Report the queries and hits in a `Prior art:` block, as at ideas depth, with `id
 ## Check each one
 
 - Load the cited source: WebFetch for pages; `curl -sL` for raw files and JSON APIs on the hosts Bash can reach (Where you run, at the end of your instructions), and WebFetch for the rest; for a source that gives a command or API endpoint, re-run that exact command. Check that the source states the specific figure or fact, not just that the page exists. A 200 status proves nothing.
+- WebFetch hands you a smaller model's summary of the page, not the page, and a summary can round or invent a figure. Where the host is one Bash reaches, check a figure with `curl -sL` and `grep`. Otherwise ask WebFetch for the sentence that states it, quoted verbatim, and write `(via WebFetch)` after the quote in Evidence.
 - If the cited source doesn't support the claim, spend one or two searches looking for a primary source that does, and report it.
 - Prices: re-derive from the primary source the note names (AWS price feed or Price List files; for the GCP Cloud Billing Catalog, `~/.claude/skills/research/scripts/gcp-skus.sh`, which holds the token so you don't call gcloud). An aggregator figure is at best *(unverified)*.
 - Project health: re-run `~/.claude/skills/research/scripts/repo-health.sh owner/repo ...` for the repos the note recommends. Stars or commit counts drifting by a few since the note was written is fine; a changed flag, a different last human commit or a new archive status is not.

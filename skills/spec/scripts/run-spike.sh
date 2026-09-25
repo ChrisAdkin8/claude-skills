@@ -26,8 +26,11 @@ done
 export UV_CACHE_DIR="$HOME/.cache/spec-spikes/.uv-cache"
 mkdir -p "$UV_CACHE_DIR"
 
+# --setting-sources user, as in hooks/run-agent.sh: a spike starts in its scratch dir, which has
+# no .claude/ of its own, but the flag keeps any project settings or CLAUDE.md above or beside it
+# from loading. The spike's own settings.json still applies through --settings.
 cd "$scratch"
-exec claude -p --model sonnet \
+exec claude -p --model sonnet --setting-sources user \
   --append-system-prompt-file "$HOME/.claude/skills/spec/spiker.md" \
   --settings settings.json \
   --allowedTools "Read Grep Glob Bash Write(./**) Edit(./**)" \

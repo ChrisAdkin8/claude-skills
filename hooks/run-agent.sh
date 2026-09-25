@@ -30,6 +30,12 @@
 # PreToolUse guard in the agent's frontmatter still runs, for what the sandbox can't see (gh and
 # the excluded scripts, git and curl semantics, WebFetch URL sizes). The agent evals run the
 # agents the same way (tests/agent-evals/run.sh).
+#
+# --setting-sources user: the agent starts in the work dir, often a repo it is reviewing, and
+# claude -p otherwise loads that repo's .claude/settings*.json and CLAUDE.md. A hook there would
+# run outside the sandbox and the guard. Checked on 2026-09-25: a repo's UserPromptSubmit hook
+# fired without the flag and not with it, the --settings file's hooks still ran with it, and the
+# repo's CLAUDE.md wasn't loaded. Rules files the review needs are read as data, from the brief.
 set -euo pipefail
 
 die() { echo "run-agent: $*" >&2; exit 2; }
@@ -87,7 +93,7 @@ status=0
 claude -p --agent "$agent" --output-format json --max-turns 200 --max-budget-usd "$max_usd" \
   --allowedTools "$tools" --add-dir "$HOME/.claude" "$HOME/notes" "$work" \
   --append-system-prompt-file "$run/sandbox.md" \
-  --settings "$here/agent-sandbox.json" ${mcp[@]+"${mcp[@]}"} ${resume[@]+"${resume[@]}"} \
+  --setting-sources user --settings "$here/agent-sandbox.json" ${mcp[@]+"${mcp[@]}"} ${resume[@]+"${resume[@]}"} \
   "$prompt" < /dev/null > "$run/run.json" 2> "$run/run.err" || status=$?
 
 python3 - "$run" "$agent" "${RUN_AGENT_LOG:-$root/sessions.log}" <<'PY'

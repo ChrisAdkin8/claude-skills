@@ -59,7 +59,7 @@ run_case() {
   (cd "$work" && claude -p --agent "$agent" --output-format json --max-turns "$turns" \
     --allowedTools "$tools" --add-dir "$HOME/.claude" "$HOME/notes" "$repo" \
     --append-system-prompt-file "$out/$c.sandbox.md" \
-    --strict-mcp-config --no-session-persistence \
+    --strict-mcp-config --no-session-persistence --setting-sources user \
     --max-budget-usd "$usd" ${EVAL_MODEL:+--model "$EVAL_MODEL"} \
     ${settings:+--settings "$settings"} "$brief") \
     > "$out/$c.json" 2> "$out/$c.err"

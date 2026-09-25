@@ -462,3 +462,165 @@ class Numbering(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def git_repo(root, files, message="init"):
+    """Commit these files in a git repo at root (made if new); return the short commit."""
+    root.mkdir(parents=True, exist_ok=True)
+    if not (root / ".git").exists():
+        subprocess.run(["git", "init", "-q", str(root)], check=True)
+    for rel, text in files.items():
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(text)
+    subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+    subprocess.run(
+        ["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@t",
+         "commit", "-qm", message],
+        check=True,
+    )  # fmt: skip
+    return subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "--short", "HEAD"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()  # fmt: skip
+
+
+class Citations(unittest.TestCase):
+    """path:line citations, checked against the cite repo as it was at read-at."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.repo = Path(tmp.name) / "repo"
+        self.read_at = git_repo(
+            self.repo,
+            {"src/app.py": "".join(f"line {n}\n" for n in range(1, 11)), "README.md": "hi\n"},
+        )
+
+    def check(self, background, read_at=None, extra=None, spec_text=None):
+        text = spec_text or FIXTURE.read_text().replace(
+            "read-at: none", f"read-at: {read_at or self.read_at}"
+        ).replace("Nothing to cite, because read-at is none.", background)
+        spec = self.repo / "docs" / "specs" / "spec.md"
+        spec.parent.mkdir(parents=True, exist_ok=True)
+        spec.write_text(text)
+        run = subprocess.run(
+            [sys.executable, str(CHECKER), str(spec), "--repo", str(self.repo), *(extra or [])],
+            capture_output=True, text=True, check=False,
+        )  # fmt: skip
+        return run.stdout, run.stdout.strip().splitlines()[-1]
+
+    def test_citation_in_range_passes(self):
+        out, result = self.check("The app starts at src/app.py:3-5.")
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertIn("1 citations to 1 files", out)
+
+    def test_line_past_the_end_fails(self):
+        out, result = self.check("See src/app.py:12.")
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("src/app.py:12: the file had only 10 lines at read-at", out)
+
+    def test_lines_added_after_read_at_fail(self):
+        # The file grew after read-at; the spec describes it as it was.
+        git_repo(self.repo, {"src/app.py": "".join(f"line {n}\n" for n in range(1, 21))}, "grow")
+        out, result = self.check("See src/app.py:15.")
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("had only 10 lines at read-at", out)
+
+    def test_uncommitted_lines_warn(self):
+        (self.repo / "src" / "app.py").write_text("".join(f"line {n}\n" for n in range(1, 21)))
+        out, result = self.check("See src/app.py:15.")
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertIn("uncommitted when the spec was read", out)
+
+    def test_trailing_blank_lines_count(self):
+        read_at = git_repo(self.repo, {"src/gap.py": "a\nb\nc\n\n\n"}, "gap")
+        out, result = self.check("See src/gap.py:5.", read_at=read_at)
+        self.assertEqual(result, "RESULT: PASS", out)
+
+    def test_shorthand_uses_the_last_file(self):
+        out, result = self.check("See src/app.py:2, then (:4) and (:11).")
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("src/app.py:11: the file had only 10 lines", out)
+        self.assertNotIn("src/app.py:4:", out)
+
+    def test_shorthand_without_a_file_warns(self):
+        out, _ = self.check("Then (:4).")
+        self.assertIn("have no full citation earlier in their paragraph", out)
+
+    def test_shorthand_does_not_cross_paragraphs(self):
+        out, _ = self.check("See src/app.py:2.\n\nThen (:4).")
+        self.assertIn("have no full citation earlier in their paragraph", out)
+
+    def test_path_climbing_out_of_the_repo_fails(self):
+        out, result = self.check("See ../other/app.py:2.")
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("don't resolve", out)
+
+    def test_missing_file_in_a_real_dir_fails(self):
+        out, result = self.check("See src/gone.py:2.")
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("src/gone.py:2: no such file", out)
+
+    def test_bare_filename_warns(self):
+        out, result = self.check("See app.py:2.")
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertIn("give a bare filename", out)
+
+    def test_citation_in_code_is_not_checked(self):
+        for fence in ("```", "~~~"):
+            with self.subTest(fence=fence):
+                out, result = self.check(f"See src/app.py:1.\n\n{fence}\nsrc/gone.py:99\n{fence}")
+                self.assertEqual(result, "RESULT: PASS", out)
+
+    def test_host_port_is_not_a_citation(self):
+        out, result = self.check("src/app.py:1 listens on svc/name:9090 and example.com:443.")
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertIn("1 citations to 1 files", out)
+
+    def test_read_at_line_is_used_with_frontmatter_lacking_read_at(self):
+        # The file had 10 lines at read-at and 20 now; line 15 only exists now.
+        git_repo(self.repo, {"src/app.py": "".join(f"line {n}\n" for n in range(1, 21))}, "grow")
+        text = f"---\ntitle: x\n---\n# House spec\n\nRead at `{self.read_at}`. See src/app.py:15.\n"
+        out, result = self.check("", spec_text=text)
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("had only 10 lines at read-at", out)
+
+    def test_cite_repo(self):
+        other = self.repo.parent / "other"
+        other_at = git_repo(other, {"lib/x.py": "one\ntwo\n"})
+        text = FIXTURE.read_text().replace("read-at: none", f"read-at: {other_at}").replace(
+            "cite-repo: none", f"cite-repo: {other}"
+        ).replace("Nothing to cite, because read-at is none.", "See lib/x.py:2 and lib/x.py:3.")
+        out, result = self.check("", spec_text=text)
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("lib/x.py:3: the file had only 2 lines", out)
+        self.assertIn("in other", out)
+
+
+class WorkItems(unittest.TestCase):
+    """Each work item needs a Done when with something in it."""
+
+    def setUp(self):
+        self.base = FIXTURE.read_text()
+
+    def test_missing_done_when_fails(self):
+        out, result = check(self.base.replace("- **Done when:** the tests pass.\n", ""))
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("W1 has no 'Done when'", out)
+
+    def test_empty_done_when_fails(self):
+        out, result = check(self.base.replace("the tests pass.", ""))
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("W1 has an empty 'Done when'", out)
+
+    def test_done_when_as_nested_list_passes(self):
+        text = self.base.replace("the tests pass.", "\n  - `make test` passes")
+        out, result = check(text)
+        self.assertEqual(result, "RESULT: PASS", out)
+
+    def test_house_spec_with_acceptance_section_passes(self):
+        text = HOUSE.format(status="\nStatus: draft\n").replace(
+            "- **W1**: a thing.", "- **W1**: a thing.\n\n## Acceptance criteria\n\n- It runs."
+        )
+        out, result = check(text)
+        self.assertEqual(result, "RESULT: PASS", out)

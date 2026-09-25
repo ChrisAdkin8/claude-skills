@@ -61,7 +61,7 @@ command run instead of guessing at output.
   at $5 ($10 for the researcher, or `RUN_AGENT_MAX_USD`), and exits 3 when the reply lacks the
   closing lines its agent file asks for, so an API error is never read as a verdict. Each runs as
   a headless `claude -p --agent <name>` session inside Claude Code's OS sandbox (no credential
-  reads, no secret environment variables, Bash writes only in its work dir, Bash network only to an
+  reads, no secret environment variables, no Bash writes under `~/code`, `~/notes` or `~/.claude`, Bash network only to an
   allowlist), since the sandbox can't be set for an in-session subagent. Some things run outside it:
   `gh` and the three research scripts that need credentials or loop over `gh` (`repo-health.sh`,
   `gcp-skus.sh`, `reddit-search.sh`), which `agent-sandbox.json` lists in `excludedCommands`, since

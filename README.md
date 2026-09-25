@@ -9,14 +9,20 @@ There are four commands. `/idea`, `/research` and `/spec` form one flow. `/cold-
 apart, and gives any markdown file the same cold review `/spec` gives a spec. Notes live in
 `~/notes`; specs live in the repo they describe.
 
-![Workflow diagram. Six stages run left to right: Capture with /idea, Research with /research,
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/workflow-narrow-dark.png">
+  <img src="docs/workflow-narrow.png" alt="Workflow diagram. Six stages run in order: Capture with /idea, Research with /research,
 Plan with /spec, Spike with /spec spike, Build in a new session, and Close out with /spec done. A
 research-verifier checks the research; check-spec.py, a spec-verifier and a cold-reviewer check
 the spec. /spec quick skips the review and spikes, a spec edited after its review gets a delta
 review before Build, and a build that overturns the research loops back to update the note. A
 band shows /cold-review's five steps for any markdown document, and another shows how every agent
 is contained: its own headless session, an OS sandbox, a guard hook and cost
-caps.](docs/workflow.png)
+caps.">
+</picture>
+
+Full size: [light](docs/workflow.png), [dark](docs/workflow-dark.png). To change the diagram,
+edit and run `docs/diagram/workflow.py`.
 
 A few terms used throughout:
 

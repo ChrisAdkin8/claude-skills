@@ -1,0 +1,8 @@
+{
+  "name": "claude-skills-diagram",
+  "private": true,
+  "description": "Renders the README's workflow diagram; see workflow.py",
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2"
+  }
+}

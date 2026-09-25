@@ -170,7 +170,16 @@ GIT_READ = {
     "cat-file", "describe", "shortlog", "rev-list", "merge-base", "name-rev", "for-each-ref",
     "show-ref", "whatchanged", "branch", "tag", "remote", "reflog", "count-objects",
 }  # fmt: skip
-GIT_BAD_ARGS = ("--output", "-O", "--open-files-in-pager", "--exec-path", "--ext-diff")
+GIT_BAD_ARGS = (
+    "--output", "-O", "--open-files-in-pager", "--exec-path", "--ext-diff", "--textconv",
+)  # fmt: skip
+# git's own options, before the subcommand, that are allowed: an allowlist, since the others
+# include -p/--paginate (starts core.pager), --git-dir and --work-tree (a config the agent may
+# have written), -c and --config-env (aliases and any config value).
+GIT_TOP_OPTS = {
+    "--no-pager", "-P", "--literal-pathspecs", "--glob-pathspecs", "--noglob-pathspecs",
+    "--icase-pathspecs", "--no-optional-locks", "--no-replace-objects", "--version", "--help",
+}  # fmt: skip
 GH_READ = {
     ("api",), ("search",), ("auth", "status"), ("repo", "view"), ("release", "list"),
     ("release", "view"), ("issue", "list"), ("issue", "view"), ("pr", "list"), ("pr", "view"),
@@ -695,13 +704,17 @@ def check_gh(args, raw, expands, clean=frozenset(), tainted=frozenset()):
 def check_git(args):
     i = 0
     while i < len(args) and args[i].startswith("-"):
-        if (
-            args[i] == "-c"
-            or args[i].startswith("--config-env")
-            or args[i] == "--exec-path"
-        ):
+        if args[i] == "-C":
+            i += 2
+            continue
+        if args[i] == "-c" or args[i].startswith("--config-env"):
             block("`git -c` can run arbitrary programs through aliases; not allowed")
-        i += 2 if args[i] in ("-C", "--git-dir", "--work-tree") else 1
+        if args[i] not in GIT_TOP_OPTS:
+            block(
+                f"`git {args[i]}` isn't allowed before the subcommand: git's own options may "
+                "start a pager or read another config. Use `git -C <dir>` to choose the repo"
+            )
+        i += 1
     if i >= len(args):
         return
     sub, rest = args[i], args[i + 1 :]

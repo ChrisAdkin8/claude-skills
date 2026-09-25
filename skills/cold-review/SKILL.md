@@ -154,8 +154,12 @@ session, since Claude Code can't sandbox a subagent on its own: with the Write t
 prompt to `~/.cache/agent-runs/<document basename>/cold-reviewer/brief.md` (`cold-reviewer-delta`
 for a delta review), then run `~/.claude/hooks/run-agent.sh cold-reviewer <repo root, or the
 document's directory> <that run dir>` with the Bash tool and `run_in_background: true`, paths
-written with `~`. When it finishes, read `<run dir>/reply.md`; if the script exited non-zero,
-`run.err` there says why. The agent brings only read-only tools and safety rules; everything it
+written with `~`. When it finishes, read `<run dir>/reply.md`. Exit 3 means the run finished
+but the reply lacks the table and closing lines the skeleton asks for (an API error such as
+"Request timed out", a budget stop, or a reply out of format): write `followup.md` in the run
+dir asking for the reply again, in full, in that format, and run the same command with
+`--resume`; if that exits 3 too, tell the user and relay nothing. Any other non-zero exit means
+no reply, and `run.err` there says why. The agent brings only read-only tools and safety rules; everything it
 reviews for comes from your prompt.
 Tell the user in one line that the document is under cold review (or delta review), and end your
 turn.

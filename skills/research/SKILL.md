@@ -26,7 +26,7 @@ The researcher and the verifier don't run as in-session subagents. Each runs as 
 
 1. With the Write tool, write its brief to `<run dir>/brief.md`, where `<run dir>` is `~/.cache/agent-runs/<note basename>/<agent>`, e.g. `~/.cache/agent-runs/2026-09-25-x/researcher`. A later round of the same agent on the same note gets `<agent>-2`, `<agent>-3`; `finish` mode uses `research-verifier-finish`.
 2. Run `~/.claude/hooks/run-agent.sh <agent> ~/notes <run dir>` with the Bash tool and `run_in_background: true`, paths written with `~`.
-3. When it finishes, read `<run dir>/reply.md` with the Read tool: that is the agent's reply. If the script exited non-zero, `run.err` and `run.json` there say why.
+3. When it finishes, read `<run dir>/reply.md` with the Read tool: that is the agent's reply. Exit 3 means the run finished but the reply lacks the closing lines its agent file asks for: an API error such as "Request timed out", a budget stop, or a reply out of format. Send one follow-up (`--resume`) asking it to reply again, in full, in the format its instructions give; if that exits 3 too, tell the user and don't act on the reply. Any other non-zero exit means no reply: `run.err` and `run.json` there say why.
 
 To send an agent a follow-up in the same session, Write `<run dir>/followup.md` and run the same command with `--resume` added. Its new reply replaces `reply.md`, and the earlier one is kept as `reply-<n>.md`.
 

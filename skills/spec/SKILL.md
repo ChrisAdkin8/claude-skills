@@ -32,7 +32,7 @@ The checking rules live in `~/.claude/agents/spec-verifier.md`; the cold review'
 
 The spec verifier and the cold reviewer run as headless, sandboxed sessions through `~/.claude/hooks/run-agent.sh` (its header says what the sandbox holds and what it writes):
 
-1. With the Write tool, write the brief to `<run dir>/brief.md`, where `<run dir>` is `~/.cache/agent-runs/<spec basename>/<agent>`; a later round gets `<agent>-2`.
+1. With the Write tool, write the brief to `<run dir>/brief.md`, where `<run dir>` is `~/.cache/agent-runs/<repo dir name>--<spec basename>/<agent>`, e.g. `~/.cache/agent-runs/rag-forge--2026-09-24-x/spec-verifier`, so specs of the same name in two repos don't share one; a later round gets `<agent>-2`.
 2. Run `~/.claude/hooks/run-agent.sh <agent> <repo root> <run dir>` with `run_in_background: true`, paths written with `~`. For several at once (one per part of a split spec), one call per agent in the same message.
 3. When it finishes, read `<run dir>/reply.md`. Exit 3 means the run finished but the reply lacks the closing lines its agent file asks for: an API error such as "Request timed out", a budget stop, or a reply out of format. Send one follow-up (`--resume`) asking it to reply again, in full, in the format its instructions give; if that exits 3 too, tell the user and don't act on the reply. Any other non-zero exit means no reply: `run.err` and `run.json` there say why.
 

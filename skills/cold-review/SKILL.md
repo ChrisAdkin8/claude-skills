@@ -167,8 +167,11 @@ with no history of this one, ask them to paste the reply back here so it can be 
 
 Otherwise run the `cold-reviewer` agent with that prompt. It runs as a headless, sandboxed
 session, since Claude Code can't sandbox a subagent on its own: with the Write tool, write the
-prompt to `~/.cache/agent-runs/<document basename>/cold-reviewer/brief.md` (`cold-reviewer-delta`
-for a delta review), then run `~/.claude/hooks/run-agent.sh cold-reviewer <repo root, or the
+prompt to `<run dir>/brief.md`. The run dir is `~/.cache/agent-runs/<name>/cold-reviewer`
+(`cold-reviewer-delta` for a delta review), where `<name>` is `<repo dir name>--<document
+basename>`, or for a document outside a repo its directory's name and basename, e.g.
+`claude-skills--README`: every repo has a README, and a run dir that's reused loses its replies.
+Then run `~/.claude/hooks/run-agent.sh cold-reviewer <repo root, or the
 document's directory> <that run dir>` with the Bash tool and `run_in_background: true`, paths
 written with `~`. When it finishes, read `<run dir>/reply.md`. Exit 3 means the run finished
 but the reply lacks the table and closing lines the skeleton asks for (an API error such as

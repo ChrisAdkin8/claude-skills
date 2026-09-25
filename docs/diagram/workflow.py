@@ -4,6 +4,8 @@
 Writes four PNGs, a wide and a narrow layout, each in light and dark:
   docs/workflow.png, docs/workflow-dark.png            wide, for viewing full size
   docs/workflow-narrow.png, docs/workflow-narrow-dark.png  narrow, stays readable at README width
+and a fifth, docs/social-preview.png: the repo's 1280x640 social media preview, uploaded by hand in
+the repo's Settings > General > Social preview.
 
     cd docs/diagram && npm install        # once: installs the resvg renderer
     python3 docs/diagram/workflow.py      # add --svg to keep the SVGs in docs/diagram/build/
@@ -697,6 +699,40 @@ def narrow(theme):
     return c.svg(W, y + gh + 36)
 
 
+# ------------------------------------------------------------------ social preview
+TITLE = "claude-skills"
+TAGLINE = "Claude Code skills that take an idea to a checked implementation plan"
+CHECKED = "Research and plans checked by agents that never saw the conversation"
+REPO = "github.com/ChrisAdkin8/claude-skills"
+
+
+def social(theme):
+    """GitHub's 1280x640 card: a few large words that survive being shown ~500px wide. Sites that
+    crop to 1.91:1 trim ~30px off each side, so nothing sits within 56px of an edge."""
+    c = Canvas(theme)
+    t = theme
+    W, H, X0 = 1280, 640, 64
+    c.text(X0, 150, TITLE, size=92, weight="bold")
+    c.text(X0, 212, TAGLINE, size=31, fill=t["muted"])
+
+    GAP = 18
+    BW = (W - 2 * X0 - 5 * GAP) / 6
+    TOP, BH = 268, 158
+    for i, st in enumerate(STAGES):
+        x, key = X0 + i * (BW + GAP), st[2]
+        c.rect(x, TOP, BW, BH, c.col(key, "head"), r=16)
+        c.number(x + 28, TOP + 36, st[0], key)
+        c.text(x + 50, TOP + 45, st[1], size=24, fill="#FFFFFF", weight="bold")
+        c.pill(x + 14, TOP + 84, BW - 28, 48, st, "block", size=19)
+        if i < 5:
+            ay = TOP + BH / 2
+            c.arrow([(x + BW + 3, ay), (x + BW + GAP - 3, ay)], t["muted"], width=3)
+
+    c.text(X0, 500, CHECKED, size=29, fill=c.col("check", "accent"), weight="bold")
+    c.text(X0, 568, REPO, size=24, fill=t["muted"])
+    return c.svg(W, H)
+
+
 # ------------------------------------------------------------------ render
 def main():
     if not (HERE / "node_modules" / "@resvg" / "resvg-js").exists():
@@ -711,6 +747,7 @@ def main():
         ("workflow-dark", wide, "dark", 2.5),
         ("workflow-narrow", narrow, "light", 2),
         ("workflow-narrow-dark", narrow, "dark", 2),
+        ("social-preview", social, "light", 1),
     ]
     for name, layout, theme, zoom in jobs:
         svg = build / f"{name}.svg"

@@ -1,0 +1,8 @@
+# The spec keeps its review history in records/spec-record.md, the layout /spec now writes.
+# The record's cold review cites hooks/agent-guard.py:999, a line that doesn't exist; it is the
+# reviewer's reply, not the spec's claims, so the verifier leaves the record alone.
+# The reply is complete, so an empty or cut-off reply can't pass.
+(?m)Confirmed:
+(?m)Plan holds:
+# No table row checks the record's citation.
+!(?m)^\|.*\b999\b

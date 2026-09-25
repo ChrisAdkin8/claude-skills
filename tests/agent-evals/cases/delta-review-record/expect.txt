@@ -1,0 +1,16 @@
+# delta-review in the record layout: the saved review and the Not reviewed line live in
+# records/spec-record.md, as /cold-review now writes them. Otherwise the same case.
+# A delta review built from /cold-review's skeleton, for an implementation spec. The prompt in
+# brief.txt is that skeleton filled in as step 4 says.
+#
+# The planted defect is in the logged change: W2's Done when runs `--quick-budget`, a flag
+# check-note.py doesn't parse (it takes a note and --headroom) and W2 doesn't add, so the check
+# can't be carried out as written. It's reported, and graded as mattering.
+(?im)^\|(?=[^\n]*--quick-budget)(?=[^\n]*\b(correctness|requirement)\b)
+# The decoy is outside the change: Background says the full hard limit is 2,000 words, but
+# WORD_BUDGET says 1,500. A delta review leaves it out.
+!(?im)^\|[^\n]*\b2,?000\b
+# The reply is complete.
+(?m)^`?Counts:
+(?m)^`?Cold read:
+(?m)^`?Needs a run:

@@ -268,3 +268,30 @@ End to end: a real `/research quick` (versitygw's release, licence and maintenan
 agents through `run-agent.sh`: the researcher in 14 turns ($0.41) with no refusal, using
 standalone `gh` and `repo-health.sh`; the verifier confirmed 6 of 6 ($0.16). Note committed in
 ~/notes as `22e3e70`.
+
+## Record-layout cases, a skill eval, and the launcher end to end (2026-09-25)
+
+Two new agent cases, run on branch `test-coverage` under the sandbox settings:
+
+| Case | Agent | Result | Turns | Cost |
+|---|---|---|---:|---:|
+| record-skip | spec-verifier | PASS | 6 | $0.15 |
+| delta-review-record | cold-reviewer | PASS | 8 | $0.21 |
+
+They are `cold-review-skip` and `delta-review` with the review history moved into
+`records/spec-record.md`, the layout the skills now write; the old cases stay, for older specs.
+
+`tests/skill-evals/` is new: a case builds a throwaway repo, runs a whole skill headless against
+it, and grades the files it leaves, so it tests the main session's steps, which no agent eval
+reaches. Its first case, `spec-done`, passed on the first run (5 turns, $0.33): `/spec done` on a
+spec whose W1 landed with a different default and whose W2 never landed set the status to
+`in-progress`, left the plan alone, wrote two implementation notes naming W1's commit and the
+reason from its message, and kept `check-spec.py` passing.
+
+`tests/test_run_agent.py` covers `hooks/run-agent.sh` with a stub `claude`: the agents and run
+dirs it refuses, what it passes, and a `--resume` follow-up keeping the old reply.
+
+End to end, a real `/cold-review` of README.md ran through `run-agent.sh`. Its first run ended
+after 22 turns with an API "Request timed out", reported as an error in `run.json`; resuming the
+saved session with a follow-up (`--resume`) returned the full table in one turn, about $1.02 for
+both. The reply was complete, since the launcher writes it to a file rather than handing it back.

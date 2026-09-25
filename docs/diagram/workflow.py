@@ -96,8 +96,6 @@ LEGEND = [
     ("New Claude session", "session"),
     ("Checking agent or script", "check"),
 ]
-TITLE = "From idea to merged change"
-SUBTITLE = "How the claude-skills commands fit into a development workflow"
 
 # Each colour is (header fill, accent for text and strokes, tint for box fills).
 THEMES = {
@@ -342,7 +340,7 @@ def wide(theme):
     W, X0, GAP, PAD = 1800, 40, 30, 18
     CW = (W - 2 * X0 - 5 * GAP) / 6
     IW = CW - 2 * PAD
-    FEED_Y, TOP = 158, 204
+    FEED_Y, TOP = 112, 158
     xs = [X0 + i * (CW + GAP) for i in range(6)]
     cxs = [x + CW / 2 for x in xs]
     bodies = [wrap(s[4], IW, 19) for s in STAGES]
@@ -357,13 +355,11 @@ def wide(theme):
     GUARD_Y, GUARD_H = LANE_Y + LANE_H + 26, 118
     H = GUARD_Y + GUARD_H + 40
 
-    c.text(X0, 64, TITLE, size=40, weight="bold")
-    c.text(X0, 102, SUBTITLE, size=21, fill=t["muted"])
-    lx = W - X0 - 540
-    for j, (label, key) in enumerate(LEGEND):
-        xx, yy = lx + (j % 2) * 270, 50 + (j // 2) * 40
-        c.rect(xx, yy, 24, 24, c.col(key, "tint"), stroke=c.col(key, "accent"), r=5)
-        c.text(xx + 34, yy + 19, label, size=18)
+    lx = X0
+    for label, key in LEGEND:
+        c.rect(lx, 36, 24, 24, c.col(key, "tint"), stroke=c.col(key, "accent"), r=5)
+        c.text(lx + 34, 55, label, size=18)
+        lx += 34 + width_of(label, 18) + 40
 
     a, b = cxs[5], cxs[1]
     c.arrow(
@@ -541,15 +537,13 @@ def narrow(theme):
     DX = RX + BW + 20
     DW = RW - BW - 20 - OW - 32
 
-    c.text(X0, 56, TITLE, size=34, weight="bold")
-    c.text(X0, 90, SUBTITLE, size=19, fill=t["muted"])
     lx = X0
     for label, key in LEGEND:
-        c.rect(lx, 112, 22, 22, c.col(key, "tint"), stroke=c.col(key, "accent"), r=5)
-        c.text(lx + 30, 129, label, size=17)
+        c.rect(lx, 34, 22, 22, c.col(key, "tint"), stroke=c.col(key, "accent"), r=5)
+        c.text(lx + 30, 51, label, size=17)
         lx += 30 + width_of(label, 17) + 30
 
-    y = 172
+    y = 94
     rows = []
     for i, st in enumerate(STAGES):
         n, _, key = st[0], st[1], st[2]

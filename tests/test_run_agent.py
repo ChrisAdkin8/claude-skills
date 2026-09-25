@@ -39,7 +39,7 @@ class RunAgent(unittest.TestCase):
         self.env = {
             **os.environ,
             "PATH": f"{bin_dir}:{os.environ['PATH']}",
-            "STUB_CALLS": str(self.calls),
+            "STUB_CALLS": str(self.calls), "RUN_AGENT_LOG": str(self.tmp / "sessions.log"),
         }
         self.name = f"test-{uuid.uuid4().hex[:8]}"
         self.addCleanup(shutil.rmtree, ROOT / self.name, True)
@@ -101,6 +101,8 @@ class RunAgent(unittest.TestCase):
         self.assertEqual(Path(call["cwd"]).resolve(), self.work.resolve())
         self.assertEqual((run / "reply.md").read_text(), "reply 1\n")
         self.assertEqual((run / "session_id").read_text(), "sess-1")
+        (entry,) = (self.tmp / "sessions.log").read_text().splitlines()
+        self.assertEqual(entry.split()[1:], ["cold-reviewer", "sess-1"])
 
     def test_researcher_keeps_its_mcp_servers(self):
         run = self.run_dir("researcher")

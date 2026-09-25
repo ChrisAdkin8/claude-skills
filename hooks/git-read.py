@@ -8,8 +8,10 @@ The /research, /spec and /cold-review skills pre-approve this script instead of 
 `Bash(git log *)` also approved `git log --output=<any file>`, which overwrites that file, and
 `Bash(git -C * rev-parse *)` approved `git -C . diff --output=<file> rev-parse`. This script
 refuses what agent-guard.py refuses an agent: subcommands that change the repo, `-c` and
-`--config-env`, options that write files or run programs (--output, -O, --ext-diff), and
-credentials paths. Then it runs git with the arguments unchanged.
+`--config-env`, git's own options other than a short safe list (-p starts a pager, --git-dir
+reads another config), options that write files or run programs (--output, -O, --ext-diff,
+--textconv), and credentials paths. Then it runs git with `--no-pager` and the arguments
+unchanged, so no pager starts even from the repo's config.
 """
 
 import importlib.util
@@ -31,7 +33,7 @@ def main():
         guard.block("usage: git-read.py [git options] <subcommand> [args]")
     # Checked as one simple command with literal words: the shell has already expanded them.
     guard.check_command(shlex.join(["git", *args]))
-    os.execvp("git", ["git", *args])
+    os.execvp("git", ["git", "--no-pager", *args])
 
 
 if __name__ == "__main__":

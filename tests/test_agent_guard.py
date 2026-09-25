@@ -60,6 +60,26 @@ class StillAllowed(GuardTestCase):
     def test_git_read(self):
         self.assertAllowed("git -C ~/notes diff HEAD~1 HEAD")
 
+    def test_git_safe_top_options(self):
+        self.assertAllowed("git --no-pager -C ~/notes log -1")
+        self.assertAllowed("git --literal-pathspecs log -- a")
+
+    def test_git_pager_and_git_dir_options(self):
+        # -p starts core.pager; --git-dir and --work-tree can point at a config the agent wrote.
+        for cmd in (
+            "git -p show HEAD",
+            "git --paginate log -1",
+            "git --git-dir=/tmp/x log",
+            "git --git-dir /tmp/x log",
+            "git --work-tree=/tmp log",
+            "git --exec-path=/tmp log",
+        ):
+            with self.subTest(cmd=cmd):
+                self.assertBlocked(cmd, "before the subcommand")
+
+    def test_git_textconv(self):
+        self.assertBlocked("git log --textconv -p", "runs another program")
+
     def test_skill_script_by_path(self):
         self.assertAllowed(
             "~/.claude/skills/research/scripts/check-note.py ~/notes/research/x.md"

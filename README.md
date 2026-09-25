@@ -53,7 +53,8 @@ command run instead of guessing at output.
 - `skills/idea/`: `/idea`.
 - `skills/research/`: `/research`, with `ideation-rules.md` (the researcher's rules at `ideas`
   depth, read only then), `ideas-finish.md` (the skill's last steps at `ideas` depth),
-  `scripts/check-note.py` and the helpers the `researcher`
+  `scripts/check-note.py`, `scripts/mdcheck.py` (the markdown helpers it shares with
+  `check-spec.py`) and the helpers the `researcher`
   agent runs while gathering evidence (`repo-health.sh`, `gcp-skus.sh`, `reddit-search.sh`).
 - `hooks/run-agent.sh` and `hooks/agent-sandbox.json`: how the skills run their agents. Every agent
   also gets `hooks/agent-sandbox.md` appended to its prompt, with the host list filled in from the

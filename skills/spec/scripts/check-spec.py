@@ -28,8 +28,15 @@ line says what the spec claims is the spec-verifier agent's job.
 import argparse
 import collections
 import re
+import sys
 import subprocess
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "research" / "scripts"))
+from mdcheck import (  # noqa: E402  shared with check-note.py
+    ACCOUNT_ID, INLINE_CODE, SECRETS, SEPARATOR, frontmatter, section, strip_code,
+)
+import mdcheck  # noqa: E402
 
 TEMPLATE = Path.home() / ".claude" / "skills" / "spec" / "template.md"
 REQUIRED = [
@@ -62,7 +69,6 @@ SHORT_ITEM = re.compile(r":(\d+)(?:[-–](\d+))?")
 ABSOLUTE = re.compile(r"(?<![\w/.:-])(~?/[\w./-]+\.\w+):(\d+)(?:[-–](\d+))?(?!\w|\.\d)")
 # [4], [1, 7] or [8-9] outside inline code, but not a markdown link [4](url).
 SOURCE_REF = re.compile(r"\[(\d+(?:\s*[,–-]\s*\d+)*)\](?!\()")
-INLINE_CODE = re.compile(r"`[^`]*`")
 READ_AT_LINE = re.compile(r"[Rr]ead at (?:commit )?`?([0-9a-f]{7,40})\b")
 # Bare filenames with these extensions are citations even if nothing matches; others
 # (example.com:443) may be hosts.
@@ -89,23 +95,6 @@ WORK_ITEM = re.compile(r"^#{2,3}\s+W(\d+)\b")
 DONE_WHEN = re.compile(r"done when", re.IGNORECASE)
 ACCEPTANCE = "## Acceptance criteria"
 EMPTY_FIELD = re.compile(r"^\s*-\s+\*\*[^*]+:\*\*\s*$")
-SEPARATOR = re.compile(r"\s*\|?[\s:|-]*\|?\s*")
-# Keep in step with SECRETS in ~/.claude/skills/research/scripts/check-note.py.
-SECRETS = [
-    (re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"), "an AWS access key ID"),
-    (
-        re.compile(r"aws_secret_access_key\s*[=:]\s*\S{20,}", re.IGNORECASE),
-        "an AWS secret key",
-    ),
-    (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"), "a private key"),
-    (re.compile(r"\bgh[pousr]_[A-Za-z0-9]{36,}\b"), "a GitHub token"),
-    (re.compile(r"\bgithub_pat_[A-Za-z0-9_]{22,}\b"), "a GitHub token"),
-    (re.compile(r"\bxox[abprs]-[A-Za-z0-9-]{10,}\b"), "a Slack token"),
-    (re.compile(r"\bsk-ant-[A-Za-z0-9_-]{20,}"), "an Anthropic API key"),
-    (re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b"), "a Google API key"),
-    (re.compile(r'"type"\s*:\s*"service_account"'), "a GCP service account key"),
-]
-ACCOUNT_ID = re.compile(r"(?<![\w.:-])\d{12}(?![\w-]|\.\d)")
 NESTED_ITEM = re.compile(r"\s+(?:[-*]|\d+\.)\s+\S")
 
 
@@ -114,46 +103,6 @@ def git(repo, *args):
         ["git", "-C", str(repo), *args], capture_output=True, text=True, check=False
     )
     return result.stdout.rstrip("\n") if result.returncode == 0 else None
-
-
-def frontmatter(lines):
-    """Return (fields, index of the first body line)."""
-    if not lines or lines[0].strip() != "---":
-        return {}, 0
-    fields = {}
-    for i, line in enumerate(lines[1:], start=1):
-        if line.strip() == "---":
-            return fields, i + 1
-        if ":" in line:
-            key, _, value = line.partition(":")
-            fields[key.strip()] = value.split(" #")[0].strip()
-    return fields, len(lines)
-
-
-def strip_code(lines):
-    """Drop fenced code blocks: command output and diagrams aren't citations."""
-    out, fenced = [], False
-    for line in lines:
-        if line.lstrip().startswith("```"):
-            fenced = not fenced
-            continue
-        if not fenced:
-            out.append(line)
-    return out
-
-
-def section(lines, heading):
-    """Lines under the first heading starting with `heading`, up to the next heading of its level or above."""
-    level = len(heading) - len(heading.lstrip("#"))
-    for i, line in enumerate(lines):
-        if line.startswith(heading):
-            body = []
-            for nxt in lines[i + 1 :]:
-                if nxt.startswith("#") and len(nxt) - len(nxt.lstrip("#")) <= level:
-                    break
-                body.append(nxt)
-            return body
-    return None
 
 
 def split_cold_review(lines, warns):
@@ -210,18 +159,7 @@ def read_record(path):
 
 def template_prompts():
     """Prose lines from the template that should never survive into a finished spec."""
-    if not TEMPLATE.exists():
-        return []
-    prompts = []
-    for line in TEMPLATE.read_text().splitlines():
-        text = line.strip()
-        if (
-            len(text) > 20
-            and not text.startswith(("#", "|", "---", "- **"))
-            and ":" not in text[:12]
-        ):
-            prompts.append(text)
-    return prompts
+    return mdcheck.template_prompts(TEMPLATE, skip=("#", "|", "---", "- **"))
 
 
 class Snapshot:

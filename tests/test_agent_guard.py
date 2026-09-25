@@ -77,6 +77,22 @@ class StillAllowed(GuardTestCase):
             with self.subTest(cmd=cmd):
                 self.assertBlocked(cmd, "before the subcommand")
 
+    def test_network_script_argument_size(self):
+        # repo-health.sh, gcp-skus.sh and reddit-search.sh run outside the sandbox with real
+        # credentials, so their arguments get the same size limits as curl's and gh's.
+        long = "x" * 500
+        self.assertBlocked(
+            f'~/.claude/skills/research/scripts/reddit-search.sh "{long}"', "characters"
+        )
+        self.assertBlocked(
+            f"bash ~/.claude/skills/research/scripts/repo-health.sh o/{long}", "characters"
+        )
+        self.assertBlocked(
+            '~/.claude/skills/research/scripts/reddit-search.sh "$(cat ~/notes/x.md)"',
+            "expands",
+        )
+        self.assertAllowed('~/.claude/skills/research/scripts/reddit-search.sh "mutation testing"')
+
     def test_git_textconv(self):
         self.assertBlocked("git log --textconv -p", "runs another program")
 

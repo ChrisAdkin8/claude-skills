@@ -28,7 +28,9 @@ token=$(gcloud auth print-access-token 2>/dev/null) || {
 fetch() {
   local url=$1 page="" resp
   while :; do
-    resp=$(curl -sf -H "Authorization: Bearer $token" "$url${page:+&pageToken=$page}") || {
+    # The token goes to curl in a config on stdin, never in its arguments, where ps shows it.
+    resp=$(printf 'header = "Authorization: Bearer %s"\n' "$token" |
+      curl -sf -K - "$url${page:+&pageToken=$page}") || {
       echo "request failed: ${url%%\?*}" >&2
       exit 1
     }

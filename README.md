@@ -72,7 +72,8 @@ command run instead of guessing at output.
 - `agents/`: `researcher`, `research-verifier`, `spec-verifier`, `cold-reviewer`.
 - `hooks/agent-guard.py`: the PreToolUse guard those subagents' Bash, Read, Grep, Glob and Write
   calls go through. It keeps credentials out of their reach, since a fetched page could get them
-  sent out in a request URL. The spiker isn't a subagent and doesn't run under it; its sandbox
+  sent out in a request URL, and session history (transcripts, prompt history, earlier agent
+  runs), so a verifier or cold reviewer can't see how the document it checks was written. The spiker isn't a subagent and doesn't run under it; its sandbox
   settings contain it instead.
 - `tests/`: deterministic tests for the guard and both checkers, a transcript replay for the guard,
   and `agent-evals/`, which runs the verifier and cold-reviewer agents against planted defects.

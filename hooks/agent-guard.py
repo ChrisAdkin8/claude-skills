@@ -15,7 +15,10 @@ GET request's URL.
 So credentials are kept out of reach instead (see SECRET_HOME): no command word may name them,
 nor may grep -r or rg search a directory that holds them, and the `read` mode refuses them to
 the Read, Grep and Glob tools. For Bash this is best effort, since a path built at run time from
-variables gets past it; for the tools it is exact, since the path arrives whole.
+variables gets past it; for the tools it is exact, since the path arrives whole. Session history
+(HISTORY_HOME) is refused the same way: the verifiers and the cold reviewer are only worth
+running if they can't see how the document they check was written. The exception is the
+agent's own saved tool output (SESSION_RESULTS).
 
 Environment variables are checked too, because they change what an allowed command runs: git
 runs GIT_EXTERNAL_DIFF through a shell, bash sources BASH_ENV, Python reads PYTHONPATH. A
@@ -197,6 +200,22 @@ SECRET_HOME = tuple(
         ".git-credentials", ".npmrc", ".pypirc", ".claude.json", ".claude/.credentials.json",
     )
 )  # fmt: skip
+# Session history: transcripts, prompt history, file snapshots and the agents' own briefs and
+# replies. No agent needs it, and a cold reviewer that could read the session that wrote a
+# document wouldn't be cold. Keep in step with `denyRead` in ~/.claude/hooks/agent-sandbox.json.
+HISTORY_HOME = tuple(
+    HOME / p
+    for p in (
+        ".claude/projects", ".claude/history.jsonl", ".claude/file-history", ".claude/sessions",
+        ".claude/session-env", ".claude/shell-snapshots", ".claude/paste-cache",
+        ".cache/agent-runs",
+    )
+)  # fmt: skip
+PRIVATE_HOME = SECRET_HOME + HISTORY_HOME
+# The one part of the history an agent may read: its own session's saved tool output, which
+# Claude Code writes under ~/.claude/projects and points the agent at when a result is too long
+# to show. Set from the hook input's transcript path and session ID in main().
+SESSION_RESULTS = None
 # The same directories and files anywhere, e.g. a relative `.aws/credentials` read from ~.
 SECRET_NAMES = {
     ".ssh",
@@ -940,6 +959,11 @@ def secret_path(path):
     for secret in SECRET_HOME:
         if under(path, str(secret)):
             return f"{secret} holds credentials"
+    if SESSION_RESULTS and under(path, SESSION_RESULTS):
+        return None
+    for history in HISTORY_HOME:
+        if under(path, str(history)):
+            return f"{history} holds session history, which would show how a document was written"
     if hidden := next((p for p in Path(path).parts if p in SECRET_NAMES), None):
         return f"`{hidden}` holds credentials"
     if SECRET_FILE.search(path):
@@ -978,8 +1002,8 @@ def secret_word(word):
             # `~/.a*/credentials` reaches a secret if the part before the glob could.
             stem = absolute(text[:glob_at]) if glob_at else CWD
             stem += "/" if text[glob_at - 1 : glob_at] in ("/", "") else ""
-            if any(str(s).startswith(stem) for s in SECRET_HOME):
-                return f"`{text}` can expand to a credentials directory"
+            if any(str(s).startswith(stem) for s in PRIVATE_HOME):
+                return f"`{text}` can expand to a credentials or session history directory"
             text = text[:glob_at]
         path = absolute(text)
         if not pathlike and not os.path.lexists(path):
@@ -990,10 +1014,11 @@ def secret_word(word):
 
 
 def ancestor_of_secret(path):
-    """True if a directory holds a credentials directory, so a recursive read reaches it."""
+    """True if a directory holds a credentials or session history directory, so a recursive read
+    reaches it."""
     paths = {path, os.path.realpath(path)}
     return any(
-        under(str(secret), p) and str(secret) != p for secret in SECRET_HOME for p in paths
+        under(str(secret), p) and str(secret) != p for secret in PRIVATE_HOME for p in paths
     )
 
 
@@ -1016,7 +1041,7 @@ def check_secrets(raw, argv):
         if reason := secret_word(word):
             block(
                 f"{reason}. These agents read untrusted content, so they may not read "
-                "secrets, which could leave in a request URL"
+                "secrets, which could leave in a request URL, nor session history"
             )
     recursive = name == "rg" or (
         searcher
@@ -1031,8 +1056,8 @@ def check_secrets(raw, argv):
     for root in operands or ["."]:
         if ancestor_of_secret(absolute(root)):
             block(
-                f"`{name}` over {absolute(root)} would read the credentials directories "
-                "inside it; search a narrower directory"
+                f"`{name}` over {absolute(root)} would read the credentials or "
+                "session history directories inside it; search a narrower directory"
             )
 
 
@@ -1045,16 +1070,16 @@ def check_read(tool_name, tool_input):
         glob_at = next((i for i, ch in enumerate(pattern) if ch in "*?[{"), len(pattern))
         stem = absolute(os.path.join(absolute(path or "."), expand_home(pattern[:glob_at])))
         if reason := secret_reason(stem):
-            block(f"{reason}. These agents may not read secrets")
+            block(f"{reason}. These agents may not read it")
     if not path:
         return
     target = absolute(path)
     if reason := secret_reason(target):
-        block(f"{reason}. These agents may not read secrets")
+        block(f"{reason}. These agents may not read it")
     if tool_name == "Grep" and ancestor_of_secret(target):
         block(
-            f"Grep over {target} would read the credentials directories inside it; "
-            "search a narrower directory"
+            f"Grep over {target} would read the credentials or session history directories "
+            "inside it; search a narrower directory"
         )
 
 
@@ -1143,8 +1168,11 @@ def main():
     except json.JSONDecodeError:
         block("couldn't read the hook input")
     tool_input = event.get("tool_input", {})
-    global CWD
+    global CWD, SESSION_RESULTS
     CWD = event.get("cwd") or CWD
+    if event.get("transcript_path") and event.get("session_id"):
+        transcripts = Path(event["transcript_path"]).expanduser().parent
+        SESSION_RESULTS = str(transcripts / event["session_id"] / "tool-results")
     if mode == "bash":
         check_command(tool_input.get("command", ""))
     elif mode == "read":

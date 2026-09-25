@@ -2,7 +2,7 @@
 name: cold-review
 description: Give a markdown file one adversarial cold read by an agent that never saw this conversation, then relay what it found. Use when the user runs /cold-review, or asks for a cold, fresh-eyes or adversarial review of a document - a walkthrough, runbook, README, design doc, spec or research note. Accepts the path to a markdown file; "prompt <path>" writes the review prompt for the user to run in a fresh session instead of launching an agent. On a document that already has a saved review, it runs the one delta review of the changes logged since.
 argument-hint: <path to a markdown file> | prompt <path to a markdown file>
-allowed-tools: Read, Grep, Glob, Bash(git rev-parse *), Bash(git status *), Bash(git ls-files *), Bash(~/.claude/hooks/git-read.py *), Bash(grep *), Bash(ls *), Bash(~/.claude/hooks/run-agent.sh *), Edit(~/.cache/agent-runs/**), Edit(~/code/**), Edit(~/notes/**)
+allowed-tools: Read, Grep, Glob, Bash(git rev-parse *), Bash(git status *), Bash(git ls-files *), Bash(~/.claude/hooks/git-read.py *), Bash(~/.claude/skills/cold-review/scripts/review-state.py *), Bash(grep *), Bash(ls *), Bash(~/.claude/hooks/run-agent.sh *), Edit(~/.cache/agent-runs/**), Edit(~/code/**), Edit(~/notes/**)
 ---
 
 # Cold-review a document
@@ -17,15 +17,12 @@ One full adversarial round per document. The reviewer edits nothing, and neither
 findings are the user's to judge. A reviewer asked to find gaps finds some whether or not any
 exist, so chasing all of them produces defensive, over-qualified prose.
 
-A document can still change after its review: findings get folded in, spikes answer questions,
-the user decides things. Those changes are the least-checked part of it. So a document that logs
-them as `Not reviewed:` lines gets one **delta review**, of just those changes, and no more.
+Changes made after the review (folded findings, spike answers, the user's decisions) are logged
+as `Not reviewed:` lines and get one **delta review**, of just those changes, and no more.
 
-A document's review history lives in its **record**, `records/<basename>-record.md` in the
-document's directory (the layout is `~/.claude/skills/spec/record-template.md`): the saved
-review, any delta review, and the `Not reviewed:` log. The document stays what its readers came
-for. Older documents keep a saved review at their end, under `## Cold review`, and `Not reviewed:`
-lines in their open questions; read those the same way, and write anything new to a record.
+Review history lives in the document's **record**, `records/<basename>-record.md` beside it
+(layout: `~/.claude/skills/spec/record-template.md`), so the document stays what its readers
+came for. Older documents keep their review at their end; write anything new to a record.
 
 `/spec` builds its cold review from steps 3 and 4 of this file, so the two ask the same question.
 Change the skeleton here, not there.
@@ -42,46 +39,31 @@ Change the skeleton here, not there.
 
 1. **The document.** Resolve the path from `$ARGUMENTS`; if it's empty, use the document just
    discussed, and failing that ask for a path in one line and stop. It must exist and be markdown.
-2. **An earlier review.** Look for a saved review before anything else: a `## Cold review`
-   heading at the start of a line in the record, `records/<basename>-record.md` beside the
-   document, or failing that in the document itself (an older one). `Not reviewed:` lines are in
-   the record's `## Changes since the review`, or the older document's open questions.
-   - None: this is the full review. Carry on.
-   - One, with `Not reviewed:` lines and no `### Delta review` under it: this is the delta
-     review. Carry on, and follow the delta notes in steps 3 to 5.
-   - One, with no `Not reviewed:` lines: check whether the document changed anyway (item 3
-     below, the review commit). If its diff is empty, say that the document had its review on the date
-     in the section and hasn't changed since, and stop. If it isn't, the changes were never
-     logged: say so, show the diff's `--stat` and the headings it touches, and draft one `Not
-     reviewed:` line per change from the diff. Once the user confirms them, add them to the
-     record and carry on as a delta review. If there's no review commit to diff from, say that
-     unlogged changes can't be found, and stop.
-   - One that already has a `### Delta review`: say that the document had its full review and
-     its delta review, name any `Not reviewed:` lines left, and stop. They stay listed as
-     unreviewed; that's the record, not a reason for a third round.
-3. **Its repo.** `~/.claude/hooks/git-read.py -C <the document's directory> rev-parse --show-toplevel`. Record the root and
-   `~/.claude/hooks/git-read.py -C <root> rev-parse --short HEAD`. A document outside a repo (a note in `~/notes`) is fine: the
-   review then works from the document and whatever it links.
-   - If `~/.claude/hooks/git-read.py -C <root> status --porcelain` shows the document or the code it describes is uncommitted, say
-     so in one line: the reviewer reads the working tree, so its findings age with it.
-   - **The review commit** (for a delta review, and for step 2's check): the oldest commit that
-     added the review's date line, which finds the original save even when the review was later
-     moved from the document into a record: `~/.claude/hooks/git-read.py -C <root> log
-     --format=%h -S'Reviewed on <the date in that line> by' -- <the record> <the document>`
-     (the last line is the oldest; with no date line, search for `## Cold review` instead). If
-     the review is in a record and that commit also changed a document that already existed
-     before it (`git-read.py -C <root> show --stat --format= <commit> -- <document>` lists it,
-     and `git-read.py -C <root> cat-file -e <commit>^:<document path from the root>` succeeds),
-     the base is `<commit>^`, so folds saved in the same commit aren't missed; otherwise the
-     base is the commit. The
-     diff is `git -C <root> diff <base> -- <document>`, which includes uncommitted edits; run it
-     here as `~/.claude/hooks/git-read.py -C <root> diff <base> -- <document>`.
-     No commit (the review was never committed): the reviewer works from the `Not reviewed:`
-     lines alone.
-   - **Unlogged changes** (delta review): read that diff against the `Not reviewed:` lines. If
-     it changes parts of the document none of them accounts for, name those headings in one
-     line. They're in the diff, so the reviewer covers them; offer to log them in the record
-     as `Not reviewed:` lines, so the record says what the delta review covered.
+2. **Where it stands.** Run `~/.claude/skills/cold-review/scripts/review-state.py <document>`.
+   It finds the saved review (in the record, `records/<basename>-record.md` beside the
+   document, or at the end of an older document), the `Not reviewed:` lines, the repo, and the
+   diff base since the review (its header says how). Its last line is the `state:`:
+   - `full`: no saved review. This is the full review; carry on.
+   - `delta`: carry on as the delta review, following the delta notes in steps 3 to 5, with the
+     `diff:` command and the `logged:` lines it printed. With no `diff:` line (the review was
+     never committed), the reviewer works from the logged lines alone. Read that diff against the logged
+     lines: if `headings:` names parts none of them accounts for, say so in one line; the
+     reviewer covers them anyway, since they're in the diff, and offer to log them in the
+     record as `Not reviewed:` lines, so the record says what the delta review covered.
+   - `unlogged`: the document changed since its review and nobody logged it. Say so, show
+     `stat:` and `headings:`, and draft one `Not reviewed:` line per change from the diff. Once
+     the user confirms them, add them to the record and carry on as the delta review.
+   - `unchanged`: say the document had its review on `review-date:` and hasn't changed since,
+     and stop.
+   - `no-base`: the review was never committed, so unlogged changes can't be found. Say so, and
+     stop.
+   - `done`: it had its full review and its delta review. Name any `logged:` lines left and
+     stop: they stay listed as unreviewed, which is the record, not a reason for a third round.
+3. **Its repo.** `repo:` and `head:` from the script; a document outside a repo is fine, and
+   the review then works from the document and whatever it links. If
+   `~/.claude/hooks/git-read.py -C <repo> status --porcelain` shows the document or the code it
+   describes is uncommitted, say so in one line: the reviewer reads the working tree, so its
+   findings age with it.
 4. **Who wrote it.** If this session wrote or edited the document, say so in one line. The agent is
    still cold - it has seen no part of this conversation - but you are not, and step 3 is where
    that leaks. If the user would rather have a reader that shares nothing at all with this
@@ -151,7 +133,7 @@ Review <absolute document path> adversarially. You haven't seen how it was writt
 
 It is <the kind from step 2, with its article: "a runbook", "an implementation spec">, so a cold reader has to be able to <what that row says>. Find what stops them: statements the code contradicts, statements that were true and have drifted, steps and prerequisites that are missing, assumptions presented as facts, costs not counted (files, checks that will go red, migrations), and anything a cold reader can't work through without asking the author. Grade each finding by whether it affects correctness or a stated requirement, and say which don't. Don't edit the file.
 <Delta review only: A full cold review of this document is saved <in its record, <absolute record path> | at its end, under "## Cold review">. Since then it has changed in the places below. Read the document straight through once as usual, then report only findings in these changes, or caused by them elsewhere in the document. The lines below say where it changed, as its author logged it, not whether the change is right. Leave the saved review alone: it is a record.
-- Diff: `git -C <repo root> diff <the base from step 1, item 3> -- <document path>`<, or "none: the review was never committed">
+- Diff: `<the diff: line from step 1>`<, or "none: the review was never committed">
 - Changes logged since the review: <each Not reviewed: line, quoted exactly>>
 
 How to go about it:
@@ -172,22 +154,19 @@ Then one line each: `Counts: N findings - C correctness, R requirement, K neithe
 In `prompt` mode, give the user the filled-in prompt in a fenced block, say it expects a session
 with no history of this one, ask them to paste the reply back here so it can be saved, and stop.
 
-Otherwise run the `cold-reviewer` agent with that prompt. It runs as a headless, sandboxed
-session, since Claude Code can't sandbox a subagent on its own: with the Write tool, write the
-prompt to `<run dir>/brief.md`. The run dir is `~/.cache/agent-runs/<name>/cold-reviewer`
+Otherwise run the `cold-reviewer` agent, as a headless, sandboxed session: with the Write tool,
+write the prompt to `<run dir>/brief.md`. The run dir is `~/.cache/agent-runs/<name>/cold-reviewer`
 (`cold-reviewer-delta` for a delta review), where `<name>` is `<repo dir name>--<document
 basename>`, or for a document outside a repo its directory's name and basename, e.g.
-`claude-skills--README`: every repo has a README, and a run dir that's reused loses its replies.
+`claude-skills--README`, since a reused run dir loses its replies.
 Then run `~/.claude/hooks/run-agent.sh cold-reviewer <repo root, or the
 document's directory> <that run dir>` with the Bash tool and `run_in_background: true`, paths
-written with `~`. When it finishes, read `<run dir>/reply.md`. Exit 3 means the run finished
-but the reply lacks the table and closing lines the skeleton asks for (an API error such as
-"Request timed out", a budget stop, or a reply out of format): write `followup.md` in the run
+written with `~`. When it finishes, read `<run dir>/reply.md`. Exit 3 means the reply lacks
+the table and closing lines the skeleton asks for (an API error, a budget stop, or a reply out
+of format): write `followup.md` in the run
 dir asking for the reply again, in full, in that format, and run the same command with
 `--resume`; if that exits 3 too, tell the user and relay nothing. Any other non-zero exit means
-no reply, and `run.err` there says why. The agent brings only read-only tools and safety rules; everything it
-reviews for comes from your prompt.
-Tell the user in one line that the document is under cold review (or delta review), and end your
+no reply, and `run.err` there says why. Tell the user in one line that the document is under cold review (or delta review), and end your
 turn.
 
 ## 5. When the reviewer finishes
@@ -207,14 +186,12 @@ turn.
    and saving the review. Don't do either unasked.
    - **Folding in:** fold only the ones the user picks. Don't touch the rest. A document with a
      saved review logs each fold in its record, under `## Changes since the review`, as `- Not
-     reviewed: <what changed>, from <review> row <n>, on <YYYY-MM-DD>.` (`check-spec.py` counts
-     them for a spec), since the fix itself hasn't been reviewed. After a delta review, those
-     lines are the record of what stays unreviewed.
+     reviewed: <what changed>, from <review> row <n>, on <YYYY-MM-DD>.`, since the fix itself
+     hasn't been reviewed.
    - **Saving:** in the record (start it from the record template, keeping only the sections it
      needs), add the table and its closing lines unchanged under `## Cold review`, after a line
      `Reviewed on <YYYY-MM-DD> by cold-reviewer. Saved unchanged; what was folded in is logged
-     under Changes since the review.` Saving it isn't acting on it. Since the record is a
-     separate file, this suits any document, a README or runbook included.
+     under Changes since the review.` Saving it isn't acting on it.
    - **Saving a delta review:** in the same record, at the end of its `## Cold review` section,
      under `### Delta review, <YYYY-MM-DD>`, after a line `Reviewed on <YYYY-MM-DD> by
      cold-reviewer: the changes logged as Not reviewed. Saved unchanged.` Then change each `Not

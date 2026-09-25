@@ -87,7 +87,9 @@ SPIKE_FOLD = re.compile(
 )
 RESULTS_PATH = re.compile(r"(?<![\w./~-])[\w.-][\w./-]*/spikes/[\w.-]+-results\.md")
 # The ledger of changes made after the cold review, and the delta review of them.
-NOT_REVIEWED = re.compile(r"\s*[-*]\s+Not reviewed:")
+# `- Not reviewed:`, and the same in bold, italics or lower case, with or without the bullet:
+# the delta-review gate counts these, so a hand-written variant mustn't slip past it.
+NOT_REVIEWED = re.compile(r"\s*(?:[-*]\s+)?[*_]*not reviewed[*_]*\s*:", re.IGNORECASE)
 ROUND_LINE = re.compile(r"\s*[-*]\s+Verifier round 2 ran on")
 IMPLEMENTATION = "## Implementation"
 DELTA_REVIEW = re.compile(r"###\s+Delta review")
@@ -125,15 +127,18 @@ def split_cold_review(lines, warns):
 
 def body_status(body):
     """A house-format spec's status, from its opening lines: a `Status: <status>` line (bold or
-    quoted is fine), or a SHIPPED or SUPERSEDED banner such as k8s-ai-observability's. None if
-    it states none."""
+    quoted or a list item is fine), or a SHIPPED or SUPERSEDED banner such as
+    k8s-ai-observability's `> ## SHIPPED - this is a RECORD`. A banner starts its line: the
+    word inside a sentence ("nothing has SHIPPED yet") isn't one. Returns the status as
+    written, lower case, even one this check doesn't know; None if it states none."""
     for line in body[:25]:
-        if m := re.match(r"[>\s]*(?:\*\*)?status(?:\*\*)?\s*:\s*(?:\*\*)?\s*([a-z-]+)", line, re.I):
-            if m.group(1).lower() in STATUSES:
-                return m.group(1).lower()
-        if re.search(r"\bSUPERSEDED\b", line):
-            return "superseded"
-        if re.search(r"\bSHIPPED\b|this is a RECORD", line):
+        if m := re.match(
+            r"[>\s]*(?:[-*]\s+)?(?:\*\*)?status(?:\*\*)?\s*:\s*(?:\*\*)?\s*([a-z-]+)", line, re.I
+        ):
+            return m.group(1).lower()
+        if banner := re.match(r"[>\s#*_]*(?:[^\w\s]\s*)?(SHIPPED|SUPERSEDED)\b", line):
+            return "superseded" if banner.group(1) == "SUPERSEDED" else "done"
+        if "this is a RECORD" in line:
             return "done"
     return None
 
@@ -594,7 +599,15 @@ def main():
     )
     # A house-format spec may have no frontmatter; then its status comes from its opening lines,
     # and a spec that states none reads as a draft.
-    stated = fields.get("status") or body_status(body)
+    stated = (fields.get("status") or body_status(body) or "").lower() or None
+    if stated and stated not in STATUSES and not templated:
+        # A house status this check doesn't know (`approved`, say) can't hold the spec back,
+        # so it's treated as none below, and said.
+        warns.append(
+            f"status {stated!r} isn't one this check knows ({', '.join(STATUSES)}), so it "
+            "can't tell whether the spec is being built"
+        )
+        stated = None
     status = stated or "draft"
     if templated and words > WORD_FAIL and status in LIVE:
         # Neither a saved review nor starting work lifts the limit: what grows a spec past it is

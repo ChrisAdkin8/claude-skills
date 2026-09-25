@@ -360,6 +360,44 @@ class HouseStatus(unittest.TestCase):
         self.assertIn("status done", out)
         self.assertNotIn("states no status", out)
 
+    def test_status_list_item_is_read(self):
+        out, result = check(HOUSE.format(status="\n- Status: reviewed\n"), record=UNREVIEWED)
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertRegex(out, r"FAIL: 1 changes .*but the spec is reviewed")
+
+    def test_shipped_in_a_sentence_is_not_a_banner(self):
+        status = "\nNothing has SHIPPED yet.\n\nStatus: reviewed\n"
+        out, result = check(HOUSE.format(status=status), record=UNREVIEWED)
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertRegex(out, r"FAIL: 1 changes .*but the spec is reviewed")
+
+    def test_quoted_frontmatter_status_is_read(self):
+        text = '---\ntitle: x\nstatus: "reviewed"\n---\n' + HOUSE.format(status="")
+        out, result = check(text, record=UNREVIEWED)
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertRegex(out, r"FAIL: 1 changes .*but the spec is reviewed")
+
+    def test_unknown_house_status_warns(self):
+        text = "---\ntitle: x\nstatus: approved\n---\n" + HOUSE.format(status="")
+        out, result = check(text, record=UNREVIEWED)
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertIn("status 'approved' isn't one this check knows", out)
+        self.assertIn("states no status", out)
+
+    def test_not_reviewed_variants_count(self):
+        # Hand-written variants of the log line must still hold a reviewed spec back.
+        for line in (
+            "- **Not reviewed:** W1 changed.",
+            "- **Not reviewed**: W1 changed.",
+            "- not reviewed: W1 changed.",
+            "* _Not reviewed:_ W1 changed.",
+            "Not reviewed: W1 changed.",
+        ):
+            with self.subTest(line=line):
+                record = RECORD + f"\n## Changes since the review\n\n{line}\n"
+                out, result = check(HOUSE.format(status="\nStatus: reviewed\n"), record=record)
+                self.assertEqual(result, "RESULT: FAIL", out)
+
 
 class Record(unittest.TestCase):
     """Review history lives in records/<basename>-record.md beside the spec."""

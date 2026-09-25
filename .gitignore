@@ -5,3 +5,4 @@ __pycache__/
 /tests/agent-evals/results/
 # Skills Claude Code syncs from the claude.ai account into ~/.claude/skills, which links here.
 /skills/synced/
+tests/skill-evals/results/

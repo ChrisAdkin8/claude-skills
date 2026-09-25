@@ -473,5 +473,74 @@ class Secrets(unittest.TestCase):
         self.assertEqual(self.tool("Glob", pattern="**/*.py", path=f"{home}/code"), 0)
 
 
+class SessionHistory(unittest.TestCase):
+    """Transcripts and the agents' run dirs stay out of reach: a verifier or cold reviewer that
+    could read the session that wrote a document would no longer be checking it cold. An agent
+    may still read its own session's saved tool output."""
+
+    HOME = str(Path.home())
+    PROJECT = f"{HOME}/.claude/projects/-Users-x-code-r"
+    SESSION = "11111111-2222-3333-4444-555555555555"
+
+    def event(self, **extra):
+        return {
+            "cwd": self.HOME,
+            "session_id": self.SESSION,
+            "transcript_path": f"{self.PROJECT}/{self.SESSION}.jsonl",
+            **extra,
+        }
+
+    def bash(self, command):
+        return hook("bash", self.event(tool_input={"command": command}))
+
+    def tool(self, tool_name, **tool_input):
+        return hook("read", self.event(tool_name=tool_name, tool_input=tool_input))[0]
+
+    def test_history_blocked_to_bash(self):
+        for command in (
+            f"cat {self.PROJECT}/66666666-0000-0000-0000-000000000000.jsonl",
+            "grep -l spec $HOME/.claude/projects/*/*.jsonl",
+            "ls ~/.claude/projects/",
+            "tail ~/.claude/history.jsonl",
+            "cat ~/.cache/agent-runs/2026-09-24-x/cold-reviewer/brief.md",
+            "ls ~/.claude/file-history",
+        ):
+            with self.subTest(command=command):
+                code, err = self.bash(command)
+                self.assertEqual(code, 2, f"expected blocked: {command!r}")
+                self.assertIn("session history", err)
+
+    def test_recursive_search_over_history_blocked(self):
+        for command in ("grep -rn spec ~/.claude", "rg spec ~/.cache"):
+            with self.subTest(command=command):
+                code, err = self.bash(command)
+                self.assertEqual(code, 2, f"expected blocked: {command!r}")
+                self.assertIn("narrower directory", err)
+
+    def test_skills_agents_and_own_results_readable(self):
+        own = f"{self.PROJECT}/{self.SESSION}/tool-results/b1.txt"
+        for command in (
+            "cat ~/.claude/skills/spec/SKILL.md",
+            "grep -rn Verdict ~/.claude/agents",
+            f"sed -n 1,20p {own}",
+        ):
+            with self.subTest(command=command):
+                code, err = self.bash(command)
+                self.assertEqual(code, 0, f"expected allowed: {command!r}\n{err}")
+
+    def test_history_to_read_tools(self):
+        other = f"{self.PROJECT}/66666666-0000-0000-0000-000000000000"
+        self.assertEqual(self.tool("Read", file_path=f"{other}.jsonl"), 2)
+        self.assertEqual(self.tool("Read", file_path=f"{other}/tool-results/b1.txt"), 2)
+        self.assertEqual(self.tool("Grep", pattern="x", path=f"{self.HOME}/.claude/projects"), 2)
+        self.assertEqual(self.tool("Grep", pattern="x", path=f"{self.HOME}/.claude"), 2)
+        self.assertEqual(self.tool("Glob", pattern="~/.claude/projects/**/*.jsonl"), 2)
+        self.assertEqual(self.tool("Read", file_path=f"{self.HOME}/.cache/agent-runs/a/b/r.md"), 2)
+        own = f"{self.PROJECT}/{self.SESSION}/tool-results/b1.txt"
+        self.assertEqual(self.tool("Read", file_path=own), 0)
+        self.assertEqual(self.tool("Read", file_path=f"{self.HOME}/.claude/agents/x.md"), 0)
+        self.assertEqual(self.tool("Grep", pattern="x", path=f"{self.HOME}/.claude/skills"), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

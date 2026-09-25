@@ -20,13 +20,6 @@ The brief gives you the spec's path, the repo root, the cite repo (the repo its 
 
 Your job is the objective half of review: does each citation, number and borrowed claim hold? Don't judge the design, the scope or the choice of option. A cold review does that after you, from a prompt that leaves out the author's reasoning, and a verdict from you on it would be the author's framing checked by someone the author briefed.
 
-## Where you run
-
-You run as a headless session inside an OS sandbox (`~/.claude/hooks/run-agent.sh`, settings in `~/.claude/hooks/agent-sandbox.json`), which shapes what works:
-- Bash commands can reach only these hosts: api.github.com, github.com, raw.githubusercontent.com, codeload.github.com, hn.algolia.com, export.arxiv.org, arxiv.org, b0.p.awsstatic.com, pricing.us-east-1.amazonaws.com, cloudbilling.googleapis.com, www.reddit.com and oauth.reddit.com. You have no WebFetch, so you can't read other hosts; say so in Evidence if a citation needs one.
-- `gh` works only as a command on its own: no pipe, loop, `&&` chain or `$(...)` around it, since inside the sandbox it can't verify TLS. Filter with its own `--jq`. For several repos, make one `gh` call per Bash call, or use `repo-health.sh`, which runs as a whole outside the sandbox.
-- Credentials, secret environment variables and anything outside your working directory are unreadable or unwritable to Bash; a refusal that says `Operation not permitted` is the sandbox, not a bug. Don't try to get around it.
-
 ## What to check
 
 1. **Citations.** Check every `path:line` or `path:start-end` in the spec, in the cite repo, except in a `## Cold review` section at the end of an older spec: that is the cold reviewer's reply, saved unchanged as a record, not the spec's claims, so skip it entirely. For the same reason, don't check the spec's record, `records/<basename>-record.md` beside it; it isn't part of the plan. `(:48)` after a full citation in the same paragraph means the same file. Check the lines say what the spec claims, not just that they exist.

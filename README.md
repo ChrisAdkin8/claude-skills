@@ -26,7 +26,7 @@ in `~/notes`; specs live in the repo they describe.
      spec's history (verifier rounds, the review, spike routing, implementation notes) so the
      spec itself stays the plan. Changes made after the review are logged there as `Not
      reviewed:` lines, and `/cold-review <spec>` gives them one delta review before
-     implementation.
+     implementation: `check-spec.py` fails a spec marked `reviewed` or `in-progress` until it has.
 4. **Spikes** answer what reading can't settle. Each runs as a sandboxed, cost-capped `claude -p`
    session in a scratch copy of the code, writes a verdict with its raw output, and has that folded
    back into the spec. Spikes run at the end of `/spec`, or later with `/spec spike <spec>`.
@@ -51,9 +51,15 @@ command run instead of guessing at output.
 ## Layout
 
 - `skills/idea/`: `/idea`.
-- `skills/research/`: `/research`, with `scripts/check-note.py` and the helpers the `researcher`
+- `skills/research/`: `/research`, with `ideation-rules.md` (the researcher's rules at `ideas`
+  depth, read only then), `ideas-finish.md` (the skill's last steps at `ideas` depth),
+  `scripts/check-note.py` and the helpers the `researcher`
   agent runs while gathering evidence (`repo-health.sh`, `gcp-skus.sh`, `reddit-search.sh`).
-- `hooks/run-agent.sh` and `hooks/agent-sandbox.json`: how the skills run their agents. Each runs as
+- `hooks/run-agent.sh` and `hooks/agent-sandbox.json`: how the skills run their agents. Every agent
+  also gets `hooks/agent-sandbox.md` appended to its prompt, with the host list filled in from the
+  settings by `hooks/sandbox-prompt.py`, so no agent file keeps its own copy. Each run is capped
+  at $5 ($10 for the researcher, or `RUN_AGENT_MAX_USD`), and exits 3 when the reply lacks the
+  closing lines its agent file asks for, so an API error is never read as a verdict. Each runs as
   a headless `claude -p --agent <name>` session inside Claude Code's OS sandbox (no credential
   reads, no secret environment variables, Bash writes only in its work dir, Bash network only to an
   allowlist), since the sandbox can't be set for an in-session subagent. Some things run outside it:
@@ -62,7 +68,8 @@ command run instead of guessing at output.
   Go CLIs fail TLS under the macOS sandbox; the Read, WebFetch and WebSearch tools, which the sandbox
   never covers (permission deny rules cover Read); and the researcher's MCP servers (AWS and
   Terraform documentation). For those, `agent-guard.py`'s checks are what holds.
-- `skills/spec/`: `/spec`, with `scripts/check-spec.py`, `template.md` and `record-template.md`. Spikes add five files:
+- `skills/spec/`: `/spec`, with `scripts/check-spec.py`, `template.md`, `record-template.md` and
+  `done-step.md` (step 8, read only by `/spec done`). Spikes add five files:
   `spike-step.md` (step 7, read only when spikes run), `spiker.md` (the rules a spike session runs
   under), `spike-settings.json` (its sandbox and permission settings), `scripts/prepare-spike.sh`
   (clears a scratch directory and exports the code into it, after checking its paths) and
@@ -72,10 +79,13 @@ command run instead of guessing at output.
 - `agents/`: `researcher`, `research-verifier`, `spec-verifier`, `cold-reviewer`.
 - `hooks/agent-guard.py`: the PreToolUse guard those subagents' Bash, Read, Grep, Glob and Write
   calls go through. It keeps credentials out of their reach, since a fetched page could get them
-  sent out in a request URL. The spiker isn't a subagent and doesn't run under it; its sandbox
+  sent out in a request URL, and session history (transcripts, prompt history, earlier agent
+  runs), so a verifier or cold reviewer can't see how the document it checks was written. The spiker isn't a subagent and doesn't run under it; its sandbox
   settings contain it instead.
 - `tests/`: deterministic tests for the guard and both checkers, a transcript replay for the guard,
-  and `agent-evals/`, which runs the verifier and cold-reviewer agents against planted defects.
+  `agent-evals/`, which runs the verifier and cold-reviewer agents against planted defects and the
+  researcher at quick and ideas depth (its note graded with `check-note.py`), and `skill-evals/`,
+  which runs whole skills against throwaway repos.
 
 ## Requirements
 

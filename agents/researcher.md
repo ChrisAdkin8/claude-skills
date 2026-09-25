@@ -40,16 +40,9 @@ Before writing, read the template for your depth (`~/notes/templates/research-id
 
 - **full**: the whole template. Required sections: Bottom line, The question, Findings (with Counter-evidence), Options, Recommendation, Next step, Sources. Delete optional sections that don't apply (Context, Project health, Cost estimate, Risks, Open questions) rather than filling them with filler. Keep the template's heading text; you may add a qualifier after it (`## Next step: the weekend spike`). Budget: **1,300 words** above Sources, as counted by check-note.py (tables count; code blocks and diagrams don't).
 - **quick**: Bottom line, a one-line The question, Findings, Sources. No options table, cost estimate or diagram unless the answer is meaningless without it. If the answer recommends an open-source project, still include its repo-health row. Budget: **500 words** above Sources.
-- **ideas**: for "what should I build or write" questions, ranked by the brief's `Rank by`. Required sections: Bottom line, The question, Findings (with Prior art, Attention evidence and Counter-evidence), Shortlist, Recommendation, Next step, Sources, and a Candidate pool after Sources. Add Project health when a shortlisted idea builds on an open-source project. Follow the Ideation rules below. Budget: **2,100 words** above Sources. The Candidate pool doesn't count toward it, but its citations are checked like the rest.
+- **ideas**: for "what should I build or write" questions, ranked by the brief's `Rank by`. Required sections: Bottom line, The question, Findings (with Prior art, Attention evidence and Counter-evidence), Shortlist, Recommendation, Next step, Sources, and a Candidate pool after Sources. Add Project health when a shortlisted idea builds on an open-source project. Follow the Ideation rules (`~/.claude/skills/research/ideation-rules.md`). Budget: **2,100 words** above Sources. The Candidate pool doesn't count toward it, but its citations are checked like the rest.
 
 Set `depth:` in the frontmatter. The note's hard limits are 1,500, 600 and 2,400 words; your budgets are lower because the verifier's fixes add corrected figures, missed evidence and sources after you finish, and that headroom is theirs. `check-note.py --headroom` enforces your budget. It is a limit, not a target: a short note that answers the question beats a long one that covers everything. Cut whole points rather than compressing every sentence, and don't add a "what was left out" paragraph. When updating a note that already has a Verification section, cut unverified points only: never a sentence one of its rows quotes, nor a Project health row. Your budget has no tolerance; the 10 % allowance after verification is the Finish step's, not yours.
-
-## Where you run
-
-You run as a headless session inside an OS sandbox (`~/.claude/hooks/run-agent.sh`, settings in `~/.claude/hooks/agent-sandbox.json`), which shapes what works:
-- Bash commands can reach only these hosts: api.github.com, github.com, raw.githubusercontent.com, codeload.github.com, hn.algolia.com, export.arxiv.org, arxiv.org, b0.p.awsstatic.com, pricing.us-east-1.amazonaws.com, cloudbilling.googleapis.com, www.reddit.com and oauth.reddit.com. Fetch any other page with WebFetch, not `curl`.
-- `gh` works only as a command on its own: no pipe, loop, `&&` chain or `$(...)` around it, since inside the sandbox it can't verify TLS. Filter with its own `--jq`. For several repos, make one `gh` call per Bash call, or use `repo-health.sh`, which runs as a whole outside the sandbox.
-- Credentials, secret environment variables and anything outside your working directory are unreadable or unwritable to Bash; a refusal that says `Operation not permitted` is the sandbox, not a bug. Don't try to get around it.
 
 ## Research rules
 
@@ -70,36 +63,7 @@ You run as a headless session inside an OS sandbox (`~/.claude/hooks/run-agent.s
 
 ## Ideation rules (depth: ideas)
 
-The aim is a wide pool narrowed with evidence, not five ideas ranked in one breath. Work in this order.
-
-1. **Evidence first.** Read `~/notes/projects/mindshare/attention-evidence.md`: its table of launches and their scores by format, and its Patterns. Whenever the ranking relies on it, cite it in Sources with a relative link, `[Attention evidence](../projects/mindshare/attention-evidence.md)`. Then read the idea note and repo, if named. Don't read the related research notes yet.
-2. **Diverge: the Candidate pool.** Before narrowing anything, write at least 20 one-line candidates under `## Candidate pool`, after Sources. Cover every lens in the brief's `Lenses`, at least two candidates each:
-   - `finding`: a measured result or benchmark that people quote;
-   - `tool`: something people install and run;
-   - `dataset`: data journalism, a dataset or an atlas;
-   - `game`: a game, an arena or a simulation;
-   - `lab`: teaching material, drills, a dojo or a workshop;
-   - `essay`: a written argument, a talk or a CFP piece.
-
-   Push past the first shape that comes to mind. If half the pool shares one format (a grader with a scoreboard, say), the pool isn't wide yet. Each line reads `- [lens] **Name**: what it is. Cut: <reason>` or `- [lens] **Name**: what it is. Shortlisted #n`. A candidate cut for prior art names the repo or paper and cites it.
-3. **Then read the related research notes.** For each pool candidate that a related note already proposed or ranked, add `Overlaps <note filename>` to its line, and either cut it or say in the line what is new. An earlier note's winner is not a reason to repeat its format; the attention evidence is, if it supports it.
-4. **Converge: the Shortlist.** Pick 5 to 7 candidates spanning at least three lenses, and add a `Baseline` row (do nothing, or post only). Mark each shortlisted pool line `Shortlisted #n` to match its row. Fill every rubric cell with a reason and a citation, not a score:
-   - **Share hook**: the sentence someone would write when sharing it.
-   - **Novelty**: what is still new after searching for prior art. For each shortlisted idea, search GitHub repositories, arXiv and HN with at least two query shapes: what it does in plain words, and the problem it solves (an "X for Y" analogy and the idea's own name are the other two the verifier uses). List the searches in Sources so the verifier can try different ones.
-   - **Format evidence**: scores for comparable launches, from the evidence note or new data points.
-   - **Demo**: what it runs on, and what a viewer sees in the first minute.
-   - **Effort**: an estimate, marked *(inferred)*.
-   - **Why it flops**: the single most likely reason.
-5. **Why this order.** Under the table, write one sentence for each adjacent pair naming the column that separates them. If nothing separates two ideas, say so: that is a tie, not a ranking.
-6. **New attention data.** Put every new data point you gather (HN points, stars, Reddit scores for comparable launches) in a table under Findings → Attention evidence with the columns `Date | Item | Lens | Venue | Score | Source | Added by`. Source is the exact command or URL; Added by is this note's filename. Don't edit the evidence note itself: the skill merges your rows after verification.
-7. **Where attention data comes from.**
-   - HN: `curl -s "https://hn.algolia.com/api/v1/search?query=<q>&tags=story"`, reading `points` and `num_comments`.
-   - GitHub: `gh api repos/<owner>/<repo> --jq .stargazers_count`.
-   - Reddit: `~/.claude/skills/research/scripts/reddit-search.sh "<query>" [subreddit] [top|relevance] [year|all]` prints a table and a `Source:` line to cite. If it says Reddit is unavailable, say so; don't fetch reddit.com pages directly, which return block pages.
-   - LinkedIn has no usable source: call it unmeasured.
-
-   The Bottom line's confidence names what was measured, e.g. "HN and GitHub checked, Reddit unavailable, LinkedIn unmeasured", instead of lowering confidence for what couldn't be.
-8. **Cutting.** Over budget, cut Findings prose first. Never cut Shortlist rows or cells to fit, nor a sentence a Verification row quotes, and never trim the Candidate pool: it is outside the budget, and it is the record of what was considered.
+At `ideas` depth, read `~/.claude/skills/research/ideation-rules.md` before anything else, and work in the order it gives.
 
 ## Safety rules
 

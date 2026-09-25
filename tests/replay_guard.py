@@ -79,8 +79,18 @@ def load_guard(path, name):
     return module
 
 
-def verdict(guard, command):
+def session_results(path):
+    """The saved tool output folder of the session a transcript belongs to, which the guard lets
+    that agent read: <session>/tool-results beside a headless run's <session>.jsonl, and the
+    parent session's for a subagent's <session>/subagents/agent-*.jsonl."""
+    if path.parent.name == "subagents":
+        return str(path.parents[1] / "tool-results")
+    return str(path.with_suffix("") / "tool-results")
+
+
+def verdict(guard, command, results=None):
     """('allowed', '') or ('blocked', reason)."""
+    guard.SESSION_RESULTS = results
     err = io.StringIO()
     try:
         with contextlib.redirect_stderr(err):
@@ -94,9 +104,10 @@ def verdict(guard, command):
     return "allowed", ""
 
 
-def read_verdict(guard, tool, tool_input, cwd):
+def read_verdict(guard, tool, tool_input, cwd, results=None):
     """('allowed', '') or ('blocked', reason) for one Read, Grep or Glob call."""
     guard.CWD = cwd
+    guard.SESSION_RESULTS = results
     err = io.StringIO()
     try:
         with contextlib.redirect_stderr(err):
@@ -111,7 +122,7 @@ def read_verdict(guard, tool, tool_input, cwd):
 
 
 def read_calls(path, agent=None):
-    """(tool, input, cwd) for each Read, Grep and Glob call in a guarded agent's transcript. A
+    """(tool, input, cwd, own results folder) for each Read, Grep and Glob call in a guarded agent's transcript. A
     subagent's type is in the .meta.json beside it; a headless run's comes from `agent`."""
     if agent is None:
         meta = path.with_name(path.name.removesuffix(".jsonl") + ".meta.json")
@@ -129,7 +140,12 @@ def read_calls(path, agent=None):
         content = (entry.get("message") or {}).get("content")
         for item in content if isinstance(content, list) else []:
             if item.get("type") == "tool_use" and item.get("name") in READ_TOOLS:
-                yield item["name"], item.get("input") or {}, entry.get("cwd") or ""
+                yield (
+                    item["name"],
+                    item.get("input") or {},
+                    entry.get("cwd") or "",
+                    session_results(path),
+                )
 
 
 def bash_commands(obj):
@@ -166,7 +182,7 @@ def main():
     for f in files:
         for line in f.read_text(errors="replace").splitlines():
             try:
-                commands.extend(bash_commands(json.loads(line)))
+                commands.extend((c, session_results(f)) for c in bash_commands(json.loads(line)))
             except json.JSONDecodeError:
                 continue
     unique = list(dict.fromkeys(commands))
@@ -188,9 +204,9 @@ def main():
         new = load_guard(REPO / "hooks" / "agent-guard.py", "agent_guard_new")
         tally = {"allowed": 0, "blocked": 0}
         newly_blocked, newly_allowed = [], []
-        for command in unique:
+        for command, results in unique:
             before, _ = verdict(old, command)
-            after, reason = verdict(new, command)
+            after, reason = verdict(new, command, results)
             tally[after] += 1
             if before == "allowed" and after == "blocked":
                 newly_blocked.append((command, reason))
@@ -218,8 +234,8 @@ def main():
         {json.dumps(call, sort_keys=True): call for call in reads}.values()
     )
     refused = []
-    for tool, tool_input, cwd in unique_reads:
-        after, reason = read_verdict(new, tool, tool_input, cwd)
+    for tool, tool_input, cwd, results in unique_reads:
+        after, reason = read_verdict(new, tool, tool_input, cwd, results)
         if after == "blocked":
             refused.append((tool, tool_input, reason))
     print(

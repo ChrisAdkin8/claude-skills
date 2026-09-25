@@ -69,6 +69,45 @@ class HeaderAgainstTable(unittest.TestCase):
         self.assertRegex(out, r"WARN: .*doesn't say 'N of M")
 
 
+class SampleStated(unittest.TestCase):
+    """The verifier checks a sample; the 'Checked on' line says how big a share."""
+
+    def test_sample_unstated_warns(self):
+        out, result = check(FIXTURE.read_text())
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertIn("a sample of the note's 3 cited claims", out)
+
+    def test_sample_stated_is_quiet(self):
+        header = HEADER.replace("confirmed.", "confirmed, a sample of the note's 3 cited claims.")
+        out, _ = check(FIXTURE.read_text().replace(HEADER, header))
+        self.assertNotIn("cited in the note", out)
+
+    def test_wrong_size_warns(self):
+        header = HEADER.replace("confirmed.", "confirmed, a sample of the note's 9 cited claims.")
+        out, _ = check(FIXTURE.read_text().replace(HEADER, header))
+        self.assertIn("about 3 cited in the note", out)
+
+    def test_counting(self):
+        spec = importlib.util.spec_from_file_location("check_note", CHECKER)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        prose = [
+            "## Findings",
+            "",
+            "One is cited [1]. Two is not. Three is [2][3], and so on.",
+            "- A bullet cites [4].",
+            "- A bullet does not.",
+            "",
+            "| Repo | Stars |",
+            "|---|---|",
+            "| a/b | 10 [5] |",
+            "| c/d | 20 |",
+            "",
+            "Code like `x[1]` isn't a citation.",
+        ]
+        self.assertEqual(module.cited_claims(prose), 4)
+
+
 class LimitAfterVerification(unittest.TestCase):
     def setUp(self):
         self.base = FIXTURE.read_text()

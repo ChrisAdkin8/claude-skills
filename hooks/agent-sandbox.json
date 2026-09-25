@@ -8,7 +8,8 @@
       "allowedDomains": ["api.github.com", "github.com", "raw.githubusercontent.com", "codeload.github.com", "hn.algolia.com", "export.arxiv.org", "arxiv.org", "b0.p.awsstatic.com", "pricing.us-east-1.amazonaws.com", "cloudbilling.googleapis.com", "www.reddit.com", "oauth.reddit.com"]
     },
     "filesystem": {
-      "denyRead": ["~/.ssh", "~/.aws", "~/.kube", "~/.gnupg", "~/.docker", "~/.azure", "~/.netrc", "~/.git-credentials", "~/.npmrc", "~/.pypirc", "~/.config/gh", "~/.config/gcloud", "~/.config/op", "~/.config/doctl", "~/.claude.json", "~/.claude/.credentials.json", "~/.zsh_history", "~/.bash_history", "~/Library/Keychains", "~/Library/Application Support/Google/Chrome", "~/Library/Cookies"]
+      "denyRead": ["~/.ssh", "~/.aws", "~/.kube", "~/.gnupg", "~/.docker", "~/.azure", "~/.netrc", "~/.git-credentials", "~/.npmrc", "~/.pypirc", "~/.config/gh", "~/.config/gcloud", "~/.config/op", "~/.config/doctl", "~/.claude.json", "~/.claude/.credentials.json", "~/.zsh_history", "~/.bash_history", "~/Library/Keychains", "~/Library/Application Support/Google/Chrome", "~/Library/Cookies",
+                 "~/.claude/history.jsonl", "~/.claude/file-history", "~/.claude/sessions", "~/.claude/session-env", "~/.claude/shell-snapshots", "~/.claude/paste-cache", "~/.cache/agent-runs"]
     },
     "credentials": {
       "envVars": [
@@ -24,6 +25,7 @@
     }
   },
   "permissions": {
-    "deny": ["Read(~/.ssh/**)", "Read(~/.aws/**)", "Read(~/.kube/**)", "Read(~/.gnupg/**)", "Read(~/.docker/**)", "Read(~/.netrc)", "Read(~/.git-credentials)", "Read(~/.config/gh/**)", "Read(~/.config/gcloud/**)", "Read(~/.claude.json)", "Read(~/.claude/.credentials.json)"]
+    "deny": ["Read(~/.ssh/**)", "Read(~/.aws/**)", "Read(~/.kube/**)", "Read(~/.gnupg/**)", "Read(~/.docker/**)", "Read(~/.netrc)", "Read(~/.git-credentials)", "Read(~/.config/gh/**)", "Read(~/.config/gcloud/**)", "Read(~/.claude.json)", "Read(~/.claude/.credentials.json)",
+             "Read(~/.claude/history.jsonl)", "Read(~/.claude/file-history/**)", "Read(~/.claude/sessions/**)", "Read(~/.claude/session-env/**)", "Read(~/.claude/shell-snapshots/**)", "Read(~/.claude/paste-cache/**)", "Read(~/.cache/agent-runs/**)"]
   }
 }

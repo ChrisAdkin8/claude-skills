@@ -1,0 +1,11 @@
+Depth: ideas
+Question: What could I build or write in a weekend that measures how often AI research agents cite sources that don't support the claim they're cited for?
+Rank by: likely mindshare: traffic and engagement (stars, shares, Hacker News, Reddit and LinkedIn traction, talks, demos people pass around). Novelty counts for more than usefulness to clients.
+Lenses: finding, tool, essay
+A good answer must cover: a wide candidate pool before narrowing; prior art for the top ideas; a ranked shortlist with a reason for each place.
+Assumptions: a weekend is about 12 hours of work; public data and open models only.
+Output file: {{NOTE}} (create it)
+Idea note: none
+Repo in scope: none
+Related notes: none
+Today's date: {{DATE}}

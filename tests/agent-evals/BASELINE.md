@@ -321,3 +321,27 @@ agent's closing lines; and `/cold-review` diffs a delta review from the original
 No case runs the researcher, so the move of its ideation rules is unexercised.
 
 Skill eval `spec-done`: PASS (10 turns, $0.32), through the new `done-step.md`.
+
+## The researcher, and /cold-review's delta path (2026-09-25)
+
+Two new agent cases run the researcher, which no case covered before. A brief with `{{NOTE}}`
+now has run.sh put the note at a hidden `~/notes/research/.eval-<case>-<timestamp>.md` (the
+only place the guard lets the researcher write), copy it to the results, check it with
+`check-note.py --headroom`, grade it against `note-expect.txt`, delete it, and fail the case if
+anything else in `~/notes` changed. `turns.txt` and `usd.txt` set a case's own limits.
+
+| Case | Agent | Result | Turns | Cost |
+|---|---|---|---:|---:|
+| research-quick | researcher | PASS | 10 | $0.30 |
+| research-ideas | researcher | PASS | 63 | $2.31 |
+
+research-ideas checks what only `ideation-rules.md` asks for, now that it's read on demand: the
+evidence note cited by relative link, at least two candidates per lens in the brief and none
+outside them. Its note had 20 candidates (12 finding, 5 tool, 3 essay), 13 prior-art searches in
+Sources, and passed `check-note.py` at 2,037 of 2,100 words. At $2.31, run-agent.sh's $10 cap
+for the researcher leaves about four times headroom for an ideas-depth run.
+
+A new skill eval, `cold-review-delta`, runs `/cold-review prompt` on a runbook whose review was
+saved in it, folded once, moved into a record, then edited without logging. PASS (4 turns,
+$0.30): the prompt diffs from the commit before the review (the rule's base), not from the move
+commit the old lookup found, quotes the logged change, and names the unlogged Rollback edit.

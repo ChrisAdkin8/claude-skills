@@ -21,9 +21,6 @@ is contained: its own headless session, an OS sandbox, a guard hook and cost
 caps.">
 </picture>
 
-Full size: [light](docs/workflow.png), [dark](docs/workflow-dark.png). To change the diagram,
-edit and run `docs/diagram/workflow.py`.
-
 A few terms used throughout:
 
 - **Cold review**: one adversarial read of a document by an agent that has seen none of the

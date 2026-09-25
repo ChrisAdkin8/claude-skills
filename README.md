@@ -27,6 +27,8 @@ in `~/notes`; specs live in the repo they describe.
      spec itself stays the plan. Changes made after the review are logged there as `Not
      reviewed:` lines, and `/cold-review <spec>` gives them one delta review before
      implementation: `check-spec.py` fails a spec marked `reviewed` or `in-progress` until it has.
+   For a small change whose approach is settled, `/spec quick` stops after the verifier: no
+   cold review, no spikes. `/spec finish <spec>` gives it the rest later.
 4. **Spikes** answer what reading can't settle. Each runs as a sandboxed, cost-capped `claude -p`
    session in a scratch copy of the code, writes a verdict with its raw output, and has that folded
    back into the spec. Spikes run at the end of `/spec`, or later with `/spec spike <spec>`.

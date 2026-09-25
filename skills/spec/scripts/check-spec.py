@@ -34,7 +34,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "research" / "scripts"))
 from mdcheck import (  # noqa: E402  shared with check-note.py
-    ACCOUNT_ID, INLINE_CODE, SECRETS, SEPARATOR, frontmatter, section, strip_code,
+    INLINE_CODE, SECRETS, SEPARATOR, count_words, frontmatter, has_account_id, section,
+    strip_code,
 )
 import mdcheck  # noqa: E402
 
@@ -100,11 +101,13 @@ EMPTY_FIELD = re.compile(r"^\s*-\s+\*\*[^*]+:\*\*\s*$")
 NESTED_ITEM = re.compile(r"\s+(?:[-*]|\d+\.)\s+\S")
 
 
-def git(repo, *args):
+def git(repo, *args, strip=True):
     result = subprocess.run(
         ["git", "-C", str(repo), *args], capture_output=True, text=True, check=False
     )
-    return result.stdout.rstrip("\n") if result.returncode == 0 else None
+    if result.returncode != 0:
+        return None
+    return result.stdout.rstrip("\n") if strip else result.stdout
 
 
 def split_cold_review(lines, warns):
@@ -186,7 +189,9 @@ class Snapshot:
 
     def length_at_read(self, rel):
         if rel not in self._lengths:
-            blob = git(self.repo, "show", f"{self.read_at}:{rel}")
+            # Unstripped: trailing blank lines are lines a citation can point at, and
+            # working_length counts them too.
+            blob = git(self.repo, "show", f"{self.read_at}:{rel}", strip=False)
             self._lengths[rel] = len(blob.splitlines()) if blob is not None else None
         return self._lengths[rel]
 
@@ -427,8 +432,9 @@ def main():
             cite_repo = repo
 
     read_at = args.read_at or fields.get("read-at", "")
-    if not read_at and not fields:
-        # A house-format spec has no frontmatter; /spec writes "Read at `<sha>`" in Background.
+    if not read_at:
+        # A house-format spec may have no frontmatter, or one without read-at; /spec writes
+        # "Read at `<sha>`" in Background.
         found = next((m for line in body if (m := READ_AT_LINE.search(line))), None)
         read_at = found.group(1) if found else ""
         if not found:
@@ -571,9 +577,9 @@ def main():
             fails.append(f"contains what looks like {what}")
         if pattern.search("\n".join(record_lines)):
             fails.append(f"its record {record.name} contains what looks like {what}")
-    if ACCOUNT_ID.search("\n".join(record_lines)):
+    if has_account_id("\n".join(record_lines)):
         warns.append(f"its record {record.name} contains a 12-digit number: make sure it isn't an AWS account ID")
-    if ACCOUNT_ID.search("\n".join(body)):
+    if has_account_id("\n".join([text, *legacy_review])):
         warns.append("contains a 12-digit number: make sure it isn't an AWS account ID")
     # Spike results are raw command output, committed beside the spec, so they get the same
     # check: this spec's own results file, and any other its answer lines cite.
@@ -585,7 +591,7 @@ def main():
         for pattern, what in SECRETS:
             if pattern.search(content):
                 fails.append(f"spike results {path.name} contain what looks like {what}")
-        if ACCOUNT_ID.search(content):
+        if has_account_id(content):
             warns.append(
                 f"spike results {path.name} contain a 12-digit number: make sure it isn't an "
                 "AWS account ID"
@@ -595,7 +601,7 @@ def main():
         l for l in section(body, "## Spike questions") or [] if SPIKE_FOLD.match(l)
     ]
     words = sum(
-        len(l.split()) for l in body if not SEPARATOR.fullmatch(l) and l not in folded
+        count_words(l) for l in body if not SEPARATOR.fullmatch(l) and l not in folded
     )
     # A house-format spec may have no frontmatter; then its status comes from its opening lines,
     # and a spec that states none reads as a draft.

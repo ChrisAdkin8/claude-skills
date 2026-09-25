@@ -258,3 +258,42 @@ class UnverifiedMarks(unittest.TestCase):
         out, result = check(text)
         self.assertEqual(result, "RESULT: FAIL", out)
         self.assertIn("isn't marked *(unverified)*", out)
+
+
+class Markdown(unittest.TestCase):
+    """Fences, tables, frontmatter lists and account IDs, read the way markdown and YAML do."""
+
+    def test_tilde_fence_is_code(self):
+        block = "~~~\n" + " ".join(["word"] * 300) + " [9]\n~~~\n\n"
+        base, _ = check(FIXTURE.read_text())
+        out, result = check(FIXTURE.read_text().replace("### Counter-evidence", block + "### Counter-evidence"))
+        self.assertEqual(result, "RESULT: PASS", out)  # [9] inside the fence isn't a citation
+        self.assertEqual(words_above_sources(out), words_above_sources(base))
+
+    def test_table_pipes_are_not_words(self):
+        base, _ = check(FIXTURE.read_text())
+        row = "| a | b | c | d | e | f | g | h |\n"
+        out, _ = check(FIXTURE.read_text().replace("| Summary |", row + "| Summary |"))
+        self.assertEqual(words_above_sources(out) - words_above_sources(base), 8)
+
+    def test_unindented_related_list_is_checked(self):
+        text = FIXTURE.read_text().replace(
+            "related: []", "related:\n- ~/notes/research/does-not-exist.md"
+        )
+        out, result = check(text)
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("does-not-exist.md doesn't exist", out)
+
+    def test_missing_absolute_related_path_fails(self):
+        text = FIXTURE.read_text().replace("related: []", "related: [/nonexistent/gone.md]")
+        out, result = check(text)
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("gone.md doesn't exist", out)
+
+    def test_account_id_in_an_arn_warns(self):
+        for where in ("prose", "code"):
+            arn = "arn:aws:iam::123456789012:role/x"
+            block = f"The role is {arn}.\n\n" if where == "prose" else f"```\n{arn}\n```\n\n"
+            with self.subTest(where=where):
+                out, _ = check(FIXTURE.read_text().replace("### Counter-evidence", block + "### Counter-evidence"))
+                self.assertIn("isn't an AWS account ID", out)

@@ -211,6 +211,23 @@ class ChangesSinceReview(unittest.TestCase):
         out, _ = check(self.base)
         self.assertNotIn("WARN: 1 changes", out)
 
+    def test_reviewed_or_in_progress_fails_until_delta(self):
+        # Status `reviewed` is the hand-off to implementation, so an unreviewed change blocks it.
+        for status in ("reviewed", "in-progress"):
+            with self.subTest(status=status):
+                text = self.base.replace("status: draft", f"status: {status}", 1)
+                out, result = check(with_review(text))
+                self.assertEqual(result, "RESULT: FAIL", out)
+                self.assertRegex(out, rf"FAIL: 1 changes .*no delta review, but the spec is {status}")
+                out, result = check(with_review(text, REVIEW + DELTA))
+                self.assertEqual(result, "RESULT: PASS", out)
+
+    def test_done_only_warns(self):
+        text = self.base.replace("status: draft", "status: done", 1)
+        out, result = check(with_review(text))
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertRegex(out, r"WARN: 1 changes since the cold review")
+
 
 EXISTING_RESULTS = "docs/specs/spikes/2026-09-17-spec-spike-phase-results.md"
 
@@ -324,6 +341,7 @@ class Record(unittest.TestCase):
         self.assertRegex(out, r"WARN: 1 changes since the cold review .*delta review")
         out, _ = check(self.base, record=RECORD + DELTA + record[len(RECORD):])
         self.assertNotIn("WARN: 1 changes", out)
+        self.assertIn("INFO: 1 changes marked 'Not reviewed:' in spec-record.md", out)
 
     def test_history_in_spec_warns(self):
         out, result = check(with_review(self.base))

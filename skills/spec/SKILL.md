@@ -132,7 +132,7 @@ In `finish` mode, start here. Take the repo from the spec's location, and `cite-
 3. **Re-run** `check-spec.py` until it passes.
    - **If you revised work items for `Plan holds: no`**, they haven't been checked at all. Run `spec-verifier` once more, in the run dir `spec-verifier-2`, with the same brief plus `Round 2: <Wn, Wm> were revised after verification; re-check them.`, and add `- Verifier round 2 ran on <YYYY-MM-DD>: after verification.` to the record's `## Verification`, so step 7 knows there's no round left. Tell the user in one line what changed and that it's being re-checked. End your turn.
    - When round 2 returns, apply its fixes, re-run the check and carry on from item 4. There is no round 3: if round 2 also says `Plan holds: no`, say so plainly in the report and in the spec's Open questions.
-4. **Status**: leave `status: draft`, or the house equivalent. The user moves it on once they've dealt with the cold review, not this skill.
+4. **Status**: leave `status: draft`, or the house equivalent. The user moves it on once they've dealt with the cold review, not this skill. `reviewed` is the hand-off to implementation: `check-spec.py` fails a `reviewed` or `in-progress` spec whose record logs `Not reviewed:` changes and no delta review.
 5. **Link the notes.**
    - In the research note, add the spec's path (with `~`) to `related`. Don't change its status; `final` there means the research was verified, which is a separate question.
    - If there's an idea note, set `status: adopted` and add the spec's path to its `related`.
@@ -180,7 +180,7 @@ In `finish` mode, start here. Take the repo from the spec's location, and `cite-
 
    Once the fold-in is done (or declined), and unless `## Spike questions` says "None.", offer step 7 in one line, and go to it if the user says yes.
 
-   After that, the order is: step 7 (or `/spec spike <spec>` later), then `/spec finish <spec>` only after hand edits (with a Cold review saved, it launches no second review), then `/cold-review <spec>` for the delta review if there are `Not reviewed:` lines, then implement. Implement in a fresh session on a branch, starting in plan mode: "implement `<spec path>`, W1 first". When the work items have landed, run `/spec done <spec>` (step 8).
+   After that, the order is: step 7 (or `/spec spike <spec>` later), then `/spec finish <spec>` only after hand edits (with a Cold review saved, it launches no second review), then `/cold-review <spec>` for the delta review if there are `Not reviewed:` lines, then `status: reviewed`, then implement. Don't give the implementation prompt while `check-spec.py` fails on the spec with `status: reviewed`. Implement in a fresh session on a branch, starting in plan mode: "implement `<spec path>`, W1 first. First run `~/.claude/skills/spec/scripts/check-spec.py <spec path> --repo <repo root>`, and if it prints `RESULT: FAIL`, stop and say why". When the work items have landed, run `/spec done <spec>` (step 8).
 
 ## 7. Spike
 

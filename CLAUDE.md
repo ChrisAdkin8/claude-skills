@@ -35,7 +35,10 @@ skill you're editing to be the one you're running.
 
 - The README's diagram is `docs/workflow*.png`, drawn by `docs/diagram/workflow.py`. Edit the
   script, never the PNGs: `cd docs/diagram && npm install` once, then
-  `python3 docs/diagram/workflow.py` redraws all four.
+  `python3 docs/diagram/workflow.py` redraws all four, and the social preview below.
+- It also draws `docs/social-preview.png`, the repo's 1280x640 social media preview. GitHub can't
+  take that from the repo: after redrawing it, upload it by hand in Settings > General > Social
+  preview.
 - Text is placed by estimated widths, so look at the PNGs after changing any wording.
 - The diagram's six stages (Capture, Research, Plan, Spike, Build, Close out) match the numbered
   list under "From idea to merged change" in the README. Change one, change the other.

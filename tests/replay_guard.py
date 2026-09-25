@@ -10,7 +10,12 @@ is now, and prints the commands whose verdict changed, with the new guard's reas
 
 Then it replays every Read, Grep and Glob call the guarded agents have made, from all their
 transcripts to date (--reads-glob), through the guard's `read` mode, and lists the ones it would
-now refuse. The guard had no `read` mode before, so there's no old verdict to compare with, and
+now refuse.
+
+Since 2026-09-25 the agents run as headless sessions (hooks/run-agent.sh), whose transcripts are
+ordinary session files, not subagent ones. run-agent.sh logs each session's agent and ID in
+~/.cache/agent-runs/sessions.log, and each run dir keeps its latest session_id; both halves of
+the replay add those transcripts (the Bash half subject to --before, like the rest). The guard had no `read` mode before, so there's no old verdict to compare with, and
 this half grows as new runs add transcripts. It prints commands and paths, which come from the
 user's own transcripts: don't paste its output anywhere public.
 """
@@ -38,6 +43,33 @@ GUARDED = {
     "cold-reviewer",
 }
 READ_TOOLS = ("Read", "Grep", "Glob")
+RUNS = Path.home() / ".cache" / "agent-runs"
+
+
+def headless_sessions():
+    """{transcript path: agent} for the guarded agents' headless runs: every session in
+    run-agent.sh's log, and the latest in each run dir (runs from before the log existed)."""
+    ids = {}
+    log = RUNS / "sessions.log"
+    if log.exists():
+        for line in log.read_text().splitlines():
+            parts = line.split()
+            if len(parts) == 3:
+                ids[parts[2]] = parts[1]
+    for f in RUNS.glob("*/*/session_id"):
+        # The run dir is named for its agent, with a round suffix: research-verifier-2.
+        agent = max(
+            (n for n in GUARDED if f.parent.name == n or f.parent.name.startswith(n + "-")),
+            key=len,
+            default=None,
+        )
+        ids.setdefault(f.read_text().strip(), agent)
+    found = {}
+    for session, agent in ids.items():
+        if agent in GUARDED:
+            for path in (Path.home() / ".claude" / "projects").glob(f"*/{session}.jsonl"):
+                found[path] = agent
+    return found
 
 
 def load_guard(path, name):
@@ -78,13 +110,15 @@ def read_verdict(guard, tool, tool_input, cwd):
     return "allowed", ""
 
 
-def read_calls(path):
-    """(tool, input, cwd) for each Read, Grep and Glob call in a guarded agent's transcript."""
-    meta = path.with_name(path.name.removesuffix(".jsonl") + ".meta.json")
-    try:
-        agent = json.loads(meta.read_text()).get("agentType")
-    except (OSError, json.JSONDecodeError):
-        return
+def read_calls(path, agent=None):
+    """(tool, input, cwd) for each Read, Grep and Glob call in a guarded agent's transcript. A
+    subagent's type is in the .meta.json beside it; a headless run's comes from `agent`."""
+    if agent is None:
+        meta = path.with_name(path.name.removesuffix(".jsonl") + ".meta.json")
+        try:
+            agent = json.loads(meta.read_text()).get("agentType")
+        except (OSError, json.JSONDecodeError):
+            return
     if agent not in GUARDED:
         return
     for line in path.read_text(errors="replace").splitlines():
@@ -122,9 +156,10 @@ def main():
     args = parser.parse_args()
 
     cutoff = datetime.fromisoformat(args.before).timestamp()
+    headless = headless_sessions()
     files = sorted(
         f
-        for f in (Path.home() / ".claude").glob(args.glob)
+        for f in [*(Path.home() / ".claude").glob(args.glob), *headless]
         if f.stat().st_mtime < cutoff
     )
     commands = []
@@ -163,7 +198,8 @@ def main():
                 newly_allowed.append(command)
 
     print(
-        f"{len(files)} transcripts before {args.before}; {len(unique)} unique Bash commands"
+        f"{len(files)} transcripts before {args.before} ({sum(f in headless for f in files)} "
+        f"headless runs); {len(unique)} unique Bash commands"
     )
     print(f"new guard: {tally['allowed']} allowed, {tally['blocked']} blocked")
     print(f"\nallowed at {args.base}, blocked now: {len(newly_blocked)}")
@@ -177,7 +213,7 @@ def main():
         call
         for f in sorted((Path.home() / ".claude").glob(args.reads_glob))
         for call in read_calls(f)
-    ]
+    ] + [call for f, agent in sorted(headless.items()) for call in read_calls(f, agent)]
     unique_reads = list(
         {json.dumps(call, sort_keys=True): call for call in reads}.values()
     )
@@ -187,7 +223,8 @@ def main():
         if after == "blocked":
             refused.append((tool, tool_input, reason))
     print(
-        f"\n{len(unique_reads)} unique Read, Grep and Glob calls by guarded agents; "
+        f"\n{len(unique_reads)} unique Read, Grep and Glob calls by guarded agents "
+        f"({len(headless)} headless runs included); "
         f"refused now: {len(refused)}"
     )
     for tool, tool_input, reason in refused:

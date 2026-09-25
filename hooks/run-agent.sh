@@ -11,6 +11,9 @@
 #   --resume    send followup.md from the run dir to the same session instead, keeping the
 #               previous reply as reply-<n>.md
 #
+# Each run's agent and session ID are appended to ~/.cache/agent-runs/sessions.log (or
+# $RUN_AGENT_LOG), which tests/replay_guard.py reads.
+#
 # Why headless: Claude Code's sandbox can't be set per subagent, and these agents read untrusted
 # web pages and repos. Run this way, each gets its agent file (prompt, tools, hooks) plus
 # hooks/agent-sandbox.json: OS-level read denies for credentials, no writes outside its work
@@ -70,10 +73,10 @@ claude -p --agent "$agent" --output-format json --max-turns 200 \
   --settings "$here/agent-sandbox.json" ${mcp[@]+"${mcp[@]}"} ${resume[@]+"${resume[@]}"} \
   "$prompt" < /dev/null > "$run/run.json" 2> "$run/run.err" || status=$?
 
-python3 - "$run" <<'PY'
-import json, sys
+python3 - "$run" "$agent" "${RUN_AGENT_LOG:-$root/sessions.log}" <<'PY'
+import json, sys, time
 from pathlib import Path
-run = Path(sys.argv[1])
+run, agent, log_path = Path(sys.argv[1]), sys.argv[2], Path(sys.argv[3])
 try:
     d = json.loads((run / "run.json").read_text())
 except (OSError, ValueError):
@@ -81,6 +84,10 @@ except (OSError, ValueError):
     sys.exit(0)
 if d.get("session_id"):
     (run / "session_id").write_text(d["session_id"])
+    # A run dir is reused by the next run of the same agent on the same document, so this log
+    # is what keeps every session findable; tests/replay_guard.py reads it.
+    with open(log_path, "a") as log:
+        log.write(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} {agent} {d['session_id']}\n")
 reply = d.get("result") or f"run-agent: the run ended with subtype {d.get('subtype')!r} and no reply"
 (run / "reply.md").write_text(reply + "\n")
 PY

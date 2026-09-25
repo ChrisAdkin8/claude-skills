@@ -97,6 +97,8 @@ class RunAgent(unittest.TestCase):
         argv = call["argv"]
         self.assertEqual(argv[argv.index("--agent") + 1], "cold-reviewer")
         self.assertTrue(argv[argv.index("--settings") + 1].endswith("hooks/agent-sandbox.json"))
+        # The reviewed repo's own settings and CLAUDE.md are never loaded.
+        self.assertEqual(argv[argv.index("--setting-sources") + 1], "user")
         prompt = Path(argv[argv.index("--append-system-prompt-file") + 1]).read_text()
         self.assertIn("api.github.com", prompt)  # the host list, filled in from the settings
         self.assertNotIn("{{HOSTS}}", prompt)

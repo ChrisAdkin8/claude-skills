@@ -9,6 +9,23 @@ There are four commands. `/idea`, `/research` and `/spec` form one flow. `/cold-
 apart, and gives any markdown file the same cold review `/spec` gives a spec. Notes live in
 `~/notes`; specs live in the repo they describe.
 
+A few terms used throughout:
+
+- **Cold review**: one adversarial read of a document by an agent that has seen none of the
+  conversation that produced it.
+- **Delta review**: a single follow-up review covering only the changes made since the cold review.
+- **Spike**: a short, sandboxed experiment that answers a question reading the code can't settle.
+- **Record**: `records/<basename>-record.md` beside a document. It holds the document's review
+  history, so the document itself stays what its readers came for.
+
+## The workflow at a glance
+
+The diagram below follows one change from idea to merge. Each numbered stage shows the command
+you run, what it does and where its output lands; the purple boxes are the agents and scripts
+that check the work. The dashed lines are the routes off the main path, and the two bands at the
+bottom cover `/cold-review` and how every agent is kept contained. The sections after it explain
+each part in words.
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/workflow-narrow-dark.png">
   <img src="docs/workflow-narrow.png" alt="Workflow diagram. Six stages run in order: Capture with /idea, Research with /research,
@@ -23,15 +40,6 @@ caps.">
 
 Full size: [light](docs/workflow.png), [dark](docs/workflow-dark.png). To change the diagram,
 edit and run `docs/diagram/workflow.py`.
-
-A few terms used throughout:
-
-- **Cold review**: one adversarial read of a document by an agent that has seen none of the
-  conversation that produced it.
-- **Delta review**: a single follow-up review covering only the changes made since the cold review.
-- **Spike**: a short, sandboxed experiment that answers a question reading the code can't settle.
-- **Record**: `records/<basename>-record.md` beside a document. It holds the document's review
-  history, so the document itself stays what its readers came for.
 
 ## How a change flows through it
 

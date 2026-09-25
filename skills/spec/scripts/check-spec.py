@@ -686,13 +686,24 @@ def main():
             f"its record has {len(implemented)} implementation notes but the spec is still "
             f"{status}: run `/spec done` to settle its status"
         )
-    if review and unreviewed and not delta:
+    # Status `reviewed` is the hand-off to implementation, so it and `in-progress` fail until
+    # the delta review has run: as a warning alone, it was skipped.
+    if review and unreviewed and not delta and status in ("reviewed", "in-progress"):
+        fails.append(
+            f"{len(unreviewed)} changes since the cold review are marked 'Not reviewed:' and "
+            f"have had no delta review, but the spec is {status}. Run `/cold-review <spec>` "
+            "for the one delta review of them, or set status back to draft"
+        )
+    elif review and unreviewed and not delta:
         warns.append(
             f"{len(unreviewed)} changes since the cold review are marked 'Not reviewed:'; "
-            "`/cold-review <spec>` runs the one delta review of them, before implementation"
+            "`/cold-review <spec>` runs the one delta review of them, before implementation. "
+            "This fails once the spec is reviewed or in-progress"
         )
     elif unreviewed:
-        infos.append(f"{len(unreviewed)} changes marked 'Not reviewed:' in Open questions")
+        places = ["Open questions"] * bool(legacy_changes) + [record.name] * bool(record_changes)
+        where = "in " + " and ".join(places)
+        infos.append(f"{len(unreviewed)} changes marked 'Not reviewed:' {where}")
     marks = len(re.findall(r"\*\((?:assumption|inferred|unverified)[^)]*\)\*", text))
     where = "" if cite_repo == repo else f" in {cite_repo.name}"
     infos.append(

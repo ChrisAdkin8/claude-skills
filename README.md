@@ -13,6 +13,7 @@ in `~/notes`; specs live in the repo they describe.
    `~/notes/research`. A `research-verifier` agent then checks each load-bearing claim against its
    source, and says which it couldn't confirm.
 3. **`/spec <research note>`** writes an implementation spec into the repo the change touches,
+   which must be a git repo under `~/code` (its pre-approved edits cover only `~/code/**`),
    grounded in the code with `path:line` citations. Then three things happen to it:
    - `check-spec.py` checks mechanically that every citation points at lines that existed at the
      commit the spec was read at, that work items have observable acceptance criteria, and that no
@@ -39,8 +40,9 @@ results beside it in `docs/specs/spikes/`.
 Outside that flow, **`/cold-review <markdown file>`** hands a document - a walkthrough, runbook,
 README, design doc, spec or research note - to a `cold-reviewer` agent that has seen none of the
 conversation that produced it. The skill works out what kind of document it is and what a cold
-reader has to be able to do with it, writes the prompt, and relays the findings; the reviewer edits
-nothing and neither does the skill. On a document with a saved review, it runs one delta review
+reader has to be able to do with it, writes the prompt, and relays the findings. The reviewer edits nothing. The skill edits the
+document only for findings you pick, and saves the review in a record, `records/<basename>-record.md`
+beside the document; it asks first, except for a spec's delta review, which it saves as `/spec` does. On a document with a saved review, it runs one delta review
 of the changes logged since as `Not reviewed:` lines, and no more. `/cold-review prompt <file>` writes the prompt for a fresh
 session instead of launching an agent. The reviewer is read-only, so it settles what it can by
 reading the Taskfile, CLI and config a document points at, and names the findings that need a
@@ -54,8 +56,12 @@ command run instead of guessing at output.
 - `hooks/run-agent.sh` and `hooks/agent-sandbox.json`: how the skills run their agents. Each runs as
   a headless `claude -p --agent <name>` session inside Claude Code's OS sandbox (no credential
   reads, no secret environment variables, Bash writes only in its work dir, Bash network only to an
-  allowlist), since the sandbox can't be set for an in-session subagent. `agent-guard.py` still
-  checks what the sandbox can't see.
+  allowlist), since the sandbox can't be set for an in-session subagent. Some things run outside it:
+  `gh` and the three research scripts that need credentials or loop over `gh` (`repo-health.sh`,
+  `gcp-skus.sh`, `reddit-search.sh`), which `agent-sandbox.json` lists in `excludedCommands`, since
+  Go CLIs fail TLS under the macOS sandbox; the Read, WebFetch and WebSearch tools, which the sandbox
+  never covers (permission deny rules cover Read); and the researcher's MCP servers (AWS and
+  Terraform documentation). For those, `agent-guard.py`'s checks are what holds.
 - `skills/spec/`: `/spec`, with `scripts/check-spec.py`, `template.md` and `record-template.md`. Spikes add five files:
   `spike-step.md` (step 7, read only when spikes run), `spiker.md` (the rules a spike session runs
   under), `spike-settings.json` (its sandbox and permission settings), `scripts/prepare-spike.sh`
@@ -73,12 +79,28 @@ command run instead of guessing at output.
 
 ## Requirements
 
-- Claude Code. Tested on 2.1.274; spike sandboxing needs a version that honours `sandbox.*` settings
-  passed with `--settings`.
+- Claude Code, 2.1.219 or later: every agent and every spike runs with `sandbox.*` settings passed
+  with `--settings`, and `strictAllowlist` there needs 2.1.219 (`sandbox.credentials`, 2.1.187).
+  Last run on 2.1.282.
 - `python3` for the checkers and tests. Some spikes use `uv`.
-- **macOS.** The spike sandbox is Seatbelt, and `skills/spec/spiker.md` carries rules about how it
-  behaves there, including Go binaries such as `helm` and `gh` failing TLS inside it. Spikes haven't
-  been run anywhere else.
+- **macOS.** Every agent and spike runs in Claude Code's sandbox, which is Seatbelt on macOS.
+  `agent-sandbox.json` and `skills/spec/spiker.md` are built around how it behaves there, including
+  Go binaries such as `helm` and `gh` failing TLS inside it. Neither has been run anywhere else; on
+  Linux the sandbox needs bubblewrap, and `gh` may not need excluding.
+
+## Set up ~/notes
+
+The skills keep notes in `~/notes`, and this repo doesn't create it. It has to be a git repo (the
+skills commit to it) holding:
+
+- `CLAUDE.md`, the notes' conventions (tags, frontmatter), which the researcher reads first;
+- `templates/idea.md`, `templates/research.md` and `templates/research-ideas.md`, which `/idea` and
+  the researcher start from, and `check-note.py` checks notes against;
+- for `/research ideas`, `projects/mindshare/attention-evidence.md`, the table of launches and
+  their scores that ranking by mindshare reads and adds to.
+
+Every agent run also passes `~/notes` to `claude` as a working directory (`--add-dir`), so it must
+exist even for `/spec` and `/cold-review`.
 
 ## Install
 

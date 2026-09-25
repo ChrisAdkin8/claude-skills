@@ -174,6 +174,21 @@ def split_cold_review(lines, warns):
     return lines[:at] + lines[end:], lines[at:end]
 
 
+def body_status(body):
+    """A house-format spec's status, from its opening lines: a `Status: <status>` line (bold or
+    quoted is fine), or a SHIPPED or SUPERSEDED banner such as k8s-ai-observability's. None if
+    it states none."""
+    for line in body[:25]:
+        if m := re.match(r"[>\s]*(?:\*\*)?status(?:\*\*)?\s*:\s*(?:\*\*)?\s*([a-z-]+)", line, re.I):
+            if m.group(1).lower() in STATUSES:
+                return m.group(1).lower()
+        if re.search(r"\bSUPERSEDED\b", line):
+            return "superseded"
+        if re.search(r"\bSHIPPED\b|this is a RECORD", line):
+            return "done"
+    return None
+
+
 def record_path(spec):
     """Where a spec's record lives: records/<basename>-record.md beside it."""
     return spec.parent / "records" / f"{spec.stem}-record.md"
@@ -639,7 +654,10 @@ def main():
     words = sum(
         len(l.split()) for l in body if not SEPARATOR.fullmatch(l) and l not in folded
     )
-    status = fields.get("status", "draft")
+    # A house-format spec may have no frontmatter; then its status comes from its opening lines,
+    # and a spec that states none reads as a draft.
+    stated = fields.get("status") or body_status(body)
+    status = stated or "draft"
     if templated and words > WORD_FAIL and status in LIVE:
         # Neither a saved review nor starting work lifts the limit: what grows a spec past it is
         # usually what was folded in or learnt since, and someone still has to work from it.
@@ -686,18 +704,36 @@ def main():
             f"its record has {len(implemented)} implementation notes but the spec is still "
             f"{status}: run `/spec done` to settle its status"
         )
-    if review and unreviewed and not delta:
+    # Status `reviewed` is the hand-off to implementation, so it and `in-progress` fail until
+    # the delta review has run: as a warning alone, it was skipped.
+    if review and unreviewed and not delta and status in ("reviewed", "in-progress"):
+        fails.append(
+            f"{len(unreviewed)} changes since the cold review are marked 'Not reviewed:' and "
+            f"have had no delta review, but the spec is {status}. Run `/cold-review <spec>` "
+            "for the one delta review of them, or set status back to draft"
+        )
+    elif review and unreviewed and not delta and not stated:
+        warns.append(
+            f"{len(unreviewed)} changes since the cold review are marked 'Not reviewed:' and have "
+            "had no delta review, but the spec states no status, so this check can't tell whether "
+            "it is being built and won't stop it. Add a `Status: draft` line near the top (moved "
+            "to reviewed before implementation), or run `/cold-review <spec>` for the delta review"
+        )
+    elif review and unreviewed and not delta:
         warns.append(
             f"{len(unreviewed)} changes since the cold review are marked 'Not reviewed:'; "
-            "`/cold-review <spec>` runs the one delta review of them, before implementation"
+            "`/cold-review <spec>` runs the one delta review of them, before implementation. "
+            "This fails once the spec is reviewed or in-progress"
         )
     elif unreviewed:
-        infos.append(f"{len(unreviewed)} changes marked 'Not reviewed:' in Open questions")
+        places = ["Open questions"] * bool(legacy_changes) + [record.name] * bool(record_changes)
+        where = "in " + " and ".join(places)
+        infos.append(f"{len(unreviewed)} changes marked 'Not reviewed:' {where}")
     marks = len(re.findall(r"\*\((?:assumption|inferred|unverified)[^)]*\)\*", text))
     where = "" if cite_repo == repo else f" in {cite_repo.name}"
     infos.append(
         f"{len(items)} work items, {count} citations to {len(cited)} files{where}, "
-        f"{marks} assumption/unverified marks, {words} words, status {fields.get('status', '?')}"
+        f"{marks} assumption/unverified marks, {words} words, status {stated or '?'}"
     )
 
     for label, found in (("FAIL", fails), ("WARN", warns), ("INFO", infos)):

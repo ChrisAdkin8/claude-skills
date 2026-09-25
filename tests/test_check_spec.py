@@ -211,6 +211,23 @@ class ChangesSinceReview(unittest.TestCase):
         out, _ = check(self.base)
         self.assertNotIn("WARN: 1 changes", out)
 
+    def test_reviewed_or_in_progress_fails_until_delta(self):
+        # Status `reviewed` is the hand-off to implementation, so an unreviewed change blocks it.
+        for status in ("reviewed", "in-progress"):
+            with self.subTest(status=status):
+                text = self.base.replace("status: draft", f"status: {status}", 1)
+                out, result = check(with_review(text))
+                self.assertEqual(result, "RESULT: FAIL", out)
+                self.assertRegex(out, rf"FAIL: 1 changes .*no delta review, but the spec is {status}")
+                out, result = check(with_review(text, REVIEW + DELTA))
+                self.assertEqual(result, "RESULT: PASS", out)
+
+    def test_done_only_warns(self):
+        text = self.base.replace("status: draft", "status: done", 1)
+        out, result = check(with_review(text))
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertRegex(out, r"WARN: 1 changes since the cold review")
+
 
 EXISTING_RESULTS = "docs/specs/spikes/2026-09-17-spec-spike-phase-results.md"
 
@@ -307,6 +324,43 @@ RECORD = """# Record: a spec
 """ + REVIEW
 
 
+HOUSE = """# Prompt: a house-format spec
+{status}
+## Role & Objective
+
+Change nothing much.
+
+## Deliverables
+
+- **W1**: a thing.
+"""
+UNREVIEWED = RECORD + "\n## Changes since the review\n\n- Not reviewed: W1 changed, on 2026-09-24.\n"
+
+
+class HouseStatus(unittest.TestCase):
+    """A house-format spec has no frontmatter, so its status comes from its opening lines."""
+
+    def test_no_status_warns_that_the_gate_cant_apply(self):
+        out, result = check(HOUSE.format(status=""), record=UNREVIEWED)
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertIn("states no status", out)
+        self.assertIn("status ?", out)
+
+    def test_status_line_is_read(self):
+        for line in ("Status: in-progress", "**Status:** in-progress", "> Status: in-progress"):
+            with self.subTest(line=line):
+                out, result = check(HOUSE.format(status=f"\n{line}\n"), record=UNREVIEWED)
+                self.assertEqual(result, "RESULT: FAIL", out)
+                self.assertRegex(out, r"FAIL: 1 changes .*but the spec is in-progress")
+
+    def test_shipped_banner_is_done(self):
+        banner = "\n> ## SHIPPED - this is a RECORD, not a specification\n"
+        out, result = check(HOUSE.format(status=banner), record=UNREVIEWED)
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertIn("status done", out)
+        self.assertNotIn("states no status", out)
+
+
 class Record(unittest.TestCase):
     """Review history lives in records/<basename>-record.md beside the spec."""
 
@@ -324,6 +378,7 @@ class Record(unittest.TestCase):
         self.assertRegex(out, r"WARN: 1 changes since the cold review .*delta review")
         out, _ = check(self.base, record=RECORD + DELTA + record[len(RECORD):])
         self.assertNotIn("WARN: 1 changes", out)
+        self.assertIn("INFO: 1 changes marked 'Not reviewed:' in spec-record.md", out)
 
     def test_history_in_spec_warns(self):
         out, result = check(with_review(self.base))

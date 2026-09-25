@@ -1,0 +1,9 @@
+Depth: quick
+Question: What licence is the pyarrow Python package released under, and what is its latest release on PyPI?
+A good answer must cover: the licence as the project states it; the latest release version and its date, from PyPI.
+Assumptions: none
+Output file: {{NOTE}} (create it)
+Idea note: none
+Repo in scope: none
+Related notes: none
+Today's date: {{DATE}}

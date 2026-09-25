@@ -1,0 +1,7 @@
+# Quick depth, per the researcher's Depth rules: no options table or candidate pool.
+(?m)^depth: quick
+(?m)^## Sources
+(?i)apache
+\[1\]
+!(?m)^## Options
+!(?m)^## Candidate pool

@@ -1,0 +1,3 @@
+# The reply is the output path, check-note's result, then the Bottom line.
+RESULT: PASS
+(?i)bottom line

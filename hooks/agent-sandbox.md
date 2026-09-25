@@ -1,0 +1,6 @@
+## Where you run
+
+You run as a headless session inside an OS sandbox (`~/.claude/hooks/run-agent.sh`, settings in `~/.claude/hooks/agent-sandbox.json`), which shapes what works:
+- Bash commands can reach only these hosts: {{HOSTS}}. If you have WebFetch, fetch any other page with it, not `curl`. If you don't, you can't read other hosts: say so in your reply's evidence where a source needs one.
+- `gh` works only as a command on its own: no pipe, loop, `&&` chain or `$(...)` around it, since inside the sandbox it can't verify TLS. Filter with its own `--jq`. For several repos, make one `gh` call per Bash call, or use `repo-health.sh`, which runs as a whole outside the sandbox.
+- Credentials, secret environment variables, session history (transcripts, prompt history, earlier agent runs) and anything outside your working directory are unreadable or unwritable to Bash, and a guard refuses the same reads to your other tools. A refusal that says `Operation not permitted` or `Blocked by agent-guard` is deliberate, not a bug. Don't try to get around it.

@@ -26,7 +26,7 @@ The researcher and the verifier don't run as in-session subagents. Each runs as 
 
 1. With the Write tool, write its brief to `<run dir>/brief.md`, where `<run dir>` is `~/.cache/agent-runs/<note basename>/<agent>`, e.g. `~/.cache/agent-runs/2026-09-25-x/researcher`. A later round of the same agent on the same note gets `<agent>-2`, `<agent>-3`; `finish` mode uses `research-verifier-finish`.
 2. Run `~/.claude/hooks/run-agent.sh <agent> ~/notes <run dir>` with the Bash tool and `run_in_background: true`, paths written with `~`.
-3. When it finishes, read `<run dir>/reply.md` with the Read tool: that is the agent's reply. If the script exited non-zero, `run.err` and `run.json` there say why.
+3. When it finishes, read `<run dir>/reply.md` with the Read tool: that is the agent's reply. Exit 3 means the run finished but the reply lacks the closing lines its agent file asks for: an API error such as "Request timed out", a budget stop, or a reply out of format. Send one follow-up (`--resume`) asking it to reply again, in full, in the format its instructions give; if that exits 3 too, tell the user and don't act on the reply. Any other non-zero exit means no reply: `run.err` and `run.json` there say why.
 
 To send an agent a follow-up in the same session, Write `<run dir>/followup.md` and run the same command with `--resume` added. Its new reply replaces `reply.md`, and the earlier one is kept as `reply-<n>.md`.
 
@@ -97,7 +97,7 @@ At ideas depth, first check the reply has a `Prior art:` block listing the queri
    ```
    ## Verification
 
-   Checked on <YYYY-MM-DD> by research-verifier: <N> of <M> claims confirmed.
+   Checked on <YYYY-MM-DD> by research-verifier: <N> of <M> claims confirmed, a sample of the note's <K> cited claims.
 
    | Claim | Cited | Verdict | Resolution |
    |---|---|---|---|
@@ -106,7 +106,7 @@ At ideas depth, first check the reply has a `Prior art:` block listing the queri
    | <…> | [9] | UNREACHABLE | marked *(unverified)*: <why, e.g. GCP page renders with JavaScript> |
    ```
 
-   Record every row the verifier returned, corrected ones included; don't drop any. `<N>` and `<M>` are the table's own counts: its CONFIRMED rows and all its rows. `check-note.py` compares them, so put round details, or the verifier's own count where it differs, after them, e.g. "16 of 21 claims confirmed across both rounds' rows. Round 1: 15 of 18 …".
+   Record every row the verifier returned, corrected ones included; don't drop any. `<N>` and `<M>` are the table's own counts: its CONFIRMED rows and all its rows. `<K>` is the note's count of cited claims, which `check-note.py` gives when it warns; leave the clause out only if the table covers them all. It says in the note itself that `final` means a sample held, not every claim. `check-note.py` compares the counts, so put round details, or the verifier's own count where it differs, after them, e.g. "16 of 21 claims confirmed across both rounds' rows. Round 1: 15 of 18 …".
 
    Every row that isn't CONFIRMED needs a Resolution: corrected, re-cited, or marked *(unverified)*, which the check confirms is in the text. If the section already exists (from `finish` mode or round 2), update the rows for claims checked again, add new ones, delete rows for claims the note no longer makes, and update the date line. A row's Claim must quote the note's current wording, or the check fails it as stale.
 3. **If the conclusion changed**, the rewritten text is the least-checked part of the note, so it gets one more check:
@@ -122,17 +122,12 @@ At ideas depth, first check the reply has a `Prior art:` block listing the queri
 
    A claim that can't be verified (a JavaScript-only pricing page, a login wall) doesn't hold a note in draft forever, as long as it's visibly marked and the Bottom line doesn't stand on it. Otherwise set `status: draft` (in `finish` mode the note may have been `final`); the report says why.
 6. **Link the idea**, if there was one: in the idea note, set `status: exploring` and add the research note's path to `related`. If the Bottom line recommends against the idea, don't go further: say so in the report and suggest `parked` or `dropped`. That call is the user's.
-7. **Merge the attention evidence** (ideas depth). Append each row of the note's Findings → Attention evidence table to the table in `~/notes/projects/mindshare/attention-evidence.md`, unless a row with the same Source is already there. Use corrected figures where the verifier corrected one. If the new rows change a reading in its Patterns list, or support a new one, update that line and its date. This is the only step that edits the evidence note.
-8. **File the top three as idea notes** (ideas depth). For Shortlist rows #1, #2 and #3 only; the rest of the Shortlist and the Candidate pool stay in the research note as the record:
-   - Look for an existing note by title: `grep -il '^title:.*<idea name>' ~/notes/ideas/*.md`. Match titles only: a name can appear in another idea's text, including one filed moments earlier in this step. If there is one, add the research note's path to its `related` and leave the rest alone. If the run started from an idea note and it is the #1 idea, step 6 has already linked it.
-   - Otherwise create `~/notes/ideas/YYYY-MM-DD-short-slug.md` from `~/notes/templates/idea.md`. Set `title` to the idea's name and a few words on what it is, `created` to today, `tags` from the research note, and `related` to the research note's `~` path, plus the repo if one was in scope. Write each section in whole sentences, not pasted cells, drawing on the Shortlist row: The idea from Idea and Share hook; Why from Format evidence; How it might work from Demo and Effort; Open questions from Novelty, as what the prior art leaves open; Risks from Why it flops. Next step is the research note's Next step for the #1 idea and "Not yet planned." for the others. Citation numbers mean nothing outside the research note, so replace each with a markdown link to that source's URL; for a source with no URL (a command, a search, a note), link the research note instead.
-   - Set `status: exploring` for the #1 idea and `parked` for #2 and #3. Under the title of each parked note, add a line: "Ranked #n in [<research note title>](../research/<file>); parked because <Why it flops, in a few words>." If the research note ends as draft because its Bottom line doesn't hold, park all of them and say why in that line.
-   - Add every idea note's `~` path to the research note's `related`, then re-run `check-note.py`: each `related` entry must exist.
-9. **Commit** only the files you created or changed in `~/notes` (the research note, the idea note if edited and, at ideas depth, the evidence note and the idea notes filed in step 8): `git -C ~/notes add <files>`, then `git -C ~/notes commit` with message `research: <title>`, following this session's commit attribution rules. Don't push.
-10. **Report** in five lines or fewer (six at ideas depth):
+7. **Ideas depth only**: read `~/.claude/skills/research/ideas-finish.md` and follow it. It merges the new attention data into the shared evidence note and files the top three ideas as idea notes.
+8. **Commit** only the files you created or changed in `~/notes` (the research note, the idea note if edited and, at ideas depth, the evidence note and the idea notes filed in step 7): `git -C ~/notes add <files>`, then `git -C ~/notes commit` with message `research: <title>`, following this session's commit attribution rules. Don't push.
+9. **Report** in five lines or fewer (six at ideas depth):
    - the note path;
    - the bottom line in two sentences;
-   - verification, e.g. `9 of 10 claims confirmed, 1 corrected, 1 left unverified`, and whether the conclusion changed;
+   - verification, e.g. `9 of 10 claims confirmed (a sample of 31 cited), 1 corrected, 1 left unverified`, and whether the conclusion changed;
    - the status and, if draft, why;
    - the commit hash;
    - at ideas depth: the pool size and lenses covered, the prior-art verdict on #1 and #2, and the idea notes filed.

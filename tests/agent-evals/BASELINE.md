@@ -295,3 +295,53 @@ End to end, a real `/cold-review` of README.md ran through `run-agent.sh`. Its f
 after 22 turns with an API "Request timed out", reported as an error in `run.json`; resuming the
 saved session with a follow-up (`--resume`) returned the full table in one turn, about $1.02 for
 both. The reply was complete, since the launcher writes it to a file rather than handing it back.
+
+## After the skills review fixes (2026-09-25)
+
+Run on branch `skills-review-fixes`, after five changes: the guard and sandbox refuse session
+history; check-spec fails a reviewed or in-progress spec whose changes skipped the delta review;
+the "Where you run" block moved to `hooks/agent-sandbox.md`, appended to every agent's prompt
+with `--append-system-prompt-file`, and the ideas-depth rules and `/spec done` steps moved to
+files read on demand; run-agent.sh caps each run's cost and exits 3 on a reply without its
+agent's closing lines; and `/cold-review` diffs a delta review from the original review commit.
+
+| Case | Agent | Result | Turns | Cost |
+|---|---|---|---:|---:|
+| absence-claim | research-verifier | PASS | 15 | $0.29 |
+| cold-review-skip | spec-verifier | PASS | 5 | $0.20 |
+| delta-review | cold-reviewer | PASS | 6 | $0.23 |
+| delta-review-record | cold-reviewer | PASS | 5 | $0.22 |
+| record-skip | spec-verifier | PASS | 8 | $0.21 |
+| spec-miscite | spec-verifier | PASS | 8 | $0.22 |
+| spike-inherited | spec-verifier | PASS | 5 | $0.19 |
+| wrong-figure | research-verifier | PASS | 6 | $0.18 |
+
+8 of 8, $1.74 in total. No reply mentions a guard or sandbox refusal, so `--agent` and
+`--append-system-prompt-file` combine, and the history denies didn't get in the way of any case.
+No case runs the researcher, so the move of its ideation rules is unexercised.
+
+Skill eval `spec-done`: PASS (10 turns, $0.32), through the new `done-step.md`.
+
+## The researcher, and /cold-review's delta path (2026-09-25)
+
+Two new agent cases run the researcher, which no case covered before. A brief with `{{NOTE}}`
+now has run.sh put the note at a hidden `~/notes/research/.eval-<case>-<timestamp>.md` (the
+only place the guard lets the researcher write), copy it to the results, check it with
+`check-note.py --headroom`, grade it against `note-expect.txt`, delete it, and fail the case if
+anything else in `~/notes` changed. `turns.txt` and `usd.txt` set a case's own limits.
+
+| Case | Agent | Result | Turns | Cost |
+|---|---|---|---:|---:|
+| research-quick | researcher | PASS | 10 | $0.30 |
+| research-ideas | researcher | PASS | 63 | $2.31 |
+
+research-ideas checks what only `ideation-rules.md` asks for, now that it's read on demand: the
+evidence note cited by relative link, at least two candidates per lens in the brief and none
+outside them. Its note had 20 candidates (12 finding, 5 tool, 3 essay), 13 prior-art searches in
+Sources, and passed `check-note.py` at 2,037 of 2,100 words. At $2.31, run-agent.sh's $10 cap
+for the researcher leaves about four times headroom for an ideas-depth run.
+
+A new skill eval, `cold-review-delta`, runs `/cold-review prompt` on a runbook whose review was
+saved in it, folded once, moved into a record, then edited without logging. PASS (4 turns,
+$0.30): the prompt diffs from the commit before the review (the rule's base), not from the move
+commit the old lookup found, quotes the logged change, and names the unlogged Rollback edit.

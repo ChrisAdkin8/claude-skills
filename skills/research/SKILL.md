@@ -97,7 +97,7 @@ At ideas depth, first check the reply has a `Prior art:` block listing the queri
    ```
    ## Verification
 
-   Checked on <YYYY-MM-DD> by research-verifier: <N> of <M> claims confirmed.
+   Checked on <YYYY-MM-DD> by research-verifier: <N> of <M> claims confirmed, a sample of the note's <K> cited claims.
 
    | Claim | Cited | Verdict | Resolution |
    |---|---|---|---|
@@ -106,7 +106,7 @@ At ideas depth, first check the reply has a `Prior art:` block listing the queri
    | <…> | [9] | UNREACHABLE | marked *(unverified)*: <why, e.g. GCP page renders with JavaScript> |
    ```
 
-   Record every row the verifier returned, corrected ones included; don't drop any. `<N>` and `<M>` are the table's own counts: its CONFIRMED rows and all its rows. `check-note.py` compares them, so put round details, or the verifier's own count where it differs, after them, e.g. "16 of 21 claims confirmed across both rounds' rows. Round 1: 15 of 18 …".
+   Record every row the verifier returned, corrected ones included; don't drop any. `<N>` and `<M>` are the table's own counts: its CONFIRMED rows and all its rows. `<K>` is the note's count of cited claims, which `check-note.py` gives when it warns; leave the clause out only if the table covers them all. It says in the note itself that `final` means a sample held, not every claim. `check-note.py` compares the counts, so put round details, or the verifier's own count where it differs, after them, e.g. "16 of 21 claims confirmed across both rounds' rows. Round 1: 15 of 18 …".
 
    Every row that isn't CONFIRMED needs a Resolution: corrected, re-cited, or marked *(unverified)*, which the check confirms is in the text. If the section already exists (from `finish` mode or round 2), update the rows for claims checked again, add new ones, delete rows for claims the note no longer makes, and update the date line. A row's Claim must quote the note's current wording, or the check fails it as stale.
 3. **If the conclusion changed**, the rewritten text is the least-checked part of the note, so it gets one more check:
@@ -127,7 +127,7 @@ At ideas depth, first check the reply has a `Prior art:` block listing the queri
 9. **Report** in five lines or fewer (six at ideas depth):
    - the note path;
    - the bottom line in two sentences;
-   - verification, e.g. `9 of 10 claims confirmed, 1 corrected, 1 left unverified`, and whether the conclusion changed;
+   - verification, e.g. `9 of 10 claims confirmed (a sample of 31 cited), 1 corrected, 1 left unverified`, and whether the conclusion changed;
    - the status and, if draft, why;
    - the commit hash;
    - at ideas depth: the pool size and lenses covered, the prior-art verdict on #1 and #2, and the idea notes filed.

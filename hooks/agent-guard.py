@@ -79,6 +79,12 @@ SCRIPTS = {
         ".claude/skills/spec/scripts/check-spec.py",
     )
 }
+# The scripts that send their arguments over the network, outside the sandbox and with the
+# user's gh, gcloud or Reddit credentials: their arguments get curl's and gh's size limits.
+NET_SCRIPTS = {
+    (HOME / ".claude/skills/research/scripts" / name).resolve()
+    for name in ("repo-health.sh", "gcp-skus.sh", "reddit-search.sh")
+}
 # Reading and text tools that can't run other programs or write files (the flags that would
 # are checked below).
 READERS = {
@@ -170,7 +176,16 @@ GIT_READ = {
     "cat-file", "describe", "shortlog", "rev-list", "merge-base", "name-rev", "for-each-ref",
     "show-ref", "whatchanged", "branch", "tag", "remote", "reflog", "count-objects",
 }  # fmt: skip
-GIT_BAD_ARGS = ("--output", "-O", "--open-files-in-pager", "--exec-path", "--ext-diff")
+GIT_BAD_ARGS = (
+    "--output", "-O", "--open-files-in-pager", "--exec-path", "--ext-diff", "--textconv",
+)  # fmt: skip
+# git's own options, before the subcommand, that are allowed: an allowlist, since the others
+# include -p/--paginate (starts core.pager), --git-dir and --work-tree (a config the agent may
+# have written), -c and --config-env (aliases and any config value).
+GIT_TOP_OPTS = {
+    "--no-pager", "-P", "--literal-pathspecs", "--glob-pathspecs", "--noglob-pathspecs",
+    "--icase-pathspecs", "--no-optional-locks", "--no-replace-objects", "--version", "--help",
+}  # fmt: skip
 GH_READ = {
     ("api",), ("search",), ("auth", "status"), ("repo", "view"), ("release", "list"),
     ("release", "view"), ("issue", "list"), ("issue", "view"), ("pr", "list"), ("pr", "view"),
@@ -695,13 +710,17 @@ def check_gh(args, raw, expands, clean=frozenset(), tainted=frozenset()):
 def check_git(args):
     i = 0
     while i < len(args) and args[i].startswith("-"):
-        if (
-            args[i] == "-c"
-            or args[i].startswith("--config-env")
-            or args[i] == "--exec-path"
-        ):
+        if args[i] == "-C":
+            i += 2
+            continue
+        if args[i] == "-c" or args[i].startswith("--config-env"):
             block("`git -c` can run arbitrary programs through aliases; not allowed")
-        i += 2 if args[i] in ("-C", "--git-dir", "--work-tree") else 1
+        if args[i] not in GIT_TOP_OPTS:
+            block(
+                f"`git {args[i]}` isn't allowed before the subcommand: git's own options may "
+                "start a pager or read another config. Use `git -C <dir>` to choose the repo"
+            )
+        i += 1
     if i >= len(args):
         return
     sub, rest = args[i], args[i + 1 :]
@@ -1110,6 +1129,8 @@ def check_command(command, depth=0, local=None, clean=None):
         path = Path(word).expanduser()
         name = os.path.basename(word)
         if "/" in word and path.resolve() in SCRIPTS:
+            if path.resolve() in NET_SCRIPTS:
+                check_request_words(args, name, clean, tainted)
             continue
         if name in ("python3", "python", "bash", "sh", "zsh") and args:
             if args[0] == "-c" and name in ("bash", "sh", "zsh") and len(args) > 1:
@@ -1121,7 +1142,10 @@ def check_command(command, depth=0, local=None, clean=None):
                     (clean | assigned_names(inner)) - tainted_names(inner),
                 )
                 continue
-            if Path(args[0]).expanduser().resolve() in SCRIPTS:
+            script = Path(args[0]).expanduser().resolve()
+            if script in SCRIPTS:
+                if script in NET_SCRIPTS:
+                    check_request_words(args[1:], script.name, clean, tainted)
                 continue
             block(f"`{name}` may only run the /research and /spec skill scripts")
         if name == "eval":

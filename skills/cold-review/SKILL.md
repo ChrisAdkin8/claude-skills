@@ -49,8 +49,8 @@ Change the skeleton here, not there.
    - None: this is the full review. Carry on.
    - One, with `Not reviewed:` lines and no `### Delta review` under it: this is the delta
      review. Carry on, and follow the delta notes in steps 3 to 5.
-   - One, with no `Not reviewed:` lines: check whether the document changed anyway (step 3,
-     the review commit). If its diff is empty, say that the document had its review on the date
+   - One, with no `Not reviewed:` lines: check whether the document changed anyway (item 3
+     below, the review commit). If its diff is empty, say that the document had its review on the date
      in the section and hasn't changed since, and stop. If it isn't, the changes were never
      logged: say so, show the diff's `--stat` and the headings it touches, and draft one `Not
      reviewed:` line per change from the diff. Once the user confirms them, add them to the
@@ -74,7 +74,8 @@ Change the skeleton here, not there.
      and `git-read.py -C <root> cat-file -e <commit>^:<document path from the root>` succeeds),
      the base is `<commit>^`, so folds saved in the same commit aren't missed; otherwise the
      base is the commit. The
-     diff is `git -C <root> diff <base> -- <document>`, which includes uncommitted edits.
+     diff is `git -C <root> diff <base> -- <document>`, which includes uncommitted edits; run it
+     here as `~/.claude/hooks/git-read.py -C <root> diff <base> -- <document>`.
      No commit (the review was never committed): the reviewer works from the `Not reviewed:`
      lines alone.
    - **Unlogged changes** (delta review): read that diff against the `Not reviewed:` lines. If
@@ -97,10 +98,16 @@ and what counts as a correctness finding:
 | README, reference | Find the entry points and trust what it says about them, without the code contradicting it | a reader who relies on it as written gets a wrong or broken result |
 | Design doc, ADR | Reach the same conclusion from the evidence given, without redoing the research | the conclusion doesn't follow from the evidence, or the design as written breaks something |
 | Implementation spec | Build it from W1 onwards, without redoing the research or going back to its author | built as written, the change is wrong: it breaks something, loses data, fails its own Done when, or can't be carried out |
-| Research note, postmortem | Tell what's established from what's inferred, and follow each claim to a source | a claim the conclusion rests on is wrong, or presented as established when it's inferred |
+| Research note, postmortem | Tell what's established from what's inferred, and see which source each claim rests on | the conclusion doesn't follow from the claims, or a claim it rests on is presented as established when it's inferred or cites nothing |
 
 A document that is several of these is reviewed as all of them; say which in the prompt, and
 join their correctness meanings with "or".
+
+A **research note**'s sources are mostly web pages, and the reviewer has no WebFetch: its Bash
+reaches only the sandbox's allowlisted hosts. So a cold read checks the note's reasoning and
+labelling, not whether each source says what it's cited for. That is the `research-verifier`'s
+job: when you relay the review, point to `/research finish <note>` for claims to check against
+their sources.
 
 An **implementation spec** gets these lines added to "How to go about it", after the second one:
 
@@ -167,8 +174,11 @@ with no history of this one, ask them to paste the reply back here so it can be 
 
 Otherwise run the `cold-reviewer` agent with that prompt. It runs as a headless, sandboxed
 session, since Claude Code can't sandbox a subagent on its own: with the Write tool, write the
-prompt to `~/.cache/agent-runs/<document basename>/cold-reviewer/brief.md` (`cold-reviewer-delta`
-for a delta review), then run `~/.claude/hooks/run-agent.sh cold-reviewer <repo root, or the
+prompt to `<run dir>/brief.md`. The run dir is `~/.cache/agent-runs/<name>/cold-reviewer`
+(`cold-reviewer-delta` for a delta review), where `<name>` is `<repo dir name>--<document
+basename>`, or for a document outside a repo its directory's name and basename, e.g.
+`claude-skills--README`: every repo has a README, and a run dir that's reused loses its replies.
+Then run `~/.claude/hooks/run-agent.sh cold-reviewer <repo root, or the
 document's directory> <that run dir>` with the Bash tool and `run_in_background: true`, paths
 written with `~`. When it finishes, read `<run dir>/reply.md`. Exit 3 means the run finished
 but the reply lacks the table and closing lines the skeleton asks for (an API error such as

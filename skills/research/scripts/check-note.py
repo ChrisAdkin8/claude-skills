@@ -20,7 +20,15 @@ checked mechanically; whether the sources support the claims is the verifier age
 
 import argparse
 import re
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from mdcheck import (  # noqa: E402  shared with check-spec.py
+    INLINE_CODE, SECRETS, SEPARATOR, count_words, frontmatter, has_account_id, level, section,
+    strip_code,
+)
+import mdcheck  # noqa: E402
 
 TEMPLATES = Path.home() / "notes" / "templates"
 TEMPLATE = {"ideas": TEMPLATES / "research-ideas.md"}  # any other depth: research.md
@@ -76,74 +84,7 @@ EVIDENCE_NOTE = "attention-evidence.md"
 # [12], [1, 7], [8-9] or [8–9], but not a markdown link [12](url).
 CITE = re.compile(r"\[(\d+(?:\s*[,–-]\s*\d+)*)\](?!\()")
 SOURCE = re.compile(r"^(\d+)\.\s")
-INLINE_CODE = re.compile(r"`[^`]*`")  # jq like `.[0]` is not a citation
-SEPARATOR = re.compile(r"\s*\|?[\s:|-]*\|?\s*")  # table rule rows and blank lines
 UNVERIFIED_MARK = re.compile(r"\*\((?:inferred|unverified)[^)]*\)\*")
-# Keep in step with SECRETS in ~/.claude/skills/spec/scripts/check-spec.py.
-SECRETS = [
-    (re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"), "an AWS access key ID"),
-    (
-        re.compile(r"aws_secret_access_key\s*[=:]\s*\S{20,}", re.IGNORECASE),
-        "an AWS secret key",
-    ),
-    (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"), "a private key"),
-    (re.compile(r"\bgh[pousr]_[A-Za-z0-9]{36,}\b"), "a GitHub token"),
-    (re.compile(r"\bgithub_pat_[A-Za-z0-9_]{22,}\b"), "a GitHub token"),
-    (re.compile(r"\bxox[abprs]-[A-Za-z0-9-]{10,}\b"), "a Slack token"),
-    (re.compile(r"\bsk-ant-[A-Za-z0-9_-]{20,}"), "an Anthropic API key"),
-    (re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b"), "a Google API key"),
-    (re.compile(r'"type"\s*:\s*"service_account"'), "a GCP service account key"),
-]
-ACCOUNT_ID = re.compile(r"(?<![\w.:-])\d{12}(?![\w-]|\.\d)")
-
-
-def frontmatter(lines):
-    """Return (fields, index of the first body line). Block lists (`key:` then `- item`) are
-    joined into a flow list, so `related` reads the same either way."""
-    if not lines or lines[0].strip() != "---":
-        return {}, 0
-    fields, key = {}, None
-    for i, line in enumerate(lines[1:], start=1):
-        if line.strip() == "---":
-            return fields, i + 1
-        item = re.match(r"\s+-\s+(.*)", line)
-        if item and key and not fields[key].startswith("["):
-            fields[key] = (fields[key] + ", " if fields[key] else "") + item.group(1)
-            continue
-        if ":" in line:
-            key, _, value = line.partition(":")
-            key = key.strip()
-            fields[key] = value.split(" #")[0].strip()
-    return fields, len(lines)
-
-
-def strip_code(lines):
-    """Drop fenced code blocks (mermaid diagrams, commands)."""
-    out, fenced = [], False
-    for line in lines:
-        if line.lstrip().startswith("```"):
-            fenced = not fenced
-            continue
-        if not fenced:
-            out.append(line)
-    return out
-
-
-def level(line):
-    return len(line) - len(line.lstrip("#"))
-
-
-def section(lines, heading):
-    """Lines under the first heading starting with `heading`, up to the next heading of its level or above."""
-    for i, line in enumerate(lines):
-        if line.startswith(heading):
-            body = []
-            for nxt in lines[i + 1 :]:
-                if nxt.startswith("#") and level(nxt) <= level(heading):
-                    break
-                body.append(nxt)
-            return body
-    return None
 
 
 def heading_index(lines, heading):
@@ -200,6 +141,32 @@ def normalise(text):
     return " ".join(re.sub(r"[*`\\]", "", text).lower().split())
 
 
+CITE_MARK = re.compile(r"\s*\[\d+(?:\s*[,–-]\s*\d+)*\](?!\()")
+SENTENCE_END = re.compile(r"[.!?](?=\s|$)")
+
+
+def claim_text(text):
+    """A Verification row's claim as the note's text is compared with it: normalised, without
+    citation markers or a closing full stop, so quoting the sentence whole still matches."""
+    text = " ".join(CITE_MARK.sub("", normalise(text)).split())
+    return text.rstrip(" .,;:")
+
+
+def claim_spans(needle, para):
+    """Where the claim appears in a paragraph, as whole words: `boxes of 12` is not in
+    `boxes of 120`."""
+    pattern = r"(?<!\w)" + re.escape(needle) + r"(?!\w)"
+    return [m.span() for m in re.finditer(pattern, para)]
+
+
+def marked_unverified(para, span):
+    """Whether the sentence holding the claim carries an (unverified) mark, not just some
+    other sentence of the paragraph. The mark may follow the sentence's full stop."""
+    start = max((m.end() for m in SENTENCE_END.finditer(para, 0, span[0])), default=0)
+    end = next((m.end() for m in SENTENCE_END.finditer(para, span[1])), len(para))
+    return "(unverified" in para[start : end + len(" (unverified)")]
+
+
 def cited_numbers(line):
     nums = set()
     for group in CITE.findall(INLINE_CODE.sub("", line)):
@@ -234,19 +201,7 @@ def cited_claims(prose):
 
 def template_prompts(depth):
     """Prose lines from the depth's template that should never survive into a finished note."""
-    template = TEMPLATE.get(depth, TEMPLATES / "research.md")
-    if not template.exists():
-        return []
-    prompts = []
-    for line in template.read_text().splitlines():
-        text = line.strip()
-        if (
-            len(text) > 20
-            and not text.startswith(("#", "|", "---"))
-            and ":" not in text[:12]
-        ):
-            prompts.append(text)
-    return prompts
+    return mdcheck.template_prompts(TEMPLATE.get(depth, TEMPLATES / "research.md"))
 
 
 def check_related(value, fails, warns):
@@ -256,7 +211,7 @@ def check_related(value, fails, warns):
             warns.append(
                 f"related entry {entry!r} isn't a ~ path; skills grep for ~ paths"
             )
-        elif not Path(entry).expanduser().exists():
+        if entry.startswith(("~/", "/")) and not Path(entry).expanduser().exists():
             fails.append(
                 f"related entry {entry} doesn't exist: fix the path, or remove it if the "
                 "file was deleted"
@@ -384,8 +339,9 @@ def check_verification(body, prose, status, fails, warns, pool=()):
             "Verification's 'Checked on' line doesn't say 'N of M claims confirmed'; give the "
             "table's CONFIRMED count and row count"
         )
-    paras = paragraphs(prose + list(pool))
-    prose_text = " ".join(paras)
+    # Compared paragraph by paragraph, without citation markers, so a claim never matches
+    # across a paragraph break.
+    paras = [" ".join(CITE_MARK.sub("", para).split()) for para in paragraphs(prose + list(pool))]
     unresolved, stale, unmarked = [], [], []
     for row in rows:
         if len(row) < 3:
@@ -400,11 +356,12 @@ def check_verification(body, prose, status, fails, warns, pool=()):
             warns.append(f"Verification row {label} has verdict {row[2]!r}")
         if verdict != "CONFIRMED" and not resolution:
             unresolved.append(label)
-        needle = normalise(claim)
-        if needle and needle not in prose_text:
+        needle = claim_text(claim)
+        found = [(para, span) for para in paras for span in claim_spans(needle, para)]
+        if needle and not found:
             stale.append(label)
-        elif "unverified" in resolution.lower() and any(
-            "(unverified" not in para for para in paras if needle in para
+        elif "unverified" in resolution.lower() and not all(
+            marked_unverified(para, span) for para, span in found
         ):  # every place the claim appears must carry the mark
             unmarked.append(label)
     if unresolved:
@@ -655,7 +612,7 @@ def main():
             warns,
         )
 
-    words = sum(len(line.split()) for line in prose if not SEPARATOR.fullmatch(line))
+    words = sum(count_words(line) for line in prose if not SEPARATOR.fullmatch(line))
     budget = (HEADROOM_BUDGET if args.headroom else WORD_BUDGET)[depth]
     kind = (
         "researcher's budget, leaving headroom for verification"
@@ -692,7 +649,7 @@ def main():
     for pattern, what in SECRETS:
         if pattern.search(text):
             fails.append(f"contains what looks like {what}")
-    if ACCOUNT_ID.search("\n".join(body)):
+    if has_account_id(text):
         warns.append("contains a 12-digit number: make sure it isn't an AWS account ID")
 
     marked = sum(len(UNVERIFIED_MARK.findall(line)) for line in prose)

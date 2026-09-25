@@ -39,7 +39,8 @@ class RunAgent(unittest.TestCase):
         self.env = {
             **os.environ,
             "PATH": f"{bin_dir}:{os.environ['PATH']}",
-            "STUB_CALLS": str(self.calls), "RUN_AGENT_LOG": str(self.tmp / "sessions.log"),
+            "STUB_CALLS": str(self.calls),
+            "RUN_AGENT_LOG": str(self.tmp / "sessions.log"),
         }
         self.name = f"test-{uuid.uuid4().hex[:8]}"
         self.addCleanup(shutil.rmtree, ROOT / self.name, True)
@@ -95,6 +96,9 @@ class RunAgent(unittest.TestCase):
         argv = call["argv"]
         self.assertEqual(argv[argv.index("--agent") + 1], "cold-reviewer")
         self.assertTrue(argv[argv.index("--settings") + 1].endswith("hooks/agent-sandbox.json"))
+        prompt = Path(argv[argv.index("--append-system-prompt-file") + 1]).read_text()
+        self.assertIn("api.github.com", prompt)  # the host list, filled in from the settings
+        self.assertNotIn("{{HOSTS}}", prompt)
         self.assertIn("--strict-mcp-config", argv)  # only the researcher keeps MCP servers
         self.assertNotIn("--resume", argv)
         self.assertEqual(argv[-1], "Review this.")

@@ -44,8 +44,10 @@ run_case() {
   brief=$(sed -e "s#{{CASE}}#$dir#g" -e "s#{{HOME}}#$HOME#g" -e "s#{{REPO}}#$repo#g" \
     -e "s#{{DATE}}#$today#g" "$dir/brief.txt")
   work=$(mktemp -d)
+  "$repo/hooks/sandbox-prompt.py" > "$out/$c.sandbox.md"
   (cd "$work" && claude -p --agent "$agent" --output-format json --max-turns 40 \
     --allowedTools "$tools" --add-dir "$HOME/.claude" "$HOME/notes" "$repo" \
+    --append-system-prompt-file "$out/$c.sandbox.md" \
     --strict-mcp-config --no-session-persistence \
     --max-budget-usd "$max_usd" ${EVAL_MODEL:+--model "$EVAL_MODEL"} \
     ${settings:+--settings "$settings"} "$brief") \

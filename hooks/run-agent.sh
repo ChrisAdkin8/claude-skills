@@ -66,10 +66,15 @@ else
   resume=()
 fi
 
+# Every agent gets the same description of its sandbox, with the host list read from the
+# settings that enforce it, rather than a copy in each agent file.
+"$here/sandbox-prompt.py" > "$run/sandbox.md" || die "couldn't write $run/sandbox.md"
+
 cd "$work"
 status=0
 claude -p --agent "$agent" --output-format json --max-turns 200 \
   --allowedTools "$tools" --add-dir "$HOME/.claude" "$HOME/notes" "$work" \
+  --append-system-prompt-file "$run/sandbox.md" \
   --settings "$here/agent-sandbox.json" ${mcp[@]+"${mcp[@]}"} ${resume[@]+"${resume[@]}"} \
   "$prompt" < /dev/null > "$run/run.json" 2> "$run/run.err" || status=$?
 

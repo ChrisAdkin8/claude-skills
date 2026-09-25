@@ -51,9 +51,13 @@ command run instead of guessing at output.
 ## Layout
 
 - `skills/idea/`: `/idea`.
-- `skills/research/`: `/research`, with `scripts/check-note.py` and the helpers the `researcher`
+- `skills/research/`: `/research`, with `ideation-rules.md` (the researcher's rules at `ideas`
+  depth, read only then), `ideas-finish.md` (the skill's last steps at `ideas` depth),
+  `scripts/check-note.py` and the helpers the `researcher`
   agent runs while gathering evidence (`repo-health.sh`, `gcp-skus.sh`, `reddit-search.sh`).
-- `hooks/run-agent.sh` and `hooks/agent-sandbox.json`: how the skills run their agents. Each runs as
+- `hooks/run-agent.sh` and `hooks/agent-sandbox.json`: how the skills run their agents. Every agent
+  also gets `hooks/agent-sandbox.md` appended to its prompt, with the host list filled in from the
+  settings by `hooks/sandbox-prompt.py`, so no agent file keeps its own copy. Each runs as
   a headless `claude -p --agent <name>` session inside Claude Code's OS sandbox (no credential
   reads, no secret environment variables, Bash writes only in its work dir, Bash network only to an
   allowlist), since the sandbox can't be set for an in-session subagent. Some things run outside it:
@@ -62,7 +66,8 @@ command run instead of guessing at output.
   Go CLIs fail TLS under the macOS sandbox; the Read, WebFetch and WebSearch tools, which the sandbox
   never covers (permission deny rules cover Read); and the researcher's MCP servers (AWS and
   Terraform documentation). For those, `agent-guard.py`'s checks are what holds.
-- `skills/spec/`: `/spec`, with `scripts/check-spec.py`, `template.md` and `record-template.md`. Spikes add five files:
+- `skills/spec/`: `/spec`, with `scripts/check-spec.py`, `template.md`, `record-template.md` and
+  `done-step.md` (step 8, read only by `/spec done`). Spikes add five files:
   `spike-step.md` (step 7, read only when spikes run), `spiker.md` (the rules a spike session runs
   under), `spike-settings.json` (its sandbox and permission settings), `scripts/prepare-spike.sh`
   (clears a scratch directory and exports the code into it, after checking its paths) and

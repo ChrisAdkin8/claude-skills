@@ -49,3 +49,4 @@ Needs a run: 1, 3, 9, 10
 - Not reviewed: rewritten for readability: terms defined before use, Spec, Agent, Verifier, Sandbox and guard added to the terms, the step list renamed to match the diagram's six stages, a clone step in Install, what each ~/notes file is for, jargon removed, long sentences split, links added, and docs/ and records/ added to Layout, on 2026-09-25.
 - Not reviewed: Layout lists `scripts/build-index.py`, which rebuilds the notes index in `~/notes`, and says `mdcheck.py` is shared with it too; the fast tests' list names `build-index.py`, on 2026-09-27.
 - Not reviewed: Layout says `/research` runs `build-index.py` before its commit, on 2026-09-27.
+- Not reviewed: stage 2 says `/research` rebuilds `~/notes/index.md`; Set up `~/notes` asks for a `topic:` line in the research templates; a new section, View the notes as a mind map, says what the index is and gives three ways to open it, on 2026-09-27.

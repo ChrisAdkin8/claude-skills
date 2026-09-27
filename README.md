@@ -60,6 +60,8 @@ The six stages match the diagram.
 2. **Research: `/research <question or idea note>`** researches it and writes a note to
    `~/notes/research`, citing a source for each claim. A `research-verifier` agent then checks the
    claims the note's conclusions depend on. It reports any it couldn't confirm from their sources.
+   Last, it rebuilds `~/notes/index.md`, a map of every note by topic
+   ([view it as a mind map](#view-the-notes-as-a-mind-map)).
 3. **Plan: `/spec <research note>`** writes a spec into the repo the change touches. The spec
    points at the code it relies on as `path:line`. The repo must be a git repo under `~/code`,
    because that's the only place `/spec` may edit files without asking. Three checks follow:
@@ -150,7 +152,8 @@ because the skills commit to it. This repo doesn't include its files either, so 
 - **`templates/research.md`** and **`templates/research-ideas.md`**: the layouts the `researcher`
   agent starts from, for a normal research note and for a ranked list of ideas. `check-note.py`
   fails a note that lacks the sections it expects, so copy its `REQUIRED` headings from
-  [`check-note.py`](skills/research/scripts/check-note.py) into these.
+  [`check-note.py`](skills/research/scripts/check-note.py) into these. Give both a `topic:` line
+  too: it also fails a note with no topic (see [below](#view-the-notes-as-a-mind-map)).
 - **`projects/mindshare/attention-evidence.md`**, needed only for `/research ideas`. It's a table
   of past launches (repos, posts, demos) and how much attention each got: stars, shares, upvotes.
   `/research ideas` ranks ideas by how much attention they're likely to get, reads this table as
@@ -158,6 +161,41 @@ because the skills commit to it. This repo doesn't include its files either, so 
 
 `/idea` and `/research` need `~/notes`. `/spec` does too: it reads the research note there and
 commits the links it adds. Only `/cold-review` works without it.
+
+## View the notes as a mind map
+
+Every research note has a `topic`, such as `kubernetes` or `claude-code/research-skill`: an area,
+and optionally a sub-area under it. At the end of each run, `/research` rebuilds `~/notes/index.md`
+from these topics. It's a nested outline: topics are headings, research notes are links under
+them, and each idea or decision sits under the research note it names. A mind map draws that
+outline as a tree of bubbles branching out from the middle.
+
+There are three ways to view it, easiest first:
+
+1. **In VS Code.** The links open your notes.
+   1. Install the [Markmap](https://marketplace.visualstudio.com/items?itemName=gera2ld.markmap-vscode)
+      extension, by gera2ld.
+   2. Open `~/notes/index.md`.
+   3. Click the Markmap icon at the top right of the editor, or run **Markmap: Open as markmap**
+      from the Command Palette (Cmd+Shift+P).
+
+   The map opens beside the file, showing the first two levels. Click a bubble to open or close
+   its branch, and click a note's title to open that note.
+2. **In a web browser, as a single file:**
+
+   ```
+   npx markmap-cli --offline -o /tmp/notes-map.html ~/notes/index.md
+   ```
+
+   This draws the map into one web page and opens it. `npx` runs the tool without installing it
+   for good. Saving the page to `/tmp` keeps an extra file out of your notes repo. Links to notes
+   may not open from the browser.
+3. **Without Markmap.** Open `~/notes/index.md` in any markdown viewer, such as GitHub, Obsidian or
+   VS Code's normal preview. It shows the same tree as an indented list.
+
+To rebuild the index by hand, for example after `/idea` adds a note, run
+`~/.claude/skills/research/scripts/build-index.py ~/notes`. Don't edit `index.md` itself: the next
+rebuild overwrites it.
 
 ## How the agents are contained
 

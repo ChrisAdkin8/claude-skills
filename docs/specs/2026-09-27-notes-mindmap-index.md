@@ -1,7 +1,7 @@
 ---
 title: A topic field and a generated mind-map index for ~/notes
 created: 2026-09-27
-status: draft # draft | reviewed | in-progress | done | superseded
+status: done # draft | reviewed | in-progress | done | superseded
 research: ~/notes/research/2026-09-27-research-notes-mindmap-index.md
 idea: none
 read-at: a69b04a

@@ -332,7 +332,7 @@ A cap stops a run only after the turn that crosses it, so a run can go over by u
 | `docs/workflow*.png`, `docs/social-preview.png` | the diagram and the repo's social preview, drawn by `docs/diagram/workflow.py` |
 | `docs/diagram/` | the script that draws them, and `render.mjs`, which turns its SVGs into PNGs |
 | `records/` | the review history of this README |
-| `tests/test_*.py` | fast tests for the guard, the two checkers (`check-note.py` and `check-spec.py`), `build-index.py`, `review-state.py`, `git-read.py`, `prepare-spike.sh`, `run-spike.sh`, `run-agent.sh` and `mdcheck.py`, that the eval runners exit 1 on a failure, and that the guard and both sandbox settings deny the same paths |
+| `tests/test_*.py` | fast tests for the guard, the two checkers (`check-note.py` and `check-spec.py`), `build-index.py`, `review-state.py`, `git-read.py`, `prepare-spike.sh`, `run-spike.sh`, `run-agent.sh`, `mdcheck.py` and the three research scripts, that the eval runners exit 1 on a failure, and that the guard and both sandbox settings deny the same paths |
 | `tests/fixtures/` | sample research notes (one of them `depth: ideas`) and a spec the tests check |
 | `tests/replay_guard.py` | runs real recorded commands and file reads through the guard |
 | `tests/agent-evals/` | runs the verifiers and the cold reviewer against documents with planted mistakes, and the researcher on sample questions |

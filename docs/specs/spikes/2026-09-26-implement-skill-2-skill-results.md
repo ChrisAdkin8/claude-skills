@@ -46,10 +46,10 @@ EXIT:1
 
 ```
 $ mkdir -p ~/.cache/build-runs
-mkdir: /Users/chrisadkin/.cache/build-runs: Operation not permitted
+mkdir: ~/.cache/build-runs: Operation not permitted
 EXIT_MKDIR:1
 $ echo test > ~/.cache/build-runs/probe-test.txt
-(eval): no such file or directory: /Users/chrisadkin/.cache/build-runs/probe-test.txt
+(eval): no such file or directory: ~/.cache/build-runs/probe-test.txt
 EXIT_WRITE:1
 ```
 

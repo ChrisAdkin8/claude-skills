@@ -27,9 +27,9 @@ SANS = "Helvetica Neue, Helvetica, Arial, sans-serif"
 MONO = "Menlo, Monaco, monospace"
 
 # ------------------------------------------------------------------ content
-# (number, title, colour key, command or None for a new session, what happens, output,
-#  whether its work runs in a subagent: a separate headless session, and whether its command
-#  is only planned, not built yet: the line under the command says so)
+# (number, title, colour key, command, what happens, output,
+#  whether its work runs in a subagent: a separate headless session, and optionally whether its
+#  command is only planned, not built yet: the line under the command says so)
 STAGES = [
     (1, "Capture", "notes", "/idea", "Save the idea as a note", "~/notes/ideas/", False),
     (

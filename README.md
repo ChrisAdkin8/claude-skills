@@ -37,7 +37,7 @@ apart: it gives any markdown file the same cold review `/spec` gives a spec. Not
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/workflow-narrow-dark.png">
-  <img src="docs/workflow-narrow-dark.png" alt="Workflow diagram. Six stages run in order: Capture with /idea, Research with /research, Plan with
+  <img src="docs/workflow-narrow.png" alt="Workflow diagram. Six stages run in order: Capture with /idea, Research with /research, Plan with
 /spec, Spike with /spec spike, Implement with /implement (planned, not built yet), and Close out
 with /spec done. Under each command, a line says whether the stage's work runs in your session or in
 a subagent: Research, Spike and Implement use subagents. Research also rebuilds the notes index; a
@@ -97,11 +97,12 @@ The six stages match the diagram.
    For a small change whose approach is settled, `/spec quick` stops after the verifier: no cold
    review, no spikes. `/spec finish <spec>` gives it the cold review later, and
    `/spec spike <spec>` runs any spikes.
-4. **Spike: `/spec spike <spec>`**, or automatically at the end of `/spec`. Each spike runs as a
+4. **Spike: `/spec spike <spec>`**, or offered at the end of `/spec`. Each spike runs as a
    separate Claude session in a scratch copy of the code, inside a sandbox and under a cost cap.
    It writes its verdict and raw output, and `/spec` then updates the spec with the answer.
 5. **Implement: `/implement <spec>`**, planned in
-   [two specs](docs/specs/2026-09-26-implement-skill-2-skill.md) and not built yet. It will hand the
+   two specs ([tools](docs/specs/2026-09-26-implement-skill-1-tools.md),
+   [skill](docs/specs/2026-09-26-implement-skill-2-skill.md)) and not built yet. It will hand the
    work to a subagent on its own git worktree and branch, then have a sandboxed verifier re-run
    each work item's Done when check. Until then, implement in a new session, working from the
    spec.
@@ -290,8 +291,8 @@ Spikes are contained differently. They don't run under the guard; their own sand
   environment variable overrides both.
 - **Each spike** is capped at $2 and 60 turns. Assume a spike that fetches anything from the web
   costs close to the cap.
-- **The agent evaluations** (see [Checks](#checks)) spend real money too. Three full runs of
-  their ten cases on 2026-09-27 cost between $3.70 and $4.46. Each case is capped at $5 (the
+- **The agent evaluations** (see [Checks](#checks)) spend real money too. Four full runs of
+  their ten cases on 2026-09-27 cost between $3.70 and $4.68. Each case is capped at $5 (the
   `research-ideas` case at $10), and the cases run at the same time, so a run that goes wrong can
   cost far more.
 - **The skill evaluations** cost about $0.30 each, capped at $3 each.
@@ -307,7 +308,7 @@ A cap stops a run only after the turn that crosses it, so a run can go over by u
 | `skills/research/` | `/research` |
 | `skills/research/ideation-rules.md`, `ideas-finish.md` | the extra steps for `/research ideas` |
 | `skills/research/scripts/check-note.py` | checks a research note |
-| `skills/research/scripts/mdcheck.py` | markdown helpers shared by `check-note.py`, `check-spec.py` and `build-index.py` |
+| `skills/research/scripts/mdcheck.py` | markdown helpers shared by `check-note.py`, `check-spec.py`, `build-index.py` and `review-state.py` |
 | `skills/research/scripts/build-index.py` | rebuilds `~/notes/index.md`, the notes by topic; `/research` runs it before its commit |
 | `skills/research/scripts/repo-health.sh`, `gcp-skus.sh`, `reddit-search.sh` | gather evidence for the `researcher` agent |
 | `skills/spec/` | `/spec` |
@@ -327,13 +328,18 @@ A cap stops a run only after the turn that crosses it, so a run can go over by u
 | `hooks/agent-sandbox.md`, `sandbox-prompt.py` | the rules added to every agent's instructions |
 | `hooks/agent-guard.py` | the guard |
 | `hooks/git-read.py` | runs read-only git commands for `/spec` and `/cold-review` |
-| `docs/specs/` | the specs for changes to this repo; spike results are in `docs/specs/spikes/` |
-| `docs/workflow*.png` | the diagram, drawn by `docs/diagram/workflow.py` |
+| `docs/specs/` | the specs for changes to this repo; their records are in `docs/specs/records/`, spike results in `docs/specs/spikes/` |
+| `docs/workflow*.png`, `docs/social-preview.png` | the diagram and the repo's social preview, drawn by `docs/diagram/workflow.py` |
+| `docs/diagram/` | the script that draws them, and `render.mjs`, which turns its SVGs into PNGs |
 | `records/` | the review history of this README |
-| `tests/test_*.py` | fast tests for the guard, the two checkers (`check-note.py` and `check-spec.py`), `build-index.py`, `review-state.py`, `git-read.py`, `prepare-spike.sh`, `run-spike.sh` and `run-agent.sh`, and that the guard and both sandbox settings deny the same paths |
+| `tests/test_*.py` | fast tests for the guard, the two checkers (`check-note.py` and `check-spec.py`), `build-index.py`, `review-state.py`, `git-read.py`, `prepare-spike.sh`, `run-spike.sh`, `run-agent.sh` and `mdcheck.py`, that the eval runners exit 1 on a failure, and that the guard and both sandbox settings deny the same paths |
+| `tests/fixtures/` | a sample research note and spec the tests check |
 | `tests/replay_guard.py` | runs real recorded commands and file reads through the guard |
 | `tests/agent-evals/` | runs the verifiers and the cold reviewer against documents with planted mistakes, and the researcher on sample questions |
 | `tests/skill-evals/` | runs whole skills against throwaway repos |
+| `.github/workflows/tests.yml` | runs the unit tests, ruff and shellcheck on each push to `main` and each pull request |
+| `CHANGELOG.md` | what changed, by day |
+| `CLAUDE.md` | the rules for working in this repo |
 
 ## Checks
 

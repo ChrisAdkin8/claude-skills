@@ -38,7 +38,7 @@ apart: it gives any markdown file the same cold review `/spec` gives a spec. Not
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/workflow-narrow-dark.png">
   <img src="docs/workflow-narrow.png" alt="Workflow diagram. Six stages run in order: Capture with /idea, Research with /research,
-Plan with /spec, Spike with /spec spike, Implement in a new session, and Close out with /spec done.
+Plan with /spec, Spike with /spec spike, Implement with /implement, and Close out with /spec done.
 A research-verifier checks the research; check-spec.py, a spec-verifier and a cold-reviewer check
 the spec. /spec quick skips the review and spikes, a spec edited after its review gets a delta
 review before Implement, and an implementation that overturns the research loops back to update the
@@ -51,6 +51,8 @@ How to read it:
 
 - It follows one change from idea to merged code, top to bottom.
 - Each numbered stage shows the command you run, what it does and where its output goes.
+- Under each command: whether the stage's work runs in your session, or in a *subagent*, a
+  separate headless Claude session that hasn't seen your conversation.
 - Purple boxes are the agents and scripts that check the work.
 - The pink box is a check that runs only if the spec was edited after its cold review.
 - Dashed lines are shortcuts and loops off the main path.
@@ -93,7 +95,11 @@ The six stages match the diagram.
 4. **Spike: `/spec spike <spec>`**, or automatically at the end of `/spec`. Each spike runs as a
    separate Claude session in a scratch copy of the code, inside a sandbox and under a cost cap.
    It writes its verdict and raw output, and `/spec` then updates the spec with the answer.
-5. **Implement** in a new session, working from the spec.
+5. **Implement: `/implement <spec>`**, planned in
+   [two specs](docs/specs/2026-09-26-implement-skill-2-skill.md) and not built yet. It will hand the
+   work to a subagent on its own git worktree and branch, then have a sandboxed verifier re-run
+   each work item's Done when check. Until then, implement in a new session, working from the
+   spec.
 6. **Close out: `/spec done <spec>`**. It notes in the record where the implementation left
    the spec, marks the spec done, and points out any research the implementation proved
    wrong.

@@ -27,9 +27,10 @@ SANS = "Helvetica Neue, Helvetica, Arial, sans-serif"
 MONO = "Menlo, Monaco, monospace"
 
 # ------------------------------------------------------------------ content
-# (number, title, colour key, command or None for a new session, what happens, output)
+# (number, title, colour key, command or None for a new session, what happens, output,
+#  whether its work runs in a subagent: a separate headless session)
 STAGES = [
-    (1, "Capture", "notes", "/idea", "Save the idea as a note", "~/notes/ideas/"),
+    (1, "Capture", "notes", "/idea", "Save the idea as a note", "~/notes/ideas/", False),
     (
         2,
         "Research",
@@ -37,8 +38,9 @@ STAGES = [
         "/research",
         "An agent researches it, citing every claim; the index is rebuilt",
         "~/notes/research/",
+        True,
     ),
-    (3, "Plan", "repo", "/spec", "A spec in the repo, citing the code", "docs/specs/"),
+    (3, "Plan", "repo", "/spec", "A spec in the repo, citing the code", "docs/specs/", False),
     (
         4,
         "Spike",
@@ -46,14 +48,16 @@ STAGES = [
         "/spec spike",
         "Sandboxed tests settle what reading can't",
         "docs/specs/spikes/",
+        True,
     ),
     (
         5,
         "Implement",
-        "session",
-        None,
-        "Implement the spec, W1 first; tests, then a PR",
-        "code + pull request",
+        "repo",
+        "/implement",
+        "Implement the spec, W1 first, test first; a verifier re-runs the checks",
+        "implement/ branch",
+        True,
     ),
     (
         6,
@@ -62,6 +66,7 @@ STAGES = [
         "/spec done",
         "Log where the implementation left the plan",
         "docs/specs/records/",
+        False,
     ),
 ]
 CHECKS = {
@@ -73,6 +78,9 @@ CHECKS = {
     ],
 }
 LOOP_BACK = "Research proved wrong? Update the note"
+# The line under each stage's command, saying where its work runs.
+RUNS = {True: "work runs in a subagent", False: "runs in your session"}
+RUNS_SHORT = {True: "subagent", False: "in session"}
 QUICK = [("/spec quick", True), (" skips review and spikes", False)]
 DELTA_HEAD = "Spec edited after its review?"
 DELTA_BODY = [
@@ -95,7 +103,6 @@ GUARDS = [
 LEGEND = [
     ("~/notes", "notes"),
     ("Your code repo", "repo"),
-    ("New Claude session", "session"),
     ("Checking agent or script", "check"),
 ]
 
@@ -346,7 +353,7 @@ def wide(theme):
     xs = [X0 + i * (CW + GAP) for i in range(6)]
     cxs = [x + CW / 2 for x in xs]
     bodies = [wrap(s[4], IW, 19) for s in STAGES]
-    BODY_Y = TOP + 52 + 20 + 42 + 36
+    BODY_Y = TOP + 52 + 20 + 42 + 24 + 36
     CARD_H = BODY_Y + max(map(len, bodies)) * 25 - TOP + 12 + 64 + 18
     CARD_B = TOP + CARD_H
     QY = CARD_B + 26
@@ -394,6 +401,7 @@ def wide(theme):
         c.number(x + 30, TOP + 26, st[0], key)
         c.text(x + 56, TOP + 35, st[1], size=24, fill="#FFFFFF", weight="bold")
         c.pill(x + PAD, TOP + 72, IW, 42, st, "card")
+        c.text(x + PAD, TOP + 138, RUNS[st[6]], size=16, fill=t["muted"], weight="bold" if st[6] else "normal")
         c.lines(x + PAD, BODY_Y, bodies[i], size=19, lh=25)
         c.output(x + PAD, CARD_B - 64 - 18, IW, 64, key, st[5])
     for i in range(5):
@@ -550,7 +558,7 @@ def narrow(theme):
     for i, st in enumerate(STAGES):
         n, _, key = st[0], st[1], st[2]
         body = wrap(st[4], DW, 19)
-        base = max(100, 30 + 25 * len(body))
+        base = max(124, 30 + 25 * len(body))
         chips = CHECKS.get(n, [])
         h = base + (74 if chips else 0)
         rows.append((y, h))
@@ -564,6 +572,7 @@ def narrow(theme):
         c.number(RX + 30, y + 30, n, key)
         c.text(RX + 56, y + 38, st[1], size=22, fill="#FFFFFF", weight="bold")
         c.pill(RX + 16, y + 54, BW - 32, 34, st, "block", size=17)
+        c.text(RX + 16, y + 110, RUNS[st[6]], size=15, fill="#FFFFFF", weight="bold" if st[6] else "normal")
         c.lines(DX, y + 40, body, size=19, lh=25)
         c.output(RX + RW - OW - 16, y + 18, OW, 64, key, st[5], size=15)
         if chips:
@@ -717,13 +726,14 @@ def social(theme):
 
     GAP = 18
     BW = (W - 2 * X0 - 5 * GAP) / 6
-    TOP, BH = 268, 158
+    TOP, BH = 268, 176
     for i, st in enumerate(STAGES):
         x, key = X0 + i * (BW + GAP), st[2]
         c.rect(x, TOP, BW, BH, c.col(key, "head"), r=16)
         c.number(x + 28, TOP + 36, st[0], key)
         c.text(x + 50, TOP + 45, st[1], size=24, fill="#FFFFFF", weight="bold")
         c.pill(x + 14, TOP + 84, BW - 28, 48, st, "block", size=19)
+        c.text(x + 16, TOP + 160, RUNS_SHORT[st[6]], size=17, fill="#FFFFFF", weight="bold" if st[6] else "normal")
         if i < 5:
             ay = TOP + BH / 2
             c.arrow([(x + BW + 3, ay), (x + BW + GAP - 3, ay)], t["muted"], width=3)

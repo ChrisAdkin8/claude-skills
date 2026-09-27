@@ -49,7 +49,7 @@ STAGES = [
     ),
     (
         5,
-        "Build",
+        "Implement",
         "session",
         None,
         "Implement the spec, W1 first; tests, then a PR",
@@ -60,7 +60,7 @@ STAGES = [
         "Close out",
         "repo",
         "/spec done",
-        "Log where the build left the plan",
+        "Log where the implementation left the plan",
         "docs/specs/records/",
     ),
 ]
@@ -72,12 +72,12 @@ CHECKS = {
         ("cold-reviewer", "fresh-eyes read"),
     ],
 }
-LOOP_BACK = "Build overturned the research? Update the note"
+LOOP_BACK = "Research proved wrong? Update the note"
 QUICK = [("/spec quick", True), (" skips review and spikes", False)]
 DELTA_HEAD = "Spec edited after its review?"
 DELTA_BODY = [
     ("/cold-review <spec>", True),
-    (" re-checks the changes before Build starts", False),
+    (" re-checks the changes before Implement starts", False),
 ]
 REVIEW_STEPS = [
     ("1 Frame", "works out the doc's job"),
@@ -418,7 +418,7 @@ def wide(theme):
     c.mixed(
         nx + 20, ny + 72, DELTA_BODY[:1] + [(" re-checks the changes", False)], size=18
     )
-    c.text(nx + 20, ny + 97, "before Build starts", size=18)
+    c.text(nx + 20, ny + 97, "before Implement starts", size=18)
     gx = xs[4] + CW - 60
     c.arrow(
         [(gx, ny - 2), (gx, CARD_B + 2)], c.col(rv, "accent"), dash="7 6", width=2.4
@@ -574,7 +574,7 @@ def narrow(theme):
             for k, (name, what) in enumerate(chips):
                 c.check_chip(DX + k * (cw + 12), cy, cw, 66, name, what, size=16)
         y += h
-        if n == 4:  # the delta-review gate sits between Spike and Build
+        if n == 4:  # the delta-review gate sits between Spike and Implement
             c.arrow(
                 [(RX + BW / 2, y + 2), (RX + BW / 2, y + GAP_Y - 2)],
                 t["muted"],
@@ -619,7 +619,7 @@ def narrow(theme):
         anchor="middle",
         rotate=-90,
     )
-    # shortcut: plan -> build, in the right gutter
+    # shortcut: plan -> implement, in the right gutter
     (y3, _), (y5, _) = rows[2], rows[4]
     c.arrow(
         [

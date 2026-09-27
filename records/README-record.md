@@ -79,3 +79,4 @@ Needs a run: none
 - Not reviewed: the worked example's Research step says the verifier checked a sample, 14 of 37 claims, and that the spike confirmed the Markmap claim, from the README delta review (2026-09-27) row 3, on 2026-09-27.
 - Not reviewed: the diagram's stage 2 says the index is rebuilt and its research-verifier "checks the key claims", redrawn, from the README delta review (2026-09-27) row 4, on 2026-09-27.
 - Not reviewed: View the notes as a mind map says notes with no topic or no research note go under Unfiled, from the README delta review (2026-09-27) row 8, on 2026-09-27.
+- Not reviewed: stage 5 is renamed from Build to Implement in the stage list, the worked example, Close out and the diagram's alt text, and 'build' becomes 'implement' where it meant that stage; the diagram's loop-back label now reads 'Research proved wrong? Update the note', on 2026-09-27.

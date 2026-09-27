@@ -4,7 +4,7 @@ created: 2026-09-27
 status: done # draft | reviewed | in-progress | done | superseded
 research: ~/notes/research/2026-09-27-research-notes-mindmap-index.md
 idea: none
-read-at: a69b04a
+read-at: 6f8f122
 cite-repo: none
 ---
 
@@ -27,7 +27,7 @@ Settled with the user on 2026-09-27: the `~/notes` side (templates, conventions,
 
 ## Background
 
-Read at `a69b04a` on 2026-09-27, the same commit the research note was read at, so the code hasn't moved since. The working tree has two other uncommitted specs and their records (`docs/specs/2026-09-26-build-skill-1-tools.md`, `-2-skill.md`), which don't touch these files.
+Read at `6f8f122` on 2026-09-27, the same commit the research note was read at, so the code hasn't moved since. The working tree has two other uncommitted specs and their records (`docs/specs/2026-09-26-build-skill-1-tools.md`, `-2-skill.md`), which don't touch these files.
 
 **`/research` Finish step.**
 - `allowed-tools` pre-approves the commands the skill runs, script by script (`skills/research/SKILL.md:5`). `build-index.py` isn't among them.

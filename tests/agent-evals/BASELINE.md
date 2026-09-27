@@ -91,7 +91,7 @@ at $0.10 (capped at $0.05, ended at $0.097) and the git follow-up at $0.16. A sm
 
 ## After the spiker and Guard changes (2026-09-17)
 
-Fourth run on 2026-09-17, on the agent and skill files as committed at `3e7e3e7`: the spiker's
+Fourth run on 2026-09-17, on the agent and skill files as committed at `6effab6`: the spiker's
 Go-CLI fetching rule and 7a's host guidance (W6), and the narrowed Guard (W8). Re-run because
 `skills/spec/SKILL.md` and `skills/spec/spiker.md` changed, as `README.md` asks. All five cases
 in parallel, on the default model.
@@ -514,7 +514,7 @@ normalises before counting. All ten agent cases in parallel, on the default mode
 Total $4.68.
 
 Skill evals: `spec-done` PASS (11 turns, $0.35). `cold-review-delta` FAILed its first run
-(4 turns, $0.27) on its two diff checks: `review-state.py` now prints `diff -M <base>` (`b0a6fa6`,
+(4 turns, $0.27) on its two diff checks: `review-state.py` now prints `diff -M <base>` (`809d3e0`,
 following renames), and the grader's pattern wanted the commit straight after `diff`. The skill's
 diff was right, from the runbook's first commit. With the pattern allowing options, a re-run
 passed every check (4 turns, $0.28).

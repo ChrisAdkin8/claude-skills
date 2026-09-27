@@ -4,7 +4,7 @@ created: 2026-09-26
 status: draft # draft | reviewed | in-progress | done | superseded
 research: none
 idea: none
-read-at: a69b04a
+read-at: 6f8f122
 cite-repo: none
 ---
 
@@ -24,7 +24,7 @@ No research note: the approach was settled in conversation on 2026-09-26, and th
 
 ## Background
 
-Read at `a69b04a` on 2026-09-26.
+Read at `6f8f122` on 2026-09-26.
 
 - **`/spec` leaves the spec and record uncommitted** for the user (`skills/spec/SKILL.md:116`), and hands over with a prompt, "implement `<spec path>`, W1 first", after a `check-spec.py` gate (`skills/spec/SKILL.md:126`). Quick mode reuses that prompt (`skills/spec/SKILL.md:118`).
 - **`/spec finish` takes read-at from the frontmatter** (`skills/spec/SKILL.md:108`); read-at is only ever set when a spec is first framed (`skills/spec/SKILL.md:52`). So nothing moves it after the code moves on.

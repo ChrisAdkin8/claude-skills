@@ -4,7 +4,7 @@ created: 2026-09-26
 status: draft # draft | reviewed | in-progress | done | superseded
 research: none
 idea: none
-read-at: a69b04a
+read-at: 6f8f122
 cite-repo: none
 ---
 
@@ -24,7 +24,7 @@ No research note: the approach was settled in conversation on 2026-09-26, and th
 
 ## Background
 
-Read at `a69b04a` on 2026-09-26.
+Read at `6f8f122` on 2026-09-26.
 
 - **Headless agents.** `run-agent.sh` runs only four named agents (`hooks/run-agent.sh:46-49`), launching `claude -p` with the sandbox settings and `--setting-sources user` (`hooks/run-agent.sh:91-97`). It writes the result to `reply.md` and exits 3 when the reply lacks its agent's closing lines (`hooks/run-agent.sh:99-140`).
 - **Spikes are the closest pattern to a verifier that runs code.** `prepare-spike.sh` checks the scratch path is `~/.cache/spec-spikes/<repo>/<spec>/S<n>` (`skills/spec/scripts/prepare-spike.sh:20-22`), resolves the parent and refuses a symlinked scratch directory (`skills/spec/scripts/prepare-spike.sh:32-40`), and exports the repo at a commit with `git archive` (`skills/spec/scripts/prepare-spike.sh:43-47`). `run-spike.sh` resolves its argument, then checks the prefix (`skills/spec/scripts/run-spike.sh:13-17`), and runs `claude -p` there with its own settings, `Write(./**)` and `Edit(./**)`, $2 and 60 turns (`skills/spec/scripts/run-spike.sh:32-39`); it checks no reply shape. The spike settings allow no network and deny reads of `~/code`, `~/notes` and `~/.claude` (`skills/spec/spike-settings.json:5-12`), and the sandbox refuses writes inside any directory named `.git` (`skills/spec/spiker.md:17`).

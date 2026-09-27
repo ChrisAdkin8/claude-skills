@@ -4,7 +4,7 @@ created: 2026-09-20
 status: draft # draft | reviewed | in-progress | done | superseded
 research: none
 idea: none
-read-at: 23b0ace
+read-at: 3a922f1
 cite-repo: none
 ---
 
@@ -20,7 +20,7 @@ Tighten the researcher's own budget for quick notes, and leave the hard limits a
 
 ## Background
 
-Read at `23b0ace`.
+Read at `3a922f1`.
 
 - The hard limit for a full-depth note is 2,000 words (`skills/research/scripts/check-note.py:27`).
 - `--headroom` applies the researcher's lower budgets, from `HEADROOM_BUDGET` (`skills/research/scripts/check-note.py:28`).

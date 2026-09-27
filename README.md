@@ -258,7 +258,8 @@ around an agent that does. Two layers contain them.
   writes, searches and web fetches. It keeps credentials out of their reach, since a fetched page
   could trick an agent into sending them out in a web address. It also hides session history (past
   conversations and earlier agent runs), so a verifier or cold reviewer can't see how the document
-  it checks was written.
+  it checks was written. If the guard itself fails, it refuses the call rather than letting it
+  through.
 
 Some things run outside the sandbox, and not all of them are checked by the guard:
 
@@ -325,7 +326,7 @@ A cap stops a run only after the turn that crosses it, so a run can go over by u
 | `docs/specs/` | the specs for changes to this repo; spike results are in `docs/specs/spikes/` |
 | `docs/workflow*.png` | the diagram, drawn by `docs/diagram/workflow.py` |
 | `records/` | the review history of this README |
-| `tests/test_*.py` | fast tests for the guard, the two checkers (`check-note.py` and `check-spec.py`), `build-index.py`, `review-state.py`, `prepare-spike.sh` and `run-agent.sh` |
+| `tests/test_*.py` | fast tests for the guard, the two checkers (`check-note.py` and `check-spec.py`), `build-index.py`, `review-state.py`, `git-read.py`, `prepare-spike.sh`, `run-spike.sh` and `run-agent.sh`, and that the guard and both sandbox settings deny the same paths |
 | `tests/replay_guard.py` | runs real recorded commands and file reads through the guard |
 | `tests/agent-evals/` | runs the verifiers and the cold reviewer against documents with planted mistakes, and the researcher on sample questions |
 | `tests/skill-evals/` | runs whole skills against throwaway repos |

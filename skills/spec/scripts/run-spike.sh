@@ -9,14 +9,21 @@
 # check won't pre-approve that compound command from allowed-tools (spike 2).
 set -euo pipefail
 
-[ $# -eq 1 ] || { echo "usage: run-spike.sh <scratch dir>" >&2; exit 2; }
-scratch=$(cd "$1" && pwd -P)
-case "$scratch/" in
-  "$HOME/.cache/spec-spikes/"*) ;;
-  *) echo "not under ~/.cache/spec-spikes/: $1" >&2; exit 2 ;;
+die() { echo "run-spike: $*" >&2; exit 2; }
+
+[ $# -eq 1 ] || die "usage: run-spike.sh <scratch dir>"
+# Both sides resolved, so a symlinked home still matches. The layout is prepare-spike.sh's:
+# <root>/<repo dir name>/<spec basename>/S<n>, so not the root itself or its .uv-cache.
+root=$(cd "$HOME/.cache/spec-spikes" 2>/dev/null && pwd -P) || die "no ~/.cache/spec-spikes"
+scratch=$(cd "$1" 2>/dev/null && pwd -P) || die "no such scratch dir: $1"
+name='[A-Za-z0-9][A-Za-z0-9._-]*'
+case "$scratch" in
+  "$root"/*) [[ ${scratch#"$root"/} =~ ^$name/$name/S[0-9]+$ ]] ||
+    die "scratch must be ~/.cache/spec-spikes/<repo>/<spec>/S<n>, not $1" ;;
+  *) die "not under ~/.cache/spec-spikes/: $1" ;;
 esac
 for f in brief.md settings.json; do
-  [ -f "$scratch/$f" ] || { echo "missing $scratch/$f" >&2; exit 2; }
+  [ -f "$scratch/$f" ] || die "missing $scratch/$f"
 done
 
 # Spikes get their own uv cache. The user's ~/.cache/uv holds the unpacked packages every real

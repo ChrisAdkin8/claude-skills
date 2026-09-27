@@ -27,6 +27,7 @@
   },
   "permissions": {
     "deny": ["Read(~/.ssh/**)", "Read(~/.aws/**)", "Read(~/.kube/**)", "Read(~/.gnupg/**)", "Read(~/.docker/**)", "Read(~/.netrc)", "Read(~/.git-credentials)", "Read(~/.azure/**)", "Read(~/.npmrc)", "Read(~/.pypirc)", "Read(~/.config/**)", "Read(~/.claude.json)", "Read(~/.claude/.credentials.json)",
+             "Read(~/.zsh_history)", "Read(~/.bash_history)", "Read(~/Library/Keychains/**)", "Read(~/Library/Cookies/**)", "Read(~/Library/Application Support/Google/Chrome/**)",
              "Read(~/.claude/history.jsonl)", "Read(~/.claude/file-history/**)", "Read(~/.claude/sessions/**)", "Read(~/.claude/session-env/**)", "Read(~/.claude/shell-snapshots/**)", "Read(~/.claude/paste-cache/**)", "Read(~/.cache/agent-runs/**)"]
   }
 }

@@ -7,7 +7,8 @@ skill you're editing to be the one you're running.
 ## Before committing
 
 - `python3 -m unittest discover -s tests` — deterministic tests for the guard, both checkers,
-  `build-index.py`, `review-state.py`, `prepare-spike.sh` and `run-agent.sh`.
+  `build-index.py`, `review-state.py`, `git-read.py`, `prepare-spike.sh`, `run-spike.sh`,
+  `run-agent.sh`, and that the guard's and both sandbox settings' deny lists agree.
 - `python3 tests/replay_guard.py` — the guard against real recorded commands and file reads.
 - After changing an agent or skill file, run `tests/agent-evals/run.sh` by hand. A full run cost
   $3.70 to $4.46 on 2026-09-27 and each case is capped at $5 (`research-ideas` at $10), so it

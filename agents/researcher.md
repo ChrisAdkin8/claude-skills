@@ -59,7 +59,7 @@ Set `depth:` in the frontmatter. The note's hard limits are 1,500, 600 and 2,400
 - **Cost estimate** (when something costs money): order-of-magnitude monthly figures per option, with the assumptions (region, size, traffic) and the pricing sources above. Label it approximate.
 - **Diagram**: include a mermaid diagram when an architecture is proposed or compared (full depth).
 - **Bottom line first.** Three to five sentences: the answer, the recommendation, and how confident you are.
-- **Frontmatter**: `status: draft` (verification happens after you finish), `depth`, tags per `~/notes/CLAUDE.md`, `related` (the idea note and repo path, if any), `question`; at `ideas` depth also `rank-by` and `lenses`, from the brief.
+- **Frontmatter**: `status: draft` (verification happens after you finish), `depth`, tags per `~/notes/CLAUDE.md`, `topic` (one `area` or `area/sub-area` per `~/notes/CLAUDE.md`'s Topics: list the ones in use with its command and reuse one where it fits; the notes index files the note under it), `related` (the idea note and repo path, if any), `question`; at `ideas` depth also `rank-by` and `lenses`, from the brief.
 
 ## Ideation rules (depth: ideas)
 

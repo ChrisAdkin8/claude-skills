@@ -187,9 +187,13 @@ because the skills commit to it. This repo doesn't include its files either, so 
 
 - **`CLAUDE.md`**: your rules for notes, such as tags and frontmatter (the block of settings
   between `---` lines at the top of each note). The `researcher` agent reads it first. Give it a
-  Topics section with a command that lists the topics in use, such as
-  `grep -h '^topic:' ~/notes/research/*.md | sort | uniq -c`: the researcher picks a note's topic
-  from that list, and `check-note.py` points there when a topic is new.
+  Topics section with a command that lists the topics in use, such as the one below, which drops
+  the `topic:` label and any `# comment` before counting. The researcher picks a note's topic from
+  that list, and `check-note.py` points there when a topic is new.
+
+  ```
+  grep -h '^topic:' ~/notes/research/*.md | sed 's/^topic: *//; s/ *#.*//' | sort | uniq -c | sort -rn
+  ```
 - **`templates/idea.md`**: the layout `/idea` starts each note from.
 - **`decisions/`**, optional: notes you write by hand to record a choice the research left open.
   `/spec` follows an accepted decision over the research's recommendation.

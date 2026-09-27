@@ -124,6 +124,15 @@ class BuildIndex(unittest.TestCase):
         self.write("ideas/i.md", note("Idea I", "seed", related=["~/notes/research/b.md"]))
         self.assertIn("2 topics, 3 notes, 0 unfiled", self.build()[0])
 
+    def test_awkward_file_names_keep_their_links(self):
+        self.write("research/a.md", note("Note A", "final", "a"))
+        self.write("ideas/my idea (v2).md", note("Idea", "seed", related=["~/notes/research/a.md"]))
+        self.write("ideas/odd<name>.md", note("Odd", "seed", related=["~/notes/research/a.md"]))
+        text = self.build()[1]
+        self.assertIn("  - [Idea](<ideas/my idea (v2).md>) · seed", text)
+        self.assertIn("  - [Odd](ideas/odd%3Cname%3E.md) · seed", text)
+        self.assertIn("- [Note A](research/a.md) · final", text)  # plain names are unchanged
+
     def test_dotfile_is_left_out(self):
         self.write("research/a.md", note("Note A", "final", "a"))
         self.write("research/.eval-case-1.md", note("Eval note", "draft", "a"))

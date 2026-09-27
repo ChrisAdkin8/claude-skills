@@ -10,6 +10,10 @@ To try them, see [Requirements](#requirements), [Install](#install) and
 
 A few terms used throughout:
 
+- **Skill**: a set of instructions Claude Code loads when you type its command, such as `/research`.
+  Each skill is a folder under `skills/`.
+- **Hook**: a script Claude Code runs automatically at a set moment, such as before each tool call.
+  This repo's hooks are in `hooks/`.
 - **Agent**: a separate Claude run with its own instructions, launched to do one job, such as
   research a question or check a document.
 - **Spec**: a plan for changing a repo, split into work items. Each item says what to change and
@@ -73,10 +77,14 @@ The six stages match the diagram.
    - A `cold-reviewer` agent gives the spec a cold review. It uses the same instructions as
      `/cold-review`, and looks for guesses stated as facts and costs nobody counted.
 
-   The spec's record keeps the review word for word, along with what the verifier found and what
-   the spikes answered. If you change the spec after its review, the record lists each change as a
+   The spec's record keeps the review word for word. It also keeps what the verifier found and
+   what the spikes answered.
+
+   You may change the spec after its review. If you do, the record lists each change as a
    `Not reviewed:` line. Run `/cold-review <spec>` to give those changes a delta review before you
-   build. Until then, `check-spec.py` won't pass a spec that's marked ready to build or being built.
+   build. A spec's `status` says where it is, such as `draft`, `reviewed` (ready to build), `in-progress`
+   or `done`. While a spec has changes with no delta review, `check-spec.py` fails it if its status
+   is `reviewed` or `in-progress`, so it can't be built by mistake.
 
    For a small change whose approach is settled, `/spec quick` stops after the verifier: no cold
    review, no spikes. `/spec finish <spec>` gives it the cold review later, and
@@ -146,8 +154,8 @@ save it. The files refer to each other by `~/.claude/...` paths, which the links
 The skills keep notes in `~/notes`, and this repo doesn't create it. It has to be a git repo,
 because the skills commit to it. This repo doesn't include its files either, so you write your own:
 
-- **`CLAUDE.md`**: your rules for notes, such as tags and frontmatter. The `researcher` agent
-  reads it first.
+- **`CLAUDE.md`**: your rules for notes, such as tags and frontmatter (the block of settings
+  between `---` lines at the top of each note). The `researcher` agent reads it first.
 - **`templates/idea.md`**: the layout `/idea` starts each note from.
 - **`templates/research.md`** and **`templates/research-ideas.md`**: the layouts the `researcher`
   agent starts from, for a normal research note and for a ranked list of ideas. `check-note.py`
@@ -240,12 +248,13 @@ Spikes are contained differently. They don't run under the guard; their own sand
   environment variable overrides both.
 - **Each spike** is capped at $2 and 60 turns. Assume a spike that fetches anything from the web
   costs close to the cap.
-- **The agent evaluations** (see [Checks](#checks)) spend real money too. Their full run of ten
-  cases on 2026-09-25 cost $4.02. Each case is capped at $5, and the cases run at the same time,
+- **The agent evaluations** (see [Checks](#checks)) spend real money too. Three full runs of their ten
+  cases on 2026-09-27 cost between $3.70 and $4.46. Each case is capped at $5, and the cases run at the same time,
   so a run that goes wrong can cost far more.
 - **The skill evaluations** cost about $0.30 each, capped at $3 each.
 
-A cap stops a run only after the turn that crosses it, so a run can go over by up to one turn.
+A cap stops a run only after the turn that crosses it, so a run can go over by up to one turn. A
+*turn* is one step of a run: Claude replies once, and may use a tool.
 
 ## Layout
 

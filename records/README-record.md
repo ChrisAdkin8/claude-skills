@@ -50,3 +50,4 @@ Needs a run: 1, 3, 9, 10
 - Not reviewed: Layout lists `scripts/build-index.py`, which rebuilds the notes index in `~/notes`, and says `mdcheck.py` is shared with it too; the fast tests' list names `build-index.py`, on 2026-09-27.
 - Not reviewed: Layout says `/research` runs `build-index.py` before its commit, on 2026-09-27.
 - Not reviewed: stage 2 says `/research` rebuilds `~/notes/index.md`; Set up `~/notes` asks for a `topic:` line in the research templates; a new section, View the notes as a mind map, says what the index is and gives three ways to open it, on 2026-09-27.
+- Not reviewed: readability fixes: Skill and Hook added to the terms, frontmatter and turn explained where first used, stage 3's record and status paragraph split and the status names spelled out, and the agent-eval cost updated to 2026-09-27's runs, on 2026-09-27.

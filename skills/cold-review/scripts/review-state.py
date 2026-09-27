@@ -18,10 +18,11 @@ Prints `key: value` lines, then `state:` last:
 The review lives in the record, records/<basename>-record.md beside the document, or in an
 older document under its own `## Cold review`. The review commit is the oldest commit that
 added the review's "Reviewed on <date> by" line, searched in the record and the document
-together, so it survives a later move of the review into a record. If the review is now in a
-record and that commit also changed a document that already existed, the diff base is the
-commit's parent, so folds saved in the same commit aren't missed. Read-only: runs git log,
-show, cat-file and diff, nothing else.
+(each followed through renames), so it survives a later move of the review into a record, or
+a rename of either. If the review is now in a record and that commit also changed a document
+that already existed, the diff base is the commit's parent, so folds saved in the same commit
+aren't missed. The diff names the document's old path too, if it was renamed since. Read-only:
+runs git log, show, cat-file, merge-base and diff, nothing else.
 """
 
 import re
@@ -30,7 +31,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "research" / "scripts"))
-from mdcheck import NOT_REVIEWED, section
+from mdcheck import NOT_REVIEWED, in_code, is_heading, section
 
 DATE_LINE = re.compile(r"Reviewed on (\d{4}-\d{2}-\d{2}) by")
 DELTA = re.compile(r"###\s+Delta review")
@@ -39,9 +40,10 @@ HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", re.MULTILINE)
 
 def git(root, *args):
     run = subprocess.run(
-        ["git", "--no-pager", "-C", str(root), *args],
+        ["git", "--no-pager", "-c", "core.quotePath=off", "-C", str(root), *args],
         capture_output=True,
         text=True,
+        errors="replace",
         check=False,
     )
     return run.stdout if run.returncode == 0 else None
@@ -49,14 +51,9 @@ def git(root, *args):
 
 def headings_at(lines, numbers):
     """The heading each 1-based line number falls under, in document order, fences skipped."""
-    owner, current, fence = {}, "(before the first heading)", None
-    for n, line in enumerate(lines, start=1):
-        m = re.match(r"\s*(`{3,}|~{3,})", line)
-        if m and fence is None:
-            fence = m.group(1)
-        elif m and fence and line.strip()[0] == fence[0] and len(line.strip()) >= len(fence):
-            fence = None
-        elif fence is None and re.match(r"#{1,6}\s", line):
+    owner, current = {}, "(before the first heading)"
+    for n, (line, code) in enumerate(zip(lines, in_code(lines)), start=1):
+        if not code and is_heading(line):
             current = line.strip()
         owner[n] = current
     found = []
@@ -67,6 +64,34 @@ def headings_at(lines, numbers):
         if heading not in found:
             found.append(heading)
     return found
+
+
+def oldest(root, commits):
+    """The earliest of commits on one line of history."""
+    first = None
+    for commit in commits:
+        if first is None or git(root, "merge-base", "--is-ancestor", commit, first) is not None:
+            first = commit
+    return first
+
+
+def path_at(root, commit, rel):
+    """What `rel` was called at `commit`, if it has been renamed since."""
+    for line in (git(root, "diff", "-M", "--name-status", commit, "--") or "").splitlines():
+        status, *names = line.split("\t")
+        if status.startswith("R") and len(names) == 2 and names[1] == rel:
+            return names[0]
+    return rel
+
+
+def changed_lines(hunks):
+    """1-based line numbers of the document each `-U0` hunk touches. A hunk that only deletes
+    has no lines of its own, so it counts the line it follows."""
+    lines = set()
+    for m in HUNK.finditer(hunks):
+        start, count = int(m.group(1)), int(m.group(2) or 1)
+        lines.update(range(start, start + count) if count else [max(start, 1)])
+    return lines
 
 
 def main():
@@ -115,28 +140,35 @@ def main():
             paths = [
                 p.relative_to(root).as_posix() for p in (record, doc) if p.is_file()
             ]
-            hits = (
-                git(root, "log", "--format=%h", f"-S{needle}", "--", *paths) or ""
-            ).split()
-            commit = hits[-1] if hits else None
+            # One path at a time, following renames: otherwise a later `git mv` of the record
+            # is the oldest commit that "added" the line, and the edits before it are missed.
+            hits = [
+                found.split()[-1]
+                for path in paths
+                if (found := git(root, "log", "--follow", "--format=%h", f"-S{needle}", "--", path))
+                and found.strip()
+            ]
+            commit = oldest(root, hits)
             out["review-commit"] = commit or "none"
             if commit:
                 base = commit
-                touched = git(root, "show", "--stat", "--format=", commit, "--", rel)
-                existed = git(root, "cat-file", "-e", f"{commit}^:{rel}") is not None
+                old = path_at(root, commit, rel)
+                touched = git(root, "show", "--stat", "--format=", commit, "--", old)
+                existed = git(root, "cat-file", "-e", f"{commit}^:{old}") is not None
                 if where == "record" and touched and touched.strip() and existed:
                     base = f"{commit}^"
                 base = (git(root, "rev-parse", "--short", base) or base).strip()
         out["base"] = base or "none"
         if base:
-            out["diff"] = f"git -C {root} diff {base} -- {rel}"
-            stat = (git(root, "diff", "--stat", base, "--", rel) or "").strip()
+            # Both names if the document was renamed since, so the diff pairs them up.
+            names = list(dict.fromkeys([path_at(root, base, rel), rel]))
+            out["diff"] = f"git -C {root} diff -M {base} -- {' '.join(names)}"
+            stat = (git(root, "diff", "-M", "--stat", base, "--", *names) or "").strip()
             out["changed"] = "yes" if stat else "no"
             if stat:
                 out["stat"] = stat.splitlines()[-1].strip()
-                hunks = git(root, "diff", "-U0", base, "--", rel) or ""
-                lines = {int(m.group(1)) or 1 for m in HUNK.finditer(hunks)}
-                out["headings"] = "; ".join(headings_at(doc_lines, lines))
+                hunks = git(root, "diff", "-M", "-U0", base, "--", *names) or ""
+                out["headings"] = "; ".join(headings_at(doc_lines, changed_lines(hunks)))
 
     if where == "none":
         state = "full"

@@ -4,5 +4,9 @@
 # The reply is complete, so an empty or cut-off reply can't pass.
 (?m)Confirmed:
 (?m)Plan holds:
+# A row for each of the spec's three citations, so a verifier that checked almost nothing fails.
+(?m)^\|.*\b31\b
+(?m)^\|.*\b187\b
+(?m)^\|.*\b394\b
 # No table row checks the record's citation.
 !(?m)^\|.*\b999\b

@@ -9,6 +9,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+# How past replies said it: "Unlogged changes", "A change nobody logged", "never logged", "isn't
+# logged anywhere", "no `Not reviewed:` line covers it", "has no line".
+UNLOGGED = re.compile(
+    r"(?i)un-?logged|\b(?:not|nobody|never|isn't|wasn't)\s+(?:been\s+)?logged|no\s+`?not reviewed|has no\b[^.\n]*\bline"
+)
+
 repo, result = Path(sys.argv[1]), json.loads(Path(sys.argv[2]).read_text())
 reply = result.get("result", "")
 hashes = dict(l.split("=", 1) for l in (repo / ".git/eval-hashes").read_text().split())
@@ -23,7 +29,11 @@ checks = {
     "the diff starts at the review, not the move": bool(bases)
     and all(b[:7] in (hashes["created"], hashes["saved"]) for b in bases),
     "the logged change is quoted": "overwrites `data/`" in reply,
-    "the unlogged Rollback edit is named": bool(re.search(r"(?i)rollback", reply)),
+    # Named as unlogged, in one paragraph or bullet: Rollback alone is also a section name.
+    "the unlogged Rollback edit is named": any(
+        re.search(r"(?i)rollback", part) and UNLOGGED.search(part)
+        for part in re.split(r"\n\s*\n|\n\s*[-*] ", reply)
+    ),
     "it's a delta review": bool(re.search(r"(?i)delta review", reply)),
     "no file changed": changed.strip() == "",
 }

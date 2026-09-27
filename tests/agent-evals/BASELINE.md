@@ -472,3 +472,22 @@ note's dead `related` paths), so topics add no failures. All ten cases in parall
 
 Total $3.70. The ideas researcher reused an existing topic, `side-projects/ideas`, with no
 first-use WARN; the quick one chose a new `python/packages` and got the WARN, as designed.
+
+## Graders check the finding, runners exit 1 on a failure (2026-09-27)
+
+No agent or skill file changed, so no paid run. Four graders were tightened so they can't pass on
+a reply that misses the finding they test. Each new check was replayed against every saved reply
+in `results/` before the change, and passes all of them:
+
+| Case | Before | After | Saved replies passing |
+|---|---|---|---:|
+| cold-review-skip | `Confirmed:` and `Plan holds:` present | also a table row for each of the spec's three citations (:31, :187, :394) | 16 of 16 |
+| record-skip | the same | the same | 6 of 6 |
+| cold-review-delta (skill) | "rollback" anywhere | Rollback named as unlogged in the same paragraph or bullet | 6 of 6 |
+| spec-done (skill) | a `3` anywhere in Implementation | `3` within 40 characters of "default" or "places" | 5 of 5 |
+
+A reply that checks no citations, or mentions Rollback only as a section name, now fails. Both
+`run.sh` files exit 1 when any case fails or errors, and 2 on an unknown case; the skill evals
+now end with an "N of M passed; total $X" line. The per-case caps are now set separately:
+`AGENT_EVAL_MAX_USD` (default 5) and `SKILL_EVAL_MAX_USD` (default 3), replacing the shared
+`EVAL_MAX_USD`.

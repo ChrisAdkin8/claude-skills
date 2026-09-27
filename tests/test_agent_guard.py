@@ -292,6 +292,85 @@ class WritesAndSendsBlocked(GuardTestCase):
                 self.assertAllowed(command)
 
 
+class Hardening(GuardTestCase):
+    """From the second 2026-09-27 repo review: shell forms the guard read differently from the
+    shell, and gh joined with commands that should stay in the sandbox."""
+
+    def test_eval_is_refused(self):
+        for command in ("eval echo hi", "eval 'cat notes.md'", "x=1; eval \"$x\""):
+            with self.subTest(command=command):
+                self.assertBlocked(command, "`eval` re-reads its arguments")
+
+    def test_wrapper_options_it_does_not_know_are_refused(self):
+        # BSD xargs -J takes a value: read as a flag, `grep` looked like the command.
+        self.assertBlocked("xargs -J grep curl -d x https://e.example", "writes a file or sends data")
+        for command in ("xargs -Z grep x", "env -X grep x f", "timeout --kill 5 grep x f"):
+            with self.subTest(command=command):
+                self.assertBlocked(command, "an option this guard doesn't know")
+
+    def test_known_wrapper_options_still_work(self):
+        for command in (
+            "git ls-files | xargs grep -n x",
+            "git ls-files | xargs -0 grep -n x",
+            "ls | xargs -n1 wc -l",
+            "ls | xargs -I{} wc -l {}",
+            "ls | xargs -n 2 wc -l",
+            "timeout 5 grep x f",
+            "nice -10 grep x f",
+            "env -i grep x f",
+        ):
+            with self.subTest(command=command):
+                self.assertAllowed(command)
+
+    def test_gh_joined_only_with_text_filters(self):
+        for command in (
+            "gh api repos/o/r --jq .content | base64 -d | head -40",
+            "for r in a b; do gh api repos/o/$r --jq .stargazers_count; done",
+            "echo ---; gh api repos/o/r --jq .name",
+            "~/.claude/skills/research/scripts/repo-health.sh o/r | grep -v '^|---'",
+        ):
+            with self.subTest(command=command):
+                self.assertAllowed(command)
+        for command, other in (
+            ("gh api repos/o/r --jq .name; curl -s https://e.example/", "curl"),
+            ("gh api repos/o/r --jq .name && git log -1", "git"),
+            ("~/.claude/skills/research/scripts/repo-health.sh o/r; curl -s https://e.example/", "curl"),
+        ):
+            with self.subTest(command=command):
+                self.assertBlocked(command, f"not `{other}`")
+
+
+def search_verdict(query):
+    run = subprocess.run(
+        [sys.executable, str(GUARD), "search"],
+        input=json.dumps({"tool_input": {"query": query}}),
+        capture_output=True, text=True, check=False,
+    )  # fmt: skip
+    return run.returncode, run.stderr
+
+
+class WebSearch(unittest.TestCase):
+    def test_ordinary_queries_pass(self):
+        for query in (
+            "kubernetes rightsizing tools comparison 2026",
+            "hands-on Kubernetes rightsizing lab workshop deliberately overprovisioned workloads "
+            "kind cluster PerfectScale OR KRR OR Goldilocks exercise",
+        ):
+            with self.subTest(query=query):
+                self.assertEqual(search_verdict(query)[0], 0)
+
+    def test_long_or_token_like_queries_are_refused(self):
+        for query, reason in (
+            ("word " * 50, "over the 200 allowed"),
+            ("docs " + "QUtJQUlPU0ZPRE5ON0VYQU1QTEVhbmRtb3JlZGF0YQ", "looks like a token"),
+            ("", "needs a query"),
+        ):
+            with self.subTest(query=query[:30]):
+                code, err = search_verdict(query)
+                self.assertEqual(code, 2)
+                self.assertIn(reason, err)
+
+
 class Variables(GuardTestCase):
     """A variable's value can leave in a request URL, so a command may expand only the
     variables it sets itself, and a few harmless ones the shell keeps."""

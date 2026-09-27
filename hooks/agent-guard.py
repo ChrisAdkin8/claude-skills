@@ -151,8 +151,10 @@ KEYWORDS = {
     "!",
 }
 # Wrappers that run the command after their own options: name -> options that take a value.
+# WRAPPER_FLAGS lists the ones that take none; any other option is refused, since an option read
+# as taking no value when it takes one (BSD `xargs -J`) would hide which command runs.
 WRAPPERS = {
-    "env": {"-u", "--unset", "-C", "--chdir"},
+    "env": {"-u", "--unset", "-C", "--chdir", "-P"},
     "timeout": {"-s", "--signal", "-k", "--kill-after"},
     "nice": {"-n", "--adjustment"},
     "time": set(),
@@ -167,10 +169,39 @@ WRAPPERS = {
         "-d",
         "-E",
         "-a",
+        "-J",
+        "-R",
+        "-S",
         "--max-args",
         "--max-procs",
+        "--max-lines",
+        "--max-chars",
+        "--arg-file",
+        "--delimiter",
+        "--eof",
+        "--replace",
     },
 }
+WRAPPER_FLAGS = {
+    "env": {"-i", "-0", "-v", "--ignore-environment", "--null"},
+    "timeout": {"--foreground", "--preserve-status", "-v", "--verbose"},
+    "nice": set(),
+    "time": {"-p", "-l", "-h"},
+    "command": {"-p"},
+    "nohup": set(),
+    "xargs": {"-0", "-t", "-r", "-x", "-o", "--null", "--verbose", "--no-run-if-empty", "--exit"},
+}
+# gh and the network scripts run outside the OS sandbox (agent-sandbox.json's excludedCommands),
+# and Claude Code doesn't document how it matches a command that joins them with others; the
+# headless runs show joined ones working, so they may run unsandboxed too. Such a command may join
+# them only with these: text filters, loops and cd, nothing that reaches the network or a repo.
+JOINABLE = {"echo", "printf", "tr", "sed", "jq", "grep", "egrep", "cut", "head", "tail", "sort",
+            "uniq", "wc", "base64", "paste", "fold", "column", "nl", "rev", "cat", "cd", "ls",
+            "date", "true", "sleep", "test", "[", "basename", "dirname", "for", "select", "while",
+            "until", "gh"}  # fmt: skip
+# A web search query goes to the search provider unchecked by the sandbox, so it's capped like a
+# request: real queries run to 139 characters, and none holds a 40-character token.
+MAX_QUERY = 200
 GIT_READ = {
     "log", "show", "diff", "blame", "grep", "ls-files", "ls-tree", "rev-parse", "status",
     "cat-file", "describe", "shortlog", "rev-list", "merge-base", "name-rev", "for-each-ref",
@@ -622,6 +653,22 @@ def unwrap(argv):
         while rest and (rest[0].startswith("-") or ASSIGNMENT.fullmatch(rest[0])):
             if m := ASSIGNMENT.fullmatch(rest[0]):
                 assigned.append(m.group(1))  # after a wrapper, always exported
+            elif rest[0] != "--":
+                option = rest[0].split("=", 1)[0]
+                takes_value = option in with_value or (
+                    option[:2] in with_value and len(option) > 2 and not option.startswith("--")
+                )  # -n5, -I{}
+                if not takes_value and option not in WRAPPER_FLAGS[name] and not (
+                    name == "nice" and re.fullmatch(r"-\d+", option)
+                ):
+                    block(f"`{name} {option}`: an option this guard doesn't know, so it can't "
+                          "tell which command runs")
+                if takes_value and ("=" in rest[0] or option not in with_value):
+                    rest = rest[1:]  # the value is in the same word
+                    continue
+            else:
+                rest = rest[1:]
+                break
             rest = rest[2:] if rest[0] in with_value else rest[1:]
         if name == "timeout" and rest:
             rest = rest[1:]  # the duration
@@ -1118,6 +1165,8 @@ def check_command(command, depth=0, local=None, clean=None):
     subs, expands = substitutions(command)
     for sub in subs:
         check_command(sub, depth + 1, local, clean)
+    if depth == 0:
+        check_joined_outside_sandbox(command)
     for raw in simple_commands(tokens(command)):
         argv = unwrap(raw)
         check_secrets(raw, argv)
@@ -1153,8 +1202,10 @@ def check_command(command, depth=0, local=None, clean=None):
                 continue
             block(f"`{name}` may only run the /research and /spec skill scripts")
         if name == "eval":
-            check_command(" ".join(args), depth + 1, local, clean)
-            continue
+            # Re-joining its words loses their quoting, so the shell may read them differently
+            # from how the guard would. No agent has needed it.
+            block("`eval` re-reads its arguments as a new command, which can't be checked here; "
+                  "run the command directly")
         if "/" in word and path.parent not in (
             Path("/bin"),
             Path("/usr/bin"),
@@ -1180,6 +1231,45 @@ def check_command(command, depth=0, local=None, clean=None):
                 f"`{name}` isn't on this agent's command list: reading and text tools, curl, "
                 "gh and git (read-only), and the skill scripts"
             )
+
+
+def command_names(command, depth=0):
+    """The command name of every simple command, in $(...) too, keywords and wrappers stripped."""
+    if depth > 4:
+        return []
+    names = [n for sub in substitutions(command)[0] for n in command_names(sub, depth + 1)]
+    for raw in simple_commands(tokens(command)):
+        argv = unwrap(raw)
+        if argv:
+            names.append(argv[0])
+    return names
+
+
+def check_joined_outside_sandbox(command):
+    names = command_names(command)
+    outside = [
+        n for n in names
+        if os.path.basename(n) == "gh" or ("/" in n and Path(n).expanduser().resolve() in NET_SCRIPTS)
+    ]  # fmt: skip
+    if not outside or len(names) < 2:
+        return
+    others = sorted({os.path.basename(n) for n in names if n not in outside} - JOINABLE)
+    if others:
+        block(
+            f"`{os.path.basename(outside[0])}` runs outside the sandbox, so it may be joined only "
+            f"with text filters, not `{others[0]}`: run `{others[0]}` in a Bash call of its own"
+        )
+
+
+def check_search(query):
+    if not isinstance(query, str) or not query.strip():
+        block("a web search needs a query")
+    if len(query) > MAX_QUERY:
+        block(f"a search query of {len(query)} characters, over the {MAX_QUERY} allowed: a long "
+              "query can carry data out")
+    if re.search(r"[A-Za-z0-9+/_=-]{40,}", query):
+        block("a search query holding a 40-character run of letters and digits looks like a token "
+              "or encoded data; search in words")
 
 
 def check_write(path, allowed_dir):
@@ -1211,6 +1301,8 @@ def main():
         check_read(event.get("tool_name", ""), tool_input)
     elif mode == "fetch":
         check_url(tool_input.get("url", ""))
+    elif mode == "search":
+        check_search(tool_input.get("query", ""))
     elif mode == "write" and len(sys.argv) > 2:
         check_write(tool_input.get("file_path", ""), sys.argv[2])
     else:

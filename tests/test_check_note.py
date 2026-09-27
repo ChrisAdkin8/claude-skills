@@ -344,3 +344,49 @@ class Topic(unittest.TestCase):
     def test_dotfile_sibling_does_not_count(self):
         out, _ = check(with_topic("kubernetes"), siblings={".eval-x.md": with_topic("kubernetes")})
         self.assertIn("has topic 'kubernetes'", out)
+
+
+class MarkdownEdgeCases(unittest.TestCase):
+    """Prose that looks like Markdown syntax isn't read as it."""
+
+    def test_link_url_with_brackets(self):
+        # Every mention above Sources, so the Verification row's claim has only linked copies.
+        prose, sources = FIXTURE.read_text().split("## Sources", 1)
+        link = "[Widgets](https://en.wikipedia.org/wiki/Widget_(thing))"
+        prose = prose.replace("Widgets weigh", f"{link} weigh").replace("widgets weigh", f"{link} weigh")
+        out, result = check(prose + "## Sources" + sources)
+        self.assertEqual(result, "RESULT: PASS", out)
+
+    def test_index_zero_is_not_a_citation(self):
+        text = FIXTURE.read_text().replace(
+            "Use the fixture only in tests.", "Use the fixture only in tests; read args[0] first."
+        )
+        out, result = check(text)
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertNotIn("[0]", out)
+
+    def test_hash_prose_is_not_a_heading(self):
+        text = FIXTURE.read_text().replace(
+            "- No searches were run; this is a fixture.",
+            "#2 on Hacker News said widgets are lighter [1].",
+        )
+        out, result = check(text)
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertNotIn("Counter-evidence is empty", out)
+
+    def test_inline_code_at_line_start_is_not_a_fence(self):
+        text = FIXTURE.read_text().replace(
+            "Use the fixture only in tests.", "```x``` is inline code. Use the fixture only in tests."
+        )
+        out, result = check(text)
+        self.assertEqual(result, "RESULT: PASS", out)
+
+    def test_note_that_is_not_utf8(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            note = Path(tmp) / "note.md"
+            note.write_bytes(FIXTURE.read_bytes().replace(b"fixture only", b"caf\xe9 only"))
+            run = subprocess.run(
+                [sys.executable, str(CHECKER), str(note)], capture_output=True, text=True, check=False
+            )
+        self.assertNotIn("Traceback", run.stderr)
+        self.assertIn("RESULT: PASS", run.stdout)

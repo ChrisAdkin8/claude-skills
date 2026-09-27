@@ -2,7 +2,7 @@
 name: research
 description: Research a question, challenge or idea and write the findings to a cited markdown note in ~/notes/research. Use when the user runs /research, or asks to research, investigate or dig into something and document it. Accepts a prompt or the path to an existing idea note; "quick" for a short answer; "ideas" for a ranked shortlist of things to build or write; "finish <note>" to verify and commit an existing note.
 argument-hint: [quick | ideas] <question or path to an idea note> | finish <path to research note> ["claim to check" ...]
-allowed-tools: Read Edit(~/notes/**) Bash(grep *) Bash(git -C ~/notes status *) Bash(~/.claude/hooks/git-read.py *) Bash(git -C ~/notes add *) Bash(git -C ~/notes commit *) Bash(~/.claude/skills/research/scripts/check-note.py *) Bash(~/.claude/hooks/run-agent.sh *) Edit(~/.cache/agent-runs/**)
+allowed-tools: Read Edit(~/notes/**) Bash(grep *) Bash(git -C ~/notes status *) Bash(~/.claude/hooks/git-read.py *) Bash(git -C ~/notes add *) Bash(git -C ~/notes commit *) Bash(~/.claude/skills/research/scripts/check-note.py *) Bash(~/.claude/skills/research/scripts/build-index.py *) Bash(~/.claude/hooks/run-agent.sh *) Edit(~/.cache/agent-runs/**)
 ---
 
 # Research and document
@@ -14,7 +14,7 @@ The work happens in background agents so the user can keep working:
 1. **Frame** (here, under a minute): settle the question, depth and output path.
 2. **Research**: the `researcher` agent writes the note and self-checks it with `check-note.py`.
 3. **Verify**: the `research-verifier` agent, which has not seen the research, checks the claims the recommendation rests on against their sources.
-4. **Finish** (here): apply the verifier's fixes, record what was checked in the note, re-verify once if the conclusion changed, set the status, link the idea, commit. At `ideas` depth, also merge the new attention data into the shared evidence note and file the top three ideas as idea notes.
+4. **Finish** (here): apply the verifier's fixes, record what was checked in the note, re-verify once if the conclusion changed, set the status, link the idea, rebuild the notes index, commit. At `ideas` depth, also merge the new attention data into the shared evidence note and file the top three ideas as idea notes.
 
 Every commit in `~/notes` names its files after `--` (`git -C ~/notes commit -m '<message>' -- <files>`): another `/research`, `/spec` or `/idea` session may have staged files of its own, and a commit without paths takes the whole index. If git says `index.lock` exists, another session is committing: retry once.
 
@@ -125,8 +125,9 @@ At ideas depth, first check the reply has a `Prior art:` block listing the queri
    A claim that can't be verified (a JavaScript-only pricing page, a login wall) doesn't hold a note in draft forever, as long as it's visibly marked and the Bottom line doesn't stand on it. Otherwise set `status: draft` (in `finish` mode the note may have been `final`); the report says why.
 6. **Link the idea**, if there was one: in the idea note, set `status: exploring` and add the research note's path to `related`. If the Bottom line recommends against the idea, don't go further: say so in the report and suggest `parked` or `dropped`. That call is the user's.
 7. **Ideas depth only**: read `~/.claude/skills/research/ideas-finish.md` and follow it. It merges the new attention data into the shared evidence note and files the top three ideas as idea notes.
-8. **Commit** only the files you created or changed in `~/notes` (the research note, the idea note if edited and, at ideas depth, the evidence note and the idea notes filed in step 7): `git -C ~/notes add <files>`, then `git -C ~/notes commit -m 'research: <title>' -- <files>`, following this session's commit attribution rules. Don't push.
-9. **Report** in five lines or fewer (six at ideas depth):
+8. **Rebuild the notes index**: run `~/.claude/skills/research/scripts/build-index.py ~/notes`. It rewrites `index.md` in `~/notes` from every note's `topic`, so it picks up this note, any idea notes filed in step 7, and notes other sessions added. If it fails, say so in the report and commit without the index.
+9. **Commit** only the files you created or changed in `~/notes` (the research note, the idea note if edited, `index.md` from step 8 and, at ideas depth, the evidence note and the idea notes filed in step 7): `git -C ~/notes add <files>`, then `git -C ~/notes commit -m 'research: <title>' -- <files>`, following this session's commit attribution rules. Don't push.
+10. **Report** in five lines or fewer (six at ideas depth):
    - the note path;
    - the bottom line in two sentences;
    - verification, e.g. `9 of 10 claims confirmed (a sample of 31 cited), 1 corrected, 1 left unverified`, and whether the conclusion changed;

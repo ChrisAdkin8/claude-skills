@@ -19,7 +19,7 @@ repo, result = Path(sys.argv[1]), json.loads(Path(sys.argv[2]).read_text())
 reply = result.get("result", "")
 hashes = dict(l.split("=", 1) for l in (repo / ".git/eval-hashes").read_text().split())
 # The diff base the prompt gives: `diff <sha> -- ...docs/runbook.md`.
-bases = re.findall(r"diff\s+([0-9a-f]{7,40})(?:\^|~1)?\s+--\s+\S*runbook\.md", reply)
+bases = re.findall(r"diff\s+(?:-\S+\s+)*([0-9a-f]{7,40})(?:\^|~1)?\s+--\s+\S*runbook\.md", reply)
 changed = subprocess.run(["git", "-C", str(repo), "status", "--porcelain"],
                          capture_output=True, text=True).stdout
 checks = {

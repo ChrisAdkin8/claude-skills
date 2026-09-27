@@ -3,7 +3,9 @@
 # subagent with `claude -p --agent`, as the skill would, and grades the reply against expect.txt.
 #
 # Usage: run.sh [case ...]        all cases by default; cases run in parallel
-#   EVAL_MAX_USD   per-case cost ceiling, passed as --max-budget-usd (default 5)
+#   AGENT_EVAL_MAX_USD  per-case cost ceiling, passed as --max-budget-usd (default 5)
+#   EVAL_CASES, EVAL_OUT  the cases and results directories (default: cases/ and
+#                  results/<timestamp>/ here); tests/test_eval_runners.py points them elsewhere
 #   EVAL_MODEL     model to run the agents on (default: your default model)
 #   EVAL_SETTINGS  the settings file passed as --settings (default: hooks/agent-sandbox.json, the
 #                  sandbox run-agent.sh uses, so the evals run the agents as the skills do;
@@ -20,32 +22,34 @@
 # as <case>.note.md, checked with check-note.py --headroom (it must pass), graded against the
 # case's note-expect.txt (same format as expect.txt), and deleted. The run also fails such a case
 # if anything else in ~/notes changed while it ran. Optional turns.txt raises the turn limit
-# from 40, and usd.txt sets the case's own cost ceiling in place of EVAL_MAX_USD.
+# from 40, and usd.txt sets the case's own cost ceiling in place of AGENT_EVAL_MAX_USD.
 #
 # The agents run with their own frontmatter tools pre-approved and their own PreToolUse hook
 # (checked 2026-09-15: the guard blocks `awk` under --agent), in a throwaway directory with read
 # access to ~/.claude, ~/notes and this repo (~/.claude/skills, agents and hooks are symlinks into
 # it), with no MCP servers and no saved session. Every run costs real tokens: run by hand after changing an
 # agent or skill file, not on every commit. Results land in results/<timestamp>/ (git-ignored).
+# Exits 0 only if every case passed, 1 if any failed or ended in an error, 2 on a bad case name.
 set -uo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd -P)
 agents="$HOME/.claude/agents"
 stamp=$(date +%Y%m%d-%H%M%S)
-out="$here/results/$stamp"
+out=${EVAL_OUT:-$here/results/$stamp}
 today=$(date +%Y-%m-%d)
-max_usd=${EVAL_MAX_USD:-5}
+max_usd=${AGENT_EVAL_MAX_USD:-5}
 settings=${EVAL_SETTINGS-$repo/hooks/agent-sandbox.json}
+cases_dir=${EVAL_CASES:-$here/cases}
 mkdir -p "$out"
 
 cases=("$@")
 if [ ${#cases[@]} -eq 0 ]; then
-  while IFS= read -r c; do cases+=("$c"); done < <(ls "$here/cases")
+  while IFS= read -r c; do cases+=("$c"); done < <(ls "$cases_dir")
 fi
 
 run_case() {
-  local c=$1 dir="$here/cases/$1" agent tools brief work
+  local c=$1 dir="$cases_dir/$1" agent tools brief work
   agent=$(cat "$dir/agent.txt")
   # The agent's frontmatter tools line, e.g. "tools: Read, Bash, WebFetch, WebSearch".
   tools=$(sed -n 's/^tools:[[:space:]]*//p' "$agents/$agent.md" | head -1 | tr -d ' ')
@@ -75,7 +79,7 @@ run_case() {
 notes_status() { git -C "$HOME/notes" status --porcelain --untracked-files=all | grep -v '/\.eval-'; }
 
 for c in "${cases[@]}"; do
-  [ -d "$here/cases/$c" ] || { echo "no such case: $c" >&2; exit 2; }
+  [ -d "$cases_dir/$c" ] || { echo "no such case: $c" >&2; exit 2; }
 done
 echo "Running ${#cases[@]} case(s) in parallel; results in $out"
 notes_status > "$out/notes-before"
@@ -83,7 +87,7 @@ for c in "${cases[@]}"; do run_case "$c" & done
 wait
 notes_status > "$out/notes-after"
 
-python3 - "$out" "$here/cases" "${cases[@]}" <<'PY'
+python3 - "$out" "$cases_dir" "${cases[@]}" <<'PY'
 import json, re, sys
 from pathlib import Path
 
@@ -132,4 +136,5 @@ for case in cases:
         passed += 1
         print(f"PASS {case} ({info})")
 print(f"{passed} of {len(cases)} passed; total ${cost:.2f}")
+sys.exit(0 if passed == len(cases) else 1)
 PY

@@ -63,6 +63,7 @@ case "$run/" in "$(cd "$root" && pwd -P)"/?*/?*/) ;; *) die "$run is outside $ro
 
 # The agent file's own tools line, e.g. "tools: Read, Bash, WebFetch, WebSearch".
 tools=$(sed -n 's/^tools:[[:space:]]*//p' "$file" | head -1 | tr -d ' ')
+[ -n "$tools" ] || die "no tools: line in $file"
 # The researcher does the open-ended work; the others check something already written.
 max_usd=${RUN_AGENT_MAX_USD:-5}
 [ "$agent" = researcher ] && max_usd=${RUN_AGENT_MAX_USD:-10}

@@ -38,12 +38,12 @@ apart: it gives any markdown file the same cold review `/spec` gives a spec. Not
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/workflow-narrow-dark.png">
   <img src="docs/workflow-narrow.png" alt="Workflow diagram. Six stages run in order: Capture with /idea, Research with /research,
-Plan with /spec, Spike with /spec spike, Build in a new session, and Close out with /spec done. A
-research-verifier checks the research; check-spec.py, a spec-verifier and a cold-reviewer check
+Plan with /spec, Spike with /spec spike, Implement in a new session, and Close out with /spec done.
+A research-verifier checks the research; check-spec.py, a spec-verifier and a cold-reviewer check
 the spec. /spec quick skips the review and spikes, a spec edited after its review gets a delta
-review before Build, and a build that overturns the research loops back to update the note. A
-band shows /cold-review's five steps for any markdown document, and another shows how every agent
-is contained: its own headless session, an OS sandbox, a guard hook and cost
+review before Implement, and an implementation that overturns the research loops back to update the
+note. A band shows /cold-review's five steps for any markdown document, and another shows how every
+agent is contained: its own headless session, an OS sandbox, a guard hook and cost
 caps.">
 </picture>
 
@@ -82,9 +82,10 @@ The six stages match the diagram.
 
    You may change the spec after its review. If you do, the record lists each change as a
    `Not reviewed:` line. Run `/cold-review <spec>` to give those changes a delta review before you
-   build. A spec's `status` says where it is, such as `draft`, `reviewed` (ready to build),
-   `in-progress` or `done`. While a spec has changes with no delta review, `check-spec.py` fails
-   it if its status is `reviewed` or `in-progress`, so it can't be built by mistake.
+   implement it. A spec's `status` says where it is, such as `draft`, `reviewed` (ready to
+   implement), `in-progress` or `done`. While a spec has changes with no delta review,
+   `check-spec.py` fails it if its status is `reviewed` or `in-progress`, so it can't be implemented
+   by mistake.
 
    For a small change whose approach is settled, `/spec quick` stops after the verifier: no cold
    review, no spikes. `/spec finish <spec>` gives it the cold review later, and
@@ -92,9 +93,10 @@ The six stages match the diagram.
 4. **Spike: `/spec spike <spec>`**, or automatically at the end of `/spec`. Each spike runs as a
    separate Claude session in a scratch copy of the code, inside a sandbox and under a cost cap.
    It writes its verdict and raw output, and `/spec` then updates the spec with the answer.
-5. **Build** in a new session, working from the spec.
-6. **Close out: `/spec done <spec>`**. It notes in the record where the build left the spec,
-   marks the spec done, and points out any research the build proved wrong.
+5. **Implement** in a new session, working from the spec.
+6. **Close out: `/spec done <spec>`**. It notes in the record where the implementation left
+   the spec, marks the spec done, and points out any research the implementation proved
+   wrong.
 
 ### A worked example
 
@@ -112,10 +114,10 @@ The [mind-map index](#view-the-notes-as-a-mind-map) went through every stage on 
 4. **Spike.** A prototype over the real notes showed that two levels of topics stay easy to read:
    5 areas, and at most 7 notes under any heading
    ([results](docs/specs/spikes/2026-09-27-notes-mindmap-index-results.md)).
-5. **Build.** One commit per work item, W1 first; two of them changed only `~/notes`, so they were
-   committed there. Running `/research` for real found a counting bug the tests had missed.
-6. **Close out.** `/spec done` wrote seven lines in the record on where the build left the plan,
-   and marked the spec done.
+5. **Implement.** One commit per work item, W1 first; two of them changed only `~/notes`, so they
+   were committed there. Running `/research` for real found a counting bug the tests had missed.
+6. **Close out.** `/spec done` wrote seven lines in the record on where the implementation left the
+   plan, and marked the spec done.
 
 ## Cold review of any document
 

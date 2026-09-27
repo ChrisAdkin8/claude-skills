@@ -518,3 +518,13 @@ Skill evals: `spec-done` PASS (11 turns, $0.35). `cold-review-delta` FAILed its 
 following renames), and the grader's pattern wanted the commit straight after `diff`. The skill's
 diff was right, from the runbook's first commit. With the pattern allowing options, a re-run
 passed every check (4 turns, $0.28).
+
+## Checker loopholes (2026-09-27)
+
+`check-spec.py`, `check-note.py`, `review-state.py`, `build-index.py` and `mdcheck.py` close the
+loopholes the second 2026-09-27 repo review found, and `review-state.py` prints its `diff:` line
+as a quoted `~/.claude/hooks/git-read.py` command. No agent or skill instruction file changed, and
+the checkers give the same results on all 32 notes in `~/notes`, this repo's 4 specs and the index;
+on 16 specs in other repos, one bare `values.yaml:163-164` is now reported as ambiguous. So the
+agent cases weren't run. Skill evals: `spec-done` PASS (5 turns, $0.30), `cold-review-delta` PASS
+(3 turns, $0.27), which takes the new `diff:` line. Total $0.57.

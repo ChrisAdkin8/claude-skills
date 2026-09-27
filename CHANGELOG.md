@@ -31,6 +31,22 @@ section is a date. Within a day, changes are grouped by area.
 
 ### Changed
 
+- Checks that specs and notes used to pass when they shouldn't:
+  - A `# comment` in a code block no longer ends a record's `## Cold review` section, and a
+    `## Cold review` quoted in a code block isn't taken for a saved review. The heading matches in
+    any case, so `## Cold Review` no longer turns off the delta-review gate.
+  - A `---` rule at the top, or frontmatter that's never closed, isn't frontmatter: the spec's
+    citations are checked, rather than 0 citations and a PASS.
+  - A code block that's never closed fails, instead of hiding the rest of the document.
+  - A bare-filename citation is range-checked when only one file has that name, and fails a
+    template spec when several do.
+  - `Done when` must be the field line itself, and `TBD`, `TODO`, `?` or `...` counts as empty.
+  - A lone carriage return isn't a line break when counting a cited file's lines.
+  - After Sources, an indented line after a blank line is prose, not a source. Indented prose in
+    the Candidate pool counts, and a candidate over 120 words fails.
+  - An *(unverified)* mark right after one sentence's full stop no longer covers the next sentence.
+  - In a shallow clone, `review-state.py` reports `no-base` rather than taking the clone's cut-off
+    commit for the review commit.
 - `check-note.py` fails a research note with no topic, or one that isn't `area` or
   `area/sub-area` in lowercase and hyphens, and warns on a topic no other note uses.
 - `check-note.py` and `build-index.py` share the topic pattern through `mdcheck.py`.
@@ -55,6 +71,12 @@ section is a date. Within a day, changes are grouped by area.
 - The README's diagram shows light in light mode; it showed the dark version to everyone. The
   README and `CLAUDE.md` list every test file and the CI, and give the fourth eval run's cost.
 - The diagram's renderer is pinned to one version, with its lockfile committed.
+- `review-state.py` prints its `diff:` line as a quoted `~/.claude/hooks/git-read.py` command,
+  which `/cold-review` may run without a prompt, and which works for paths with spaces.
+- `build-index.py` skips a broken link or a folder named `*.md` instead of crashing, escapes a
+  backslash in a title, and reads a note that starts with a byte-order mark.
+- `mdcheck.py` holds the delta-review pattern, the record path and the secrets scan the checkers
+  each kept a copy of.
 
 ## 2026-09-26
 

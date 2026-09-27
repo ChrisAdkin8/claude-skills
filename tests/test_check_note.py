@@ -197,6 +197,39 @@ class PoolRowsAreNotStale(unittest.TestCase):
         )
 
 
+
+class BudgetEscapes(unittest.TestCase):
+    """Text the word budget and the other checks used to miss."""
+
+    def test_indented_prose_after_a_blank_line_is_not_a_source(self):
+        pad = "    " + " ".join(["filler"] * 2000)
+        text = FIXTURE.read_text().replace(
+            "2. [Gadget spec](https://example.com/gadgets): boxes of 12.\n",
+            "2. [Gadget spec](https://example.com/gadgets): boxes of 12.\n\n" + pad + "\n",
+        )
+        out, result = check(text)
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("lines of prose after Sources", out)
+
+    def test_wrapped_source_is_still_a_source(self):
+        text = FIXTURE.read_text().replace(
+            "2. [Gadget spec](https://example.com/gadgets): boxes of 12.\n",
+            "2. [Gadget spec](https://example.com/gadgets):\n   boxes of 12.\n",
+        )
+        out, result = check(text)
+        self.assertEqual(result, "RESULT: PASS", out)
+
+    def test_unclosed_code_block_fails(self):
+        text = FIXTURE.read_text().replace("Run the tests.", "Run the tests.\n\n```bash\nmake test")
+        out, result = check(text)
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("is never closed", out)
+
+    def test_byte_order_mark_before_frontmatter(self):
+        out, result = check("\ufeff" + FIXTURE.read_text())
+        self.assertEqual(result, "RESULT: PASS", out)
+
+
 if __name__ == "__main__":
     unittest.main()
 
@@ -257,6 +290,22 @@ class UnverifiedMarks(unittest.TestCase):
     def test_mark_on_another_sentence_fails(self):
         text = self.text.replace("boxes of 12 [2].", "boxes of 12 [2] *(unverified)*.").replace(
             "3 kg each [1],", "3 kg each [1] *(unverified)*,"
+        )
+        out, result = check(text)
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("isn't marked *(unverified)*", out)
+
+    def test_mark_after_the_previous_sentence_is_not_this_ones(self):
+        # The mark follows the Widgets sentence's full stop, so it's that sentence's, not the
+        # Gadgets claim's that comes next.
+        text = (
+            FIXTURE.read_text()
+            .replace(
+                "| Gadgets ship in boxes of 12 | [2] | WRONG | corrected from boxes of 10, cited [2] |",
+                "| Gadgets ship in boxes of 12 | [2] | UNREACHABLE | marked *(unverified)* |",
+            )
+            .replace("boxes of 12 [2]. Confidence", "boxes of 12 [2] *(unverified)*. Confidence")
+            .replace("3 kg each [1]. Gadgets", "3 kg each [1]. *(unverified)* Gadgets")
         )
         out, result = check(text)
         self.assertEqual(result, "RESULT: FAIL", out)

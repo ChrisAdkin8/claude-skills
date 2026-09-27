@@ -29,8 +29,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from mdcheck import (  # noqa: E402  shared with check-spec.py
-    INLINE_CODE, SECRETS, SEPARATOR, count_words, frontmatter, has_account_id, level, section,
-    strip_code,
+    INLINE_CODE, SECRETS, SEPARATOR, TOPIC, count_words, flow_list, frontmatter, has_account_id,
+    level, section, strip_code,
 )
 import mdcheck  # noqa: E402
 
@@ -39,7 +39,6 @@ TEMPLATE = {"ideas": TEMPLATES / "research-ideas.md"}  # any other depth: resear
 WORD_BUDGET = {"full": 1500, "quick": 600, "ideas": 2400}
 HEADROOM_BUDGET = {"full": 1300, "quick": 500, "ideas": 2100}
 STATUSES = ("draft", "final", "outdated")
-TOPIC = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*(?:/[a-z0-9]+(?:-[a-z0-9]+)*)?")
 VERDICTS = ("CONFIRMED", "MISCITED", "WRONG", "UNSUPPORTED", "UNREACHABLE")
 REQUIRED = {
     "full": [
@@ -132,11 +131,6 @@ def first_table(lines):
             break
     rows = [cells(line) for line in block if not SEPARATOR.fullmatch(line)]
     return (rows[0], rows[1:]) if rows else ([], [])
-
-
-def flow_list(value):
-    """Items of a frontmatter flow list, `[a, b]`."""
-    return [e.strip().strip("'\"") for e in value.strip("[]").split(",") if e.strip()]
 
 
 def normalise(text):

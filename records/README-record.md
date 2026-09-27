@@ -47,3 +47,4 @@ Needs a run: 1, 3, 9, 10
 - Not reviewed: the diagram loses its title; it now sits under a new heading, The workflow at a glance, after the glossary, with a short paragraph saying how to read it, on 2026-09-25.
 - Not reviewed: the heading now sits directly above the diagram, and the paragraph on reading it becomes a short list below it, on 2026-09-25.
 - Not reviewed: rewritten for readability: terms defined before use, Spec, Agent, Verifier, Sandbox and guard added to the terms, the step list renamed to match the diagram's six stages, a clone step in Install, what each ~/notes file is for, jargon removed, long sentences split, links added, and docs/ and records/ added to Layout, on 2026-09-25.
+- Not reviewed: Layout lists `scripts/build-index.py`, which rebuilds the notes index in `~/notes`, and says `mdcheck.py` is shared with it too; the fast tests' list names `build-index.py`, on 2026-09-27.

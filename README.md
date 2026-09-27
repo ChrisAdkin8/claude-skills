@@ -215,7 +215,9 @@ A cap stops a run only after the turn that crosses it, so a run can go over by u
 - `skills/research/`: `/research`, with:
   - `ideation-rules.md` and `ideas-finish.md`, the extra steps for `/research ideas`;
   - `scripts/check-note.py`, which checks a research note, and `scripts/mdcheck.py`, markdown
-    helpers it shares with `check-spec.py`;
+    helpers it shares with `check-spec.py` and `build-index.py`;
+  - `scripts/build-index.py`, which rebuilds `index.md` in `~/notes`, the notes arranged by
+    `topic` as an outline that Markmap shows as a mind map;
   - `scripts/repo-health.sh`, `gcp-skus.sh` and `reddit-search.sh`, which the `researcher` agent
     runs to gather evidence.
 - `skills/spec/`: `/spec`, with:
@@ -243,8 +245,8 @@ A cap stops a run only after the turn that crosses it, so a run can go over by u
   - `workflow*.png`, the diagram, drawn by `diagram/workflow.py`.
 - `records/`: the review history of this README.
 - `tests/`:
-  - `test_*.py`, fast tests for the guard, both checkers, `review-state.py`, `prepare-spike.sh`
-    and `run-agent.sh`;
+  - `test_*.py`, fast tests for the guard, both checkers, `build-index.py`, `review-state.py`,
+    `prepare-spike.sh` and `run-agent.sh`;
   - `replay_guard.py`, which runs real recorded commands and file reads through the guard;
   - `agent-evals/`, which runs the verifiers and the cold reviewer against documents with planted
     mistakes, and the researcher on sample questions;

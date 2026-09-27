@@ -2,7 +2,9 @@
 ~/.claude/skills/spec/scripts/check-spec.py and ~/.claude/skills/cold-review/scripts/review-state.py.
 
 Not run on its own. Each script loads it by path, so a fix here reaches all of them: frontmatter,
-code fences, headings, sections, citations, template leftovers, the topic form, and the secret and account-ID patterns.
+code fences (and a fence left open), headings, sections, citations, template leftovers, the topic
+form, the `Not reviewed:` and delta-review patterns, the record path, word and line counts, and the
+secret and account-ID patterns.
 """
 
 import re
@@ -32,7 +34,7 @@ ARN_ACCOUNT = re.compile(r"\barn:aws[\w-]*:[\w-]*:[\w-]*:\d{12}(?::|/|$)", re.MU
 # hand-written variant mustn't slip past them.
 NOT_REVIEWED = re.compile(r"\s*(?:[-*]\s+)?[*_]*not reviewed[*_]*\s*:", re.IGNORECASE)
 # A research note's `topic`: area or area/sub-area, each lowercase and hyphenated. check-note.py
-# warns on anything else, and build-index.py files anything else as Unfiled.
+# fails anything else, and build-index.py files anything else as Unfiled.
 TOPIC = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*(?:/[a-z0-9]+(?:-[a-z0-9]+)*)?")
 # A delta review's heading inside a saved cold review, in any case.
 DELTA_REVIEW = re.compile(r"###\s+delta review", re.IGNORECASE)

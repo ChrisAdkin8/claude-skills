@@ -9,7 +9,7 @@
 #   SKILL_EVAL_MAX_USD  per-case cost ceiling, passed as --max-budget-usd (default 3)
 #   EVAL_CASES, EVAL_OUT  the cases and results directories (default: cases/ and
 #                         results/<timestamp>/ here); tests/test_eval_runners.py points them elsewhere
-# Exits 0 only if every case passed, 1 if any failed, 2 on a bad case name.
+# Exits 0 only if every case passed, 1 if any failed, 2 on a bad case name or no cases.
 set -uo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd -P)

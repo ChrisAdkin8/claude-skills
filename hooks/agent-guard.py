@@ -10,7 +10,10 @@ Bash commands are checked against an allowlist: every command word, including th
 pipelines, lists, braces, if/while bodies and $(...) substitutions, must be a reading tool, curl,
 gh, git or one of the skill scripts, and those have per-command limits (GET only, no file
 writes). It's a guard against injected instructions, not a sandbox: data can still leave in a
-GET request's URL.
+GET request's URL. `eval` is refused, since it re-reads its words without their quoting. A
+wrapper such as `env`, `timeout` or `xargs` may take only the options WRAPPERS and WRAPPER_FLAGS
+list. `gh` and the network scripts run outside the sandbox, so a command that holds them may
+join them only with the text filters, loops and `cd` in JOINABLE.
 
 So credentials are kept out of reach instead (see SECRET_HOME): no command word may name them,
 nor may grep -r or rg search a directory that holds them, and the `read` mode refuses them to
@@ -46,13 +49,16 @@ name of at most MAX_HOST characters, at most MAX_AFTER_HOST after it, no user na
 in the URL, and no curl or gh argument over MAX_ARG characters. Real requests stay well inside
 these (the longest in the agents' transcripts to 2026-09-24 had a 43-character host and 206
 characters after it). It doesn't stop a leak, it slows one to a few hundred characters a request.
-The WebFetch tool gets the same check through the `fetch` mode.
+The WebFetch tool gets the same check through the `fetch` mode. A WebSearch query gets its own,
+through the `search` mode: at most MAX_QUERY characters, and no 40-character run of letters and
+digits.
 
 Usage, from an agent's frontmatter hooks:
   agent-guard.py bash            Bash tool
   agent-guard.py read            Read, Grep and Glob tools: no credentials
   agent-guard.py write <dir>     Write/Edit tools: allow only files under <dir>
   agent-guard.py fetch           WebFetch tool: the URL size limits
+  agent-guard.py search          WebSearch tool: query length and token-like runs
 
 Reads the hook's JSON on stdin. Exit 0 allows; exit 2 blocks and tells the agent why on stderr.
 """

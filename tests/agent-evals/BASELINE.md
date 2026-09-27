@@ -111,7 +111,7 @@ by these agents.
 
 ## Spikes on a real spec
 
-Step 7 ran on `~/code/github.com/another-repo/docs/specs/2026-09-13-rightsizing-pr-action.md`
+Step 7 ran on a real spec in another local repo
 on 2026-09-17, which is where W6, W7 and W8 came from. Two spikes ran, both `--model sonnet`
 through `run-spike.sh`:
 
@@ -594,3 +594,28 @@ research-verifier hook WebSearch to it, and `agent-sandbox.md` says so. All ten 
 | wrong-figure | PASS | 6 | $0.19 |
 
 Total $4.00.
+
+## Docs sweep and the delta reviewer's diff (2026-09-28)
+
+`/cold-review` gives the delta reviewer its diff as `git`, which its guard allows, not the
+`git-read.py` form `review-state.py` prints; `cold-review-delta` gains a check for it. The
+researcher treats an `API error` row from `repo-health.sh` as unverified. All ten agent cases:
+
+| Case | Result | Turns | Cost |
+|---|---|---:|---:|
+| absence-claim | FAIL, then PASS | 2, then 14 | $0.55, then $0.28 |
+| cold-review-skip | PASS | 7 | $0.15 |
+| delta-review | PASS | 7 | $0.20 |
+| delta-review-record | PASS | 9 | $0.24 |
+| record-skip | PASS | 7 | $0.14 |
+| research-ideas | PASS | 51 | $1.96 |
+| research-quick | PASS | 12 | $0.31 |
+| spec-miscite | PASS | 9 | $0.17 |
+| spike-inherited | PASS | 6 | $0.13 |
+| wrong-figure | PASS | 6 | $0.15 |
+
+Total $4.01, and $0.28 for the re-run. `absence-claim`'s first run found the right answer, a
+WRONG row and `Bottom line holds: no`, but the verifier then sent a second, short message when
+late search results came back, and the runner grades only the last one. Nothing this change
+touched affects the verifier; the re-run passed. Skill evals: `cold-review-delta` PASS (5 turns,
+$0.28), with the new check; `spec-done` PASS (8 turns, $0.36); total $0.64.

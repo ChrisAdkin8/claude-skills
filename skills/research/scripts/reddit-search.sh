@@ -7,8 +7,8 @@
 #   e.g. reddit-search.sh "rightsizing" kubernetes top year
 #
 # Prints a markdown table (date, subreddit, title, score, comments, URL), then a line to cite.
-# If there are no credentials, or Reddit refuses, it says "Reddit unavailable" and why, and
-# exits 1: write "Reddit unavailable" in the note rather than fetching reddit.com pages, which
+# If jq or curl is missing, there are no credentials, or Reddit refuses, it says "Reddit
+# unavailable" and why, and exits 1 (2 on bad arguments): write "Reddit unavailable" in the note rather than fetching reddit.com pages, which
 # return block pages to scripts. There is no fallback: the pullpush.io archive refuses agents
 # (HTTP 429, checked 2026-09-14).
 #

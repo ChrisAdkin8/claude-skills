@@ -9,7 +9,8 @@
 #       e.g. gcp-skus.sh 6F81-5844-456A 'E2 Instance Core' europe-west2
 #
 # Prints one row per matching SKU: description, regions, unit and USD price per tier, then a
-# line to cite. Needs gcloud logged in; if it isn't, says so and exits 1.
+# line to cite. Needs gcloud (logged in), curl and jq; if one is missing, gcloud isn't logged in or
+# a request fails, it says so and exits 1. Exits 2 on bad arguments.
 set -euo pipefail
 
 api=https://cloudbilling.googleapis.com/v1

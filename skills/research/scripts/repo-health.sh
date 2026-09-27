@@ -9,6 +9,7 @@
 # repo prints an error row and moves on to the next: "not found or no access" only when GitHub says
 # so, "API error" for anything else (a rate limit, the network). Exits 1 if gh or jq is missing,
 # gh isn't logged in, or no repo could be read, so a failure never reads as a fact about the repos.
+# Exits 2 on an argument that isn't owner/repo.
 set -uo pipefail
 
 command -v gh > /dev/null && command -v jq > /dev/null ||

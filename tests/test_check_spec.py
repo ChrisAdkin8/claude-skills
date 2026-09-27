@@ -1,4 +1,5 @@
-"""Tests for skills/spec/scripts/check-spec.py's handling of a saved cold review and spike results.
+"""Tests for skills/spec/scripts/check-spec.py: citations, work items, status, the record, the
+delta-review gate and spike results.
 
 Run with: python3 -m unittest discover -s ~/code/github.com/claude-skills/tests
 """

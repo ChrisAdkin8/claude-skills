@@ -29,7 +29,7 @@ MONO = "Menlo, Monaco, monospace"
 # ------------------------------------------------------------------ content
 # (number, title, colour key, command or None for a new session, what happens, output,
 #  whether its work runs in a subagent: a separate headless session, and whether its command
-#  is only planned, not built yet: drawn dashed)
+#  is only planned, not built yet: the line under the command says so)
 STAGES = [
     (1, "Capture", "notes", "/idea", "Save the idea as a note", "~/notes/ideas/", False),
     (
@@ -274,19 +274,7 @@ class Canvas:
 
     # shared pieces
     def pill(self, x, y, w, h, stage, key, size=19.0):
-        if stage[3] and planned(stage):
-            ink = "#FFFFFF" if key == "block" else self.t["pill"]
-            self.rect(x, y, w, h, "none", stroke=ink, r=8, sw=2, dash="6 5")
-            self.text(
-                x + 14,
-                y + h / 2 + size * 0.35,
-                stage[3],
-                size=size,
-                fill=ink,
-                mono=True,
-                weight="bold",
-            )
-        elif stage[3]:
+        if stage[3]:
             self.rect(x, y, w, h, "#111827" if key == "block" else self.t["pill"], r=8)
             self.text(
                 x + 14,

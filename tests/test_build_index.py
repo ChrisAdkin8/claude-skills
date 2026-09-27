@@ -118,6 +118,12 @@ class BuildIndex(unittest.TestCase):
             unfiled,
         )
 
+    def test_counts_one_topic_per_area_and_sub_area_in_use(self):
+        self.write("research/a.md", note("Note A", "final", "a/x"))
+        self.write("research/b.md", note("Note B", "final", "b"))
+        self.write("ideas/i.md", note("Idea I", "seed", related=["~/notes/research/b.md"]))
+        self.assertIn("2 topics, 3 notes, 0 unfiled", self.build()[0])
+
     def test_dotfile_is_left_out(self):
         self.write("research/a.md", note("Note A", "final", "a"))
         self.write("research/.eval-case-1.md", note("Eval note", "draft", "a"))

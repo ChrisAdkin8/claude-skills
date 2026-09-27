@@ -1,6 +1,8 @@
 # Rules only ideation-rules.md gives (the template doesn't): the evidence note cited by relative
 # link, at least two candidates for every lens in the brief, and no lens outside it.
 (?m)^depth: ideas
+# One topic, area or area/sub-area, so build-index.py can file the note.
+(?m)^topic: [a-z0-9-]+(/[a-z0-9-]+)?(\s+#.*)?\s*$
 \.\./projects/mindshare/attention-evidence\.md
 (?s)## Candidate pool.*\[finding\].*\[finding\]
 (?s)## Candidate pool.*\[tool\].*\[tool\]

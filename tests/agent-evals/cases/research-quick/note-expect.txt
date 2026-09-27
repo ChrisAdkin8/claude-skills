@@ -1,5 +1,7 @@
 # Quick depth, per the researcher's Depth rules: no options table or candidate pool.
 (?m)^depth: quick
+# One topic, area or area/sub-area, so build-index.py can file the note.
+(?m)^topic: [a-z0-9-]+(/[a-z0-9-]+)?(\s+#.*)?\s*$
 (?m)^## Sources
 (?i)apache
 \[1\]

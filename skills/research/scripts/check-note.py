@@ -15,8 +15,9 @@ the Finish step never has to cut verified content to fit; --headroom has no tole
 Verification header's first "N of M" must be the table's CONFIRMED count and row count.
 
 `topic` is one `area` or `area/sub-area`, lowercase and hyphenated; build-index.py makes the
-notes index from it. A missing or malformed topic is a WARN, and so is one no other note in the
-same folder uses (dotfiles don't count), which nudges the researcher to reuse a topic.
+notes index from it. A missing or malformed topic is a FAIL. One no other note in the same
+folder uses (dotfiles don't count) is a WARN, since every topic is new once; it nudges the
+researcher to reuse a topic.
 
 Prints FAIL, WARN and INFO lines and exits 1 if anything failed. Checks only what can be
 checked mechanically; whether the sources support the claims is the verifier agent's job.
@@ -217,15 +218,15 @@ def check_related(value, fails, warns):
             )
 
 
-def check_topic(fields, note, warns):
+def check_topic(fields, note, fails, warns):
     """build-index.py files each research note under its topic, so it needs one, in a form the
     index can nest, and reused rather than near-duplicated."""
     topic = fields.get("topic", "")
     if not topic:
-        warns.append("frontmatter 'topic' is empty")
+        fails.append("frontmatter 'topic' is empty")
         return
     if not TOPIC.fullmatch(topic):
-        warns.append(
+        fails.append(
             f"topic is {topic!r}; expected area or area/sub-area, lowercase and hyphenated"
         )
         return
@@ -575,7 +576,7 @@ def main():
         fails.append(f"status is {status!r}; expected one of {', '.join(STATUSES)}")
     if fields.get("tags", "[]") in ("", "[]"):
         warns.append("frontmatter 'tags' is empty")
-    check_topic(fields, note, warns)
+    check_topic(fields, note, fails, warns)
     check_related(fields.get("related", ""), fails, warns)
 
     body = strip_code(lines[start:])

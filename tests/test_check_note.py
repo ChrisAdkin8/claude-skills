@@ -303,23 +303,28 @@ class Markdown(unittest.TestCase):
 
 
 def with_topic(topic):
-    return FIXTURE.read_text().replace("related: []", f"related: []\ntopic: {topic}", 1)
+    """The fixture with its topic replaced; None removes the line."""
+    line = f"topic: {topic}\n" if topic is not None else ""
+    return FIXTURE.read_text().replace("topic: test-fixture\n", line, 1)
 
 
 class Topic(unittest.TestCase):
-    """build-index.py files notes by topic; until every note has one, the checks only warn."""
+    """build-index.py files notes by topic, so a missing or malformed one fails; a topic no
+    other note uses only warns, since every topic is new once."""
 
-    def test_missing_topic_warns(self):
-        out, result = check(FIXTURE.read_text())
-        self.assertEqual(result, "RESULT: PASS", out)
-        self.assertIn("WARN: frontmatter 'topic' is empty", out)
+    def test_missing_topic_fails(self):
+        for text in (with_topic(None), with_topic("")):
+            with self.subTest(text=text[:0]):
+                out, result = check(text)
+                self.assertEqual(result, "RESULT: FAIL", out)
+                self.assertIn("FAIL: frontmatter 'topic' is empty", out)
 
-    def test_malformed_topic_warns(self):
+    def test_malformed_topic_fails(self):
         for topic in ("a/b/c", "Kubernetes", "a b", "a/"):
             with self.subTest(topic=topic):
                 out, result = check(with_topic(topic))
-                self.assertEqual(result, "RESULT: PASS", out)
-                self.assertIn(f"WARN: topic is '{topic}'", out)
+                self.assertEqual(result, "RESULT: FAIL", out)
+                self.assertIn(f"FAIL: topic is '{topic}'", out)
 
     def test_well_formed_topic_is_quiet(self):
         for topic in ("kubernetes", "claude-code/research-skill", "aws2/s3"):

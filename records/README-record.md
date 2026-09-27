@@ -51,3 +51,4 @@ Needs a run: 1, 3, 9, 10
 - Not reviewed: Layout says `/research` runs `build-index.py` before its commit, on 2026-09-27.
 - Not reviewed: stage 2 says `/research` rebuilds `~/notes/index.md`; Set up `~/notes` asks for a `topic:` line in the research templates; a new section, View the notes as a mind map, says what the index is and gives three ways to open it, on 2026-09-27.
 - Not reviewed: readability fixes: Skill and Hook added to the terms, frontmatter and turn explained where first used, stage 3's record and status paragraph split and the status names spelled out, and the agent-eval cost updated to 2026-09-27's runs, on 2026-09-27.
+- Not reviewed: second readability pass: stage 2 names `/research` as what rebuilds the index; two long lines rewrapped; Set up `~/notes` explains `decisions/`; Layout is a table, naming the two checkers; a worked example of the mind-map spec through all six stages replaces the pointer to the spike-phase spec, on 2026-09-27.

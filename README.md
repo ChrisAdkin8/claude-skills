@@ -64,7 +64,7 @@ The six stages match the diagram.
 2. **Research: `/research <question or idea note>`** researches it and writes a note to
    `~/notes/research`, citing a source for each claim. A `research-verifier` agent then checks the
    claims the note's conclusions depend on. It reports any it couldn't confirm from their sources.
-   Last, it rebuilds `~/notes/index.md`, a map of every note by topic
+   Last, `/research` rebuilds `~/notes/index.md`, a map of every note by topic
    ([view it as a mind map](#view-the-notes-as-a-mind-map)).
 3. **Plan: `/spec <research note>`** writes a spec into the repo the change touches. The spec
    points at the code it relies on as `path:line`. The repo must be a git repo under `~/code`,
@@ -82,9 +82,9 @@ The six stages match the diagram.
 
    You may change the spec after its review. If you do, the record lists each change as a
    `Not reviewed:` line. Run `/cold-review <spec>` to give those changes a delta review before you
-   build. A spec's `status` says where it is, such as `draft`, `reviewed` (ready to build), `in-progress`
-   or `done`. While a spec has changes with no delta review, `check-spec.py` fails it if its status
-   is `reviewed` or `in-progress`, so it can't be built by mistake.
+   build. A spec's `status` says where it is, such as `draft`, `reviewed` (ready to build),
+   `in-progress` or `done`. While a spec has changes with no delta review, `check-spec.py` fails
+   it if its status is `reviewed` or `in-progress`, so it can't be built by mistake.
 
    For a small change whose approach is settled, `/spec quick` stops after the verifier: no cold
    review, no spikes. `/spec finish <spec>` gives it the cold review later, and
@@ -96,8 +96,25 @@ The six stages match the diagram.
 6. **Close out: `/spec done <spec>`**. It notes in the record where the build left the spec,
    marks the spec done, and points out any research the build proved wrong.
 
-For a finished example, see [the spike-phase spec](docs/specs/2026-09-17-spec-spike-phase.md) and
-its spike results in [`docs/specs/spikes/`](docs/specs/spikes/).
+### A worked example
+
+The [mind-map index](#view-the-notes-as-a-mind-map) went through every stage on 2026-09-27:
+
+1. **Capture.** No idea note: the question went straight to `/research`.
+2. **Research.** The note compared four ways to map the notes and recommended a generated Markmap
+   outline. The verifier confirmed the claims the recommendation rested on.
+3. **Plan.** [The spec](docs/specs/2026-09-27-notes-mindmap-index.md) has seven work items. The
+   spec-verifier found that one expected 37 idea notes when there were 40. The cold review found
+   eight problems, such as a check that would pass without testing anything, because it called a
+   script by a name the shell couldn't find. Both are in
+   [its record](docs/specs/records/2026-09-27-notes-mindmap-index-record.md).
+4. **Spike.** A prototype over the real notes showed that two levels of topics stay easy to read:
+   5 areas, and at most 7 notes under any heading
+   ([results](docs/specs/spikes/2026-09-27-notes-mindmap-index-results.md)).
+5. **Build.** One commit per work item, W1 first; two of them changed only `~/notes`, so they were
+   committed there. Running `/research` for real found a counting bug the tests had missed.
+6. **Close out.** `/spec done` wrote seven lines in the record on where the build left the plan,
+   and marked the spec done.
 
 ## Cold review of any document
 
@@ -157,6 +174,8 @@ because the skills commit to it. This repo doesn't include its files either, so 
 - **`CLAUDE.md`**: your rules for notes, such as tags and frontmatter (the block of settings
   between `---` lines at the top of each note). The `researcher` agent reads it first.
 - **`templates/idea.md`**: the layout `/idea` starts each note from.
+- **`decisions/`**, optional: notes you write by hand to record a choice the research left open.
+  `/spec` follows an accepted decision over the research's recommendation.
 - **`templates/research.md`** and **`templates/research-ideas.md`**: the layouts the `researcher`
   agent starts from, for a normal research note and for a ranked list of ideas. `check-note.py`
   fails a note that lacks the sections it expects, so copy its `REQUIRED` headings from
@@ -175,7 +194,7 @@ commits the links it adds. Only `/cold-review` works without it.
 Every research note has a `topic`, such as `kubernetes` or `claude-code/research-skill`: an area,
 and optionally a sub-area under it. At the end of each run, `/research` rebuilds `~/notes/index.md`
 from these topics. It's a nested outline: topics are headings, research notes are links under
-them, and each idea or decision sits under the research note it names. A mind map draws that
+them, and each idea or decision note sits under the research note it names. A mind map draws that
 outline as a tree of bubbles branching out from the middle.
 
 There are three ways to view it, easiest first:
@@ -248,9 +267,9 @@ Spikes are contained differently. They don't run under the guard; their own sand
   environment variable overrides both.
 - **Each spike** is capped at $2 and 60 turns. Assume a spike that fetches anything from the web
   costs close to the cap.
-- **The agent evaluations** (see [Checks](#checks)) spend real money too. Three full runs of their ten
-  cases on 2026-09-27 cost between $3.70 and $4.46. Each case is capped at $5, and the cases run at the same time,
-  so a run that goes wrong can cost far more.
+- **The agent evaluations** (see [Checks](#checks)) spend real money too. Three full runs of
+  their ten cases on 2026-09-27 cost between $3.70 and $4.46. Each case is capped at $5, and the
+  cases run at the same time, so a run that goes wrong can cost far more.
 - **The skill evaluations** cost about $0.30 each, capped at $3 each.
 
 A cap stops a run only after the turn that crosses it, so a run can go over by up to one turn. A
@@ -258,46 +277,39 @@ A cap stops a run only after the turn that crosses it, so a run can go over by u
 
 ## Layout
 
-- `skills/idea/`: `/idea`.
-- `skills/research/`: `/research`, with:
-  - `ideation-rules.md` and `ideas-finish.md`, the extra steps for `/research ideas`;
-  - `scripts/check-note.py`, which checks a research note, and `scripts/mdcheck.py`, markdown
-    helpers it shares with `check-spec.py` and `build-index.py`;
-  - `scripts/build-index.py`, which `/research` runs before its commit to rebuild `index.md` in
-    `~/notes`: the notes arranged by `topic` as an outline that Markmap shows as a mind map;
-  - `scripts/repo-health.sh`, `gcp-skus.sh` and `reddit-search.sh`, which the `researcher` agent
-    runs to gather evidence.
-- `skills/spec/`: `/spec`, with:
-  - `scripts/check-spec.py`, `template.md` (the spec's layout) and `record-template.md`;
-  - `done-step.md`, the steps for `/spec done`;
-  - for spikes:
-    - `spike-step.md`, the steps for running spikes;
-    - `spiker.md`, the rules a spike session follows;
-    - `spike-settings.json`, its sandbox and permission settings;
-    - `scripts/prepare-spike.sh`, which makes the scratch copy of the code;
-    - `scripts/run-spike.sh`, which launches the spike.
-- `skills/cold-review/`: `/cold-review`. `scripts/review-state.py` works out which review a
-  document is due and what has changed since its last one. `/spec` builds its cold review from
-  this skill's instructions.
-- `agents/`: `researcher`, `research-verifier`, `spec-verifier`, `cold-reviewer`.
-- `hooks/`:
-  - `run-agent.sh`, which launches an agent. It exits with code 3 when a reply is missing its expected
-    ending, so an error is never mistaken for a verdict;
-  - `agent-sandbox.json`, the agents' sandbox settings;
-  - `agent-sandbox.md` and `sandbox-prompt.py`, the rules added to every agent's instructions;
-  - `agent-guard.py`, the guard;
-  - `git-read.py`, which runs read-only git commands for `/spec` and `/cold-review`.
-- `docs/`:
-  - `specs/`, the specs for changes to this repo, with their spike results in `specs/spikes/`;
-  - `workflow*.png`, the diagram, drawn by `diagram/workflow.py`.
-- `records/`: the review history of this README.
-- `tests/`:
-  - `test_*.py`, fast tests for the guard, both checkers, `build-index.py`, `review-state.py`,
-    `prepare-spike.sh` and `run-agent.sh`;
-  - `replay_guard.py`, which runs real recorded commands and file reads through the guard;
-  - `agent-evals/`, which runs the verifiers and the cold reviewer against documents with planted
-    mistakes, and the researcher on sample questions;
-  - `skill-evals/`, which runs whole skills against throwaway repos.
+| Path | What it is |
+|---|---|
+| `skills/idea/` | `/idea` |
+| `skills/research/` | `/research` |
+| `skills/research/ideation-rules.md`, `ideas-finish.md` | the extra steps for `/research ideas` |
+| `skills/research/scripts/check-note.py` | checks a research note |
+| `skills/research/scripts/mdcheck.py` | markdown helpers shared by `check-note.py`, `check-spec.py` and `build-index.py` |
+| `skills/research/scripts/build-index.py` | rebuilds `~/notes/index.md`, the notes by topic; `/research` runs it before its commit |
+| `skills/research/scripts/repo-health.sh`, `gcp-skus.sh`, `reddit-search.sh` | gather evidence for the `researcher` agent |
+| `skills/spec/` | `/spec` |
+| `skills/spec/scripts/check-spec.py` | checks a spec |
+| `skills/spec/template.md`, `record-template.md` | the layouts of a spec and its record |
+| `skills/spec/done-step.md` | the steps for `/spec done` |
+| `skills/spec/spike-step.md` | the steps for running spikes |
+| `skills/spec/spiker.md` | the rules a spike session follows |
+| `skills/spec/spike-settings.json` | a spike's sandbox and permission settings |
+| `skills/spec/scripts/prepare-spike.sh` | makes the scratch copy of the code for a spike |
+| `skills/spec/scripts/run-spike.sh` | launches a spike |
+| `skills/cold-review/` | `/cold-review`; `/spec` builds its cold review from this skill's instructions |
+| `skills/cold-review/scripts/review-state.py` | works out which review a document is due, and what has changed since its last one |
+| `agents/` | `researcher`, `research-verifier`, `spec-verifier`, `cold-reviewer` |
+| `hooks/run-agent.sh` | launches an agent; exits with code 3 when a reply lacks its expected ending, so an error is never mistaken for a verdict |
+| `hooks/agent-sandbox.json` | the agents' sandbox settings |
+| `hooks/agent-sandbox.md`, `sandbox-prompt.py` | the rules added to every agent's instructions |
+| `hooks/agent-guard.py` | the guard |
+| `hooks/git-read.py` | runs read-only git commands for `/spec` and `/cold-review` |
+| `docs/specs/` | the specs for changes to this repo; spike results are in `docs/specs/spikes/` |
+| `docs/workflow*.png` | the diagram, drawn by `docs/diagram/workflow.py` |
+| `records/` | the review history of this README |
+| `tests/test_*.py` | fast tests for the guard, the two checkers (`check-note.py` and `check-spec.py`), `build-index.py`, `review-state.py`, `prepare-spike.sh` and `run-agent.sh` |
+| `tests/replay_guard.py` | runs real recorded commands and file reads through the guard |
+| `tests/agent-evals/` | runs the verifiers and the cold reviewer against documents with planted mistakes, and the researcher on sample questions |
+| `tests/skill-evals/` | runs whole skills against throwaway repos |
 
 ## Checks
 

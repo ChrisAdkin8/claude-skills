@@ -102,7 +102,8 @@ The [mind-map index](#view-the-notes-as-a-mind-map) went through every stage on 
 
 1. **Capture.** No idea note: the question went straight to `/research`.
 2. **Research.** The note compared four ways to map the notes and recommended a generated Markmap
-   outline. The verifier confirmed the claims the recommendation rested on.
+   outline. The verifier checked a sample of its claims, 14 of 37, and confirmed them all. The
+   claim that Markmap draws an outline as a mind map wasn't in the sample; the spike confirmed it.
 3. **Plan.** [The spec](docs/specs/2026-09-27-notes-mindmap-index.md) has seven work items. The
    spec-verifier found that one expected 37 idea notes when there were 40. The cold review found
    eight problems, such as a check that would pass without testing anything, because it called a
@@ -172,7 +173,10 @@ The skills keep notes in `~/notes`, and this repo doesn't create it. It has to b
 because the skills commit to it. This repo doesn't include its files either, so you write your own:
 
 - **`CLAUDE.md`**: your rules for notes, such as tags and frontmatter (the block of settings
-  between `---` lines at the top of each note). The `researcher` agent reads it first.
+  between `---` lines at the top of each note). The `researcher` agent reads it first. Give it a
+  Topics section with a command that lists the topics in use, such as
+  `grep -h '^topic:' ~/notes/research/*.md | sort | uniq -c`: the researcher picks a note's topic
+  from that list, and `check-note.py` points there when a topic is new.
 - **`templates/idea.md`**: the layout `/idea` starts each note from.
 - **`decisions/`**, optional: notes you write by hand to record a choice the research left open.
   `/spec` follows an accepted decision over the research's recommendation.
@@ -193,9 +197,10 @@ commits the links it adds. Only `/cold-review` works without it.
 
 Every research note has a `topic`, such as `kubernetes` or `claude-code/research-skill`: an area,
 and optionally a sub-area under it. At the end of each run, `/research` rebuilds `~/notes/index.md`
-from these topics. It's a nested outline: topics are headings, research notes are links under
-them, and each idea or decision note sits under the research note it names. A mind map draws that
-outline as a tree of bubbles branching out from the middle.
+from these topics. It's a nested outline: topics are headings, research notes are links under them,
+and each idea or decision note sits under the research note it names. A note that has no topic, or
+names no research note (a new `/idea`, say), goes under a heading called Unfiled. A mind map draws
+that outline as a tree of bubbles branching out from the middle.
 
 There are three ways to view it, easiest first:
 
@@ -268,8 +273,9 @@ Spikes are contained differently. They don't run under the guard; their own sand
 - **Each spike** is capped at $2 and 60 turns. Assume a spike that fetches anything from the web
   costs close to the cap.
 - **The agent evaluations** (see [Checks](#checks)) spend real money too. Three full runs of
-  their ten cases on 2026-09-27 cost between $3.70 and $4.46. Each case is capped at $5, and the
-  cases run at the same time, so a run that goes wrong can cost far more.
+  their ten cases on 2026-09-27 cost between $3.70 and $4.46. Each case is capped at $5 (the
+  `research-ideas` case at $10), and the cases run at the same time, so a run that goes wrong can
+  cost far more.
 - **The skill evaluations** cost about $0.30 each, capped at $3 each.
 
 A cap stops a run only after the turn that crosses it, so a run can go over by up to one turn. A

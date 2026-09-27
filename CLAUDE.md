@@ -40,5 +40,5 @@ skill you're editing to be the one you're running.
   take that from the repo: after redrawing it, upload it by hand in Settings > General > Social
   preview.
 - Text is placed by estimated widths, so look at the PNGs after changing any wording.
-- The diagram's six stages (Capture, Research, Plan, Spike, Build, Close out) match the numbered
+- The diagram's six stages (Capture, Research, Plan, Spike, Implement, Close out) match the numbered
   list under "From idea to merged change" in the README. Change one, change the other.

@@ -22,7 +22,10 @@ checks = {
     "the plan is unchanged apart from the status line": all("status:" in l for l in changed),
     "the record has an Implementation section": bool(impl.strip()),
     "an implementation note names W1 and its commit": bool(re.search(rf"W1[^\n]*{w1[:7]}|{w1[:7]}[^\n]*W1", impl)),
-    "the note says the default is 3 places": bool(re.search(r"\b3\b", impl)),
+    # 3 beside "default" or "places", not any 3: "3 of 3 claims" is in the record already.
+    "the note says the default is 3 places": bool(
+        re.search(r"(?i)(?:default|places)[^\n]{0,40}\b3\b|\b3\b[^\n]{0,40}(?:default|places)", impl)
+    ),
     "check-spec passes": "RESULT: PASS" in check,
     "the reply names W2 as not landed": bool(re.search(r"W2", result.get("result", ""))),
 }

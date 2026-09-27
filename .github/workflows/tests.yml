@@ -1,0 +1,25 @@
+# The free, deterministic tests on each push to main and each pull request. The paid agent and
+# skill evals, replay_guard.py (it needs this machine's transcripts) and check-spec.py over
+# docs/specs (the specs link notes in ~/notes) stay by hand; see CLAUDE.md.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    # macOS, as the skills run: its bash 3.2 and BSD tools are what the scripts must work with.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Link ~/.claude to the checkout, as an install does
+        run: |
+          mkdir -p ~/.claude
+          for d in skills agents hooks; do ln -s "$PWD/$d" ~/.claude/$d; done
+      - name: Unit tests
+        run: python3 -m unittest discover -s tests

@@ -18,6 +18,10 @@ ordinary session files, not subagent ones. run-agent.sh logs each session's agen
 the replay add those transcripts (the Bash half subject to --before, like the rest). The guard had no `read` mode before, so there's no old verdict to compare with, and
 this half grows as new runs add transcripts. It prints commands and paths, which come from the
 user's own transcripts: don't paste its output anywhere public.
+
+Exits 1 if a command the guard at --base blocked is allowed now, or if any recorded Read, Grep or
+Glob call is refused now: both are changes to look at before committing. It prints SKIP and exits
+0 when there's nothing to replay, as on a machine whose transcripts these aren't.
 """
 
 import argparse
@@ -25,6 +29,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -32,7 +37,10 @@ from datetime import datetime
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-DEFAULT_GLOB = "projects/-Users-chrisadkin/*/subagents/agent-*.jsonl"
+# Claude Code names a project's transcript folder after its path, with every other character
+# than a letter or digit as `-`: /Users/<name> becomes -Users-<name>.
+HOME_PROJECT = re.sub(r"[^A-Za-z0-9]", "-", str(Path.home()))
+DEFAULT_GLOB = f"projects/{HOME_PROJECT}/*/subagents/agent-*.jsonl"
 READS_GLOB = "projects/*/*/subagents/agent-*.jsonl"
 # The agents whose frontmatter runs agent-guard.py; spec-reviewer was merged into cold-reviewer.
 GUARDED = {
@@ -246,6 +254,15 @@ def main():
     for tool, tool_input, reason in refused:
         target = tool_input.get("file_path") or tool_input.get("path") or ""
         print(f"  - {tool} {target[:140]}\n    {reason[:160]}")
+    if not unique and not unique_reads:
+        print("\nSKIP: no recorded agent transcripts here, so nothing was checked")
+        return 0
+    if newly_allowed or refused:
+        print(
+            f"\nFAIL: {len(newly_allowed)} commands allowed that --base blocked, "
+            f"{len(refused)} recorded reads refused"
+        )
+        return 1
     return 0
 
 

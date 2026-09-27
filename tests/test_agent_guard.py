@@ -578,5 +578,38 @@ class SessionHistory(unittest.TestCase):
         self.assertEqual(self.tool("Grep", pattern="x", path=f"{self.HOME}/.claude/skills"), 0)
 
 
+class FailsClosed(unittest.TestCase):
+    """Claude Code blocks a call only on exit 2, and lets it through on any other failure. So
+    input the checks don't expect must block the call, not crash the guard."""
+
+    def raw(self, mode, text, *extra):
+        return subprocess.run(
+            [sys.executable, str(GUARD), mode, *extra],
+            input=text,
+            capture_output=True,
+            text=True,
+            check=False,
+        ).returncode
+
+    def test_odd_input_blocked(self):
+        for mode, text in (
+            ("bash", "not json"),
+            ("bash", "[]"),
+            ("bash", '{"tool_input": []}'),
+            ("bash", '{"tool_input": {"command": 5}}'),
+            ("bash", '{"tool_input": {"command": ["ls"]}}'),
+            ("read", '{"tool_name": "Read", "tool_input": {"file_path": 5}}'),
+            ("fetch", '{"tool_input": {"url": {"a": 1}}}'),
+        ):
+            with self.subTest(mode=mode, text=text):
+                self.assertEqual(self.raw(mode, text), 2)
+
+    def test_write_with_no_path_blocked(self):
+        # An empty path resolves to the working dir, which is inside the allowed dir here.
+        here = os.getcwd()
+        self.assertEqual(self.raw("write", '{"tool_input": {"file_path": ""}}', here), 2)
+        self.assertEqual(self.raw("write", '{"tool_input": {}}', here), 2)
+
+
 if __name__ == "__main__":
     unittest.main()

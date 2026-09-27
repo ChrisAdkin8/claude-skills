@@ -205,19 +205,24 @@ URL_IN_WORD = re.compile(r"[a-zA-Z][\w+.-]*://[^\s'\"<>]+")
 BARE_HOST = re.compile(r"[\w-]+(?:\.[\w-]+)+(?::\d+)?(?:[/?#].*)?")
 PUNCT = set("();<>|&")
 # Credentials no agent needs to read. A fetched page can still make an agent send data out in a
-# GET request's URL, so the data it can reach is what has to be limited. Keep the home entries in
-# step with `denyRead` in ~/.claude/skills/spec/spike-settings.json, which can't take all of
-# ~/.config: git and uv read their own config there.
+# GET request's URL, so the data it can reach is what has to be limited. Shell history, cookies,
+# browser logins and keychains count: they hold tokens too. Every entry must also be in `denyRead`
+# and the Read denies of ~/.claude/hooks/agent-sandbox.json and
+# ~/.claude/skills/spec/spike-settings.json; tests/test_sandbox_settings.py checks it. The spike
+# settings deny only parts of ~/.config, because git and uv read their own config there.
 SECRET_HOME = tuple(
     HOME / p
     for p in (
         ".ssh", ".aws", ".kube", ".gnupg", ".docker", ".azure", ".config", ".netrc",
         ".git-credentials", ".npmrc", ".pypirc", ".claude.json", ".claude/.credentials.json",
+        ".zsh_history", ".bash_history", "Library/Keychains", "Library/Cookies",
+        "Library/Application Support/Google/Chrome",
     )
 )  # fmt: skip
 # Session history: transcripts, prompt history, file snapshots and the agents' own briefs and
 # replies. No agent needs it, and a cold reviewer that could read the session that wrote a
-# document wouldn't be cold. Keep in step with `denyRead` in ~/.claude/hooks/agent-sandbox.json.
+# document wouldn't be cold. Also denied in agent-sandbox.json, except ~/.claude/projects: the
+# agent's own tool output is saved there (SESSION_RESULTS), so only this guard covers it.
 HISTORY_HOME = tuple(
     HOME / p
     for p in (
@@ -390,7 +395,7 @@ def assignment_values(command):
 # over fixed words and untainted variables brings in nothing private. SCRIPTED take a script
 # or pattern as their first operand; any other operand of any of them is a file.
 PURE = {"echo", "printf", "tr", "sed", "jq", "grep", "cut", "head", "tail", "sort", "uniq",
-        "wc", "base64", "paste", "fold", "rev", "curl"}  # fmt: skip
+        "wc", "base64", "paste", "fold", "curl"}  # fmt: skip
 SCRIPTED = {"sed", "jq", "grep"}
 DATA_OPERANDS = {"echo", "printf", "tr"}  # their operands are text, never files
 FILE_OPTS = ("-f", "--file", "--from-file", "--rawfile", "--slurpfile", "--args", "--jsonargs")
@@ -686,7 +691,6 @@ def check_gh(args, raw, expands, clean=frozenset(), tainted=frozenset()):
         for a in args
         if a.startswith(("-f", "-F", "--field", "--raw-field", "--input"))
     ]
-    endpoint = next((a for a in args[1:] if not a.startswith("-")), "")
     if endpoint and endpoint != "graphql" and "://" not in endpoint:
         check_url("https://api.github.com/" + endpoint.lstrip("/"))
     if endpoint != "graphql":
@@ -1179,6 +1183,8 @@ def check_command(command, depth=0, local=None, clean=None):
 
 
 def check_write(path, allowed_dir):
+    if not path:
+        block("a write with no file path")
     target = Path(path).expanduser().resolve()
     root = Path(allowed_dir).expanduser().resolve()
     if not target.is_relative_to(root):
@@ -1191,6 +1197,8 @@ def main():
         event = json.load(sys.stdin)
     except json.JSONDecodeError:
         block("couldn't read the hook input")
+    if not isinstance(event, dict) or not isinstance(event.get("tool_input", {}), dict):
+        block("the hook input isn't a JSON object with a tool_input object")
     tool_input = event.get("tool_input", {})
     global CWD, SESSION_RESULTS
     CWD = event.get("cwd") or CWD
@@ -1211,4 +1219,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # Claude Code blocks a tool call only on exit 2; a crash exits 1, which lets the call through.
+    # So any error the checks didn't foresee blocks the call instead.
+    try:
+        main()
+    except Exception as e:
+        block(f"the guard failed ({type(e).__name__}: {e}), so the call is refused")

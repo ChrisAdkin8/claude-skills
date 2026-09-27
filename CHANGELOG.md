@@ -12,12 +12,25 @@ section is a date. Within a day, changes are grouped by area.
   `build-index.py`: research notes grouped under their topics, with their ideas and decisions
   under them. Markmap shows it as a clickable mind map; the README says how to open it.
 - The researcher sets a `topic` on each note, reusing one already in use where it fits.
+- Specs for `/implement`, a planned skill for workflow stage 5, in two parts: its tools (range-level
+  drift, a diff scanner and a sandboxed `implement-verifier`), then the skill. It will hand the
+  work to an `implementer` subagent, a headless session of its own on a git worktree. Both specs
+  are drafts awaiting their delta review; the skill isn't built yet.
 
 ### Changed
 
 - `check-note.py` fails a research note with no topic, or one that isn't `area` or
   `area/sub-area` in lowercase and hyphens, and warns on a topic no other note uses.
 - `check-note.py` and `build-index.py` share the topic pattern through `mdcheck.py`.
+- Workflow stage 5 is Implement, not Build. The diagram shows `/implement` as its command, says
+  under each stage's command whether its work runs in your session or in a subagent, and shows
+  stage 2 rebuilding the notes index, with its verifier checking the key claims.
+- The README defines skill, hook, frontmatter and turn where it first uses them, gives Layout as a
+  table, and follows the mind-map index through all six stages as a worked example.
+- The README takes five fixes from a delta cold review, which is saved in its record: the
+  `research-ideas` eval case's $10 cap, a Topics section for `~/notes/CLAUDE.md`, what the worked
+  example's verifier actually checked, and where unfiled notes go in the index.
+- `CLAUDE.md` gives the agent evals' current cost and the `research-ideas` case's cap.
 
 ## 2026-09-26
 

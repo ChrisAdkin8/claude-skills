@@ -27,9 +27,11 @@ SANS = "Helvetica Neue, Helvetica, Arial, sans-serif"
 MONO = "Menlo, Monaco, monospace"
 
 # ------------------------------------------------------------------ content
-# (number, title, colour key, command or None for a new session, what happens, output)
+# (number, title, colour key, command or None for a new session, what happens, output,
+#  whether its work runs in a subagent: a separate headless session, and whether its command
+#  is only planned, not built yet: drawn dashed)
 STAGES = [
-    (1, "Capture", "notes", "/idea", "Save the idea as a note", "~/notes/ideas/"),
+    (1, "Capture", "notes", "/idea", "Save the idea as a note", "~/notes/ideas/", False),
     (
         2,
         "Research",
@@ -37,8 +39,9 @@ STAGES = [
         "/research",
         "An agent researches it, citing every claim; the index is rebuilt",
         "~/notes/research/",
+        True,
     ),
-    (3, "Plan", "repo", "/spec", "A spec in the repo, citing the code", "docs/specs/"),
+    (3, "Plan", "repo", "/spec", "A spec in the repo, citing the code", "docs/specs/", False),
     (
         4,
         "Spike",
@@ -46,22 +49,26 @@ STAGES = [
         "/spec spike",
         "Sandboxed tests settle what reading can't",
         "docs/specs/spikes/",
+        True,
     ),
     (
         5,
-        "Build",
-        "session",
-        None,
-        "Implement the spec, W1 first; tests, then a PR",
-        "code + pull request",
+        "Implement",
+        "repo",
+        "/implement",
+        "Implement the spec, W1 first, test first; a verifier re-runs the checks",
+        "implement/ branch",
+        True,
+        True,
     ),
     (
         6,
         "Close out",
         "repo",
         "/spec done",
-        "Log where the build left the plan",
+        "Log where the implementation left the plan",
         "docs/specs/records/",
+        False,
     ),
 ]
 CHECKS = {
@@ -72,12 +79,26 @@ CHECKS = {
         ("cold-reviewer", "fresh-eyes read"),
     ],
 }
-LOOP_BACK = "Build overturned the research? Update the note"
+LOOP_BACK = "Research proved wrong? Update the note"
+# The line under each stage's command, saying where its work runs.
+RUNS = {True: "work runs in a subagent", False: "runs in your session"}
+RUNS_SHORT = {True: "subagent", False: "in session"}
+RUNS_PLANNED, RUNS_PLANNED_SHORT = "planned: in a subagent", "planned"
+
+
+def planned(st):
+    return len(st) > 7 and st[7]
+
+
+def runs(st, short=False):
+    if planned(st):
+        return RUNS_PLANNED_SHORT if short else RUNS_PLANNED
+    return (RUNS_SHORT if short else RUNS)[st[6]]
 QUICK = [("/spec quick", True), (" skips review and spikes", False)]
 DELTA_HEAD = "Spec edited after its review?"
 DELTA_BODY = [
     ("/cold-review <spec>", True),
-    (" re-checks the changes before Build starts", False),
+    (" re-checks the changes before Implement starts", False),
 ]
 REVIEW_STEPS = [
     ("1 Frame", "works out the doc's job"),
@@ -95,7 +116,6 @@ GUARDS = [
 LEGEND = [
     ("~/notes", "notes"),
     ("Your code repo", "repo"),
-    ("New Claude session", "session"),
     ("Checking agent or script", "check"),
 ]
 
@@ -254,7 +274,19 @@ class Canvas:
 
     # shared pieces
     def pill(self, x, y, w, h, stage, key, size=19.0):
-        if stage[3]:
+        if stage[3] and planned(stage):
+            ink = "#FFFFFF" if key == "block" else self.t["pill"]
+            self.rect(x, y, w, h, "none", stroke=ink, r=8, sw=2, dash="6 5")
+            self.text(
+                x + 14,
+                y + h / 2 + size * 0.35,
+                stage[3],
+                size=size,
+                fill=ink,
+                mono=True,
+                weight="bold",
+            )
+        elif stage[3]:
             self.rect(x, y, w, h, "#111827" if key == "block" else self.t["pill"], r=8)
             self.text(
                 x + 14,
@@ -346,7 +378,7 @@ def wide(theme):
     xs = [X0 + i * (CW + GAP) for i in range(6)]
     cxs = [x + CW / 2 for x in xs]
     bodies = [wrap(s[4], IW, 19) for s in STAGES]
-    BODY_Y = TOP + 52 + 20 + 42 + 36
+    BODY_Y = TOP + 52 + 20 + 42 + 24 + 36
     CARD_H = BODY_Y + max(map(len, bodies)) * 25 - TOP + 12 + 64 + 18
     CARD_B = TOP + CARD_H
     QY = CARD_B + 26
@@ -394,6 +426,7 @@ def wide(theme):
         c.number(x + 30, TOP + 26, st[0], key)
         c.text(x + 56, TOP + 35, st[1], size=24, fill="#FFFFFF", weight="bold")
         c.pill(x + PAD, TOP + 72, IW, 42, st, "card")
+        c.text(x + PAD, TOP + 138, runs(st), size=16, fill=t["muted"], weight="bold" if st[6] else "normal")
         c.lines(x + PAD, BODY_Y, bodies[i], size=19, lh=25)
         c.output(x + PAD, CARD_B - 64 - 18, IW, 64, key, st[5])
     for i in range(5):
@@ -418,7 +451,7 @@ def wide(theme):
     c.mixed(
         nx + 20, ny + 72, DELTA_BODY[:1] + [(" re-checks the changes", False)], size=18
     )
-    c.text(nx + 20, ny + 97, "before Build starts", size=18)
+    c.text(nx + 20, ny + 97, "before Implement starts", size=18)
     gx = xs[4] + CW - 60
     c.arrow(
         [(gx, ny - 2), (gx, CARD_B + 2)], c.col(rv, "accent"), dash="7 6", width=2.4
@@ -550,7 +583,7 @@ def narrow(theme):
     for i, st in enumerate(STAGES):
         n, _, key = st[0], st[1], st[2]
         body = wrap(st[4], DW, 19)
-        base = max(100, 30 + 25 * len(body))
+        base = max(124, 30 + 25 * len(body))
         chips = CHECKS.get(n, [])
         h = base + (74 if chips else 0)
         rows.append((y, h))
@@ -564,6 +597,7 @@ def narrow(theme):
         c.number(RX + 30, y + 30, n, key)
         c.text(RX + 56, y + 38, st[1], size=22, fill="#FFFFFF", weight="bold")
         c.pill(RX + 16, y + 54, BW - 32, 34, st, "block", size=17)
+        c.text(RX + 16, y + 110, runs(st), size=15, fill="#FFFFFF", weight="bold" if st[6] else "normal")
         c.lines(DX, y + 40, body, size=19, lh=25)
         c.output(RX + RW - OW - 16, y + 18, OW, 64, key, st[5], size=15)
         if chips:
@@ -574,7 +608,7 @@ def narrow(theme):
             for k, (name, what) in enumerate(chips):
                 c.check_chip(DX + k * (cw + 12), cy, cw, 66, name, what, size=16)
         y += h
-        if n == 4:  # the delta-review gate sits between Spike and Build
+        if n == 4:  # the delta-review gate sits between Spike and Implement
             c.arrow(
                 [(RX + BW / 2, y + 2), (RX + BW / 2, y + GAP_Y - 2)],
                 t["muted"],
@@ -619,7 +653,7 @@ def narrow(theme):
         anchor="middle",
         rotate=-90,
     )
-    # shortcut: plan -> build, in the right gutter
+    # shortcut: plan -> implement, in the right gutter
     (y3, _), (y5, _) = rows[2], rows[4]
     c.arrow(
         [
@@ -717,13 +751,14 @@ def social(theme):
 
     GAP = 18
     BW = (W - 2 * X0 - 5 * GAP) / 6
-    TOP, BH = 268, 158
+    TOP, BH = 268, 176
     for i, st in enumerate(STAGES):
         x, key = X0 + i * (BW + GAP), st[2]
         c.rect(x, TOP, BW, BH, c.col(key, "head"), r=16)
         c.number(x + 28, TOP + 36, st[0], key)
         c.text(x + 50, TOP + 45, st[1], size=24, fill="#FFFFFF", weight="bold")
         c.pill(x + 14, TOP + 84, BW - 28, 48, st, "block", size=19)
+        c.text(x + 16, TOP + 160, runs(st, short=True), size=17, fill="#FFFFFF", weight="bold" if st[6] else "normal")
         if i < 5:
             ay = TOP + BH / 2
             c.arrow([(x + BW + 3, ay), (x + BW + GAP - 3, ay)], t["muted"], width=3)

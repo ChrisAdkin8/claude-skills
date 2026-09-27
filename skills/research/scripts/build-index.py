@@ -17,6 +17,7 @@ Prints the path and counts of topics, notes and unfiled notes.
 import sys
 from collections import defaultdict
 from pathlib import Path
+from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from mdcheck import (
@@ -57,7 +58,17 @@ def item(rel, fields):
     title = fields.get("title") or Path(rel).stem
     title = title.replace("[", "\\[").replace("]", "\\]")
     status = fields.get("status")
-    return f"- [{title}]({rel})" + (f" · {status}" if status else "")
+    return f"- [{title}]({destination(rel)})" + (f" · {status}" if status else "")
+
+
+def destination(rel):
+    """A link destination markdown reads back as rel. A space or bracket would end or break a
+    bare destination, so such a path goes in angle brackets, or is percent-encoded if it holds one."""
+    if not set(rel) & set(" ()<>"):
+        return rel
+    if "<" in rel or ">" in rel:
+        return quote(rel, safe="/")
+    return f"<{rel}>"
 
 
 def parent(fields, research):

@@ -491,3 +491,30 @@ A reply that checks no citations, or mentions Rollback only as a section name, n
 now end with an "N of M passed; total $X" line. The per-case caps are now set separately:
 `AGENT_EVAL_MAX_USD` (default 5) and `SKILL_EVAL_MAX_USD` (default 3), replacing the shared
 `EVAL_MAX_USD`.
+
+## CodeRabbit's fixes from PR 5 (2026-09-27)
+
+`/research` step 8 says how the index recovers when two sessions finish at once; `build-index.py`
+puts a path with a space or bracket in angle brackets; the README's topic-listing command
+normalises before counting. All ten agent cases in parallel, on the default model:
+
+| Case | Result | Turns | Cost |
+|---|---|---:|---:|
+| absence-claim | PASS | 15 | $0.30 |
+| cold-review-skip | PASS | 6 | $0.22 |
+| delta-review | PASS | 6 | $0.25 |
+| delta-review-record | PASS | 6 | $0.20 |
+| record-skip | PASS | 6 | $0.20 |
+| research-ideas | PASS | 63 | $2.59 |
+| research-quick | PASS | 11 | $0.33 |
+| spec-miscite | PASS | 5 | $0.19 |
+| spike-inherited | PASS | 5 | $0.19 |
+| wrong-figure | PASS | 6 | $0.21 |
+
+Total $4.68.
+
+Skill evals: `spec-done` PASS (11 turns, $0.35). `cold-review-delta` FAILed its first run
+(4 turns, $0.27) on its two diff checks: `review-state.py` now prints `diff -M <base>` (`b0a6fa6`,
+following renames), and the grader's pattern wanted the commit straight after `diff`. The skill's
+diff was right, from the runbook's first commit. With the pattern allowing options, a re-run
+passed every check (4 turns, $0.28).

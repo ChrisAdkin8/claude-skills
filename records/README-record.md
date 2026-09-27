@@ -84,3 +84,4 @@ Needs a run: none
 - Not reviewed: the diagram draws `/implement`'s command box dashed and says "planned" under it; How to read it explains dashed command boxes; the alt text now covers the subagent lines, the index rebuild and `/implement` being planned; a line under the diagram links the full-size light and dark versions, on 2026-09-27.
 - Not reviewed: `/implement`'s command box is solid black like the others, not dashed; the "planned" line under it stays, and How to read it says what "planned" means instead of what a dashed box means, on 2026-09-27.
 - Not reviewed: How the agents are contained says the guard refuses a call if it fails itself; the Layout table's `tests/test_*.py` row adds `git-read.py`, `run-spike.sh` and the deny-list check, on 2026-09-27.
+- Not reviewed: Set up `~/notes`'s example topic-listing command drops the `topic:` label and any `# comment` before counting, in a code block, from CodeRabbit's review of PR 5, on 2026-09-27.

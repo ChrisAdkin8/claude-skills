@@ -75,6 +75,21 @@ section is a date. Within a day, changes are grouped by area.
   which `/cold-review` may run without a prompt, and which works for paths with spaces.
 - `build-index.py` skips a broken link or a folder named `*.md` instead of crashing, escapes a
   backslash in a title, and reads a note that starts with a byte-order mark.
+- Skill instructions that a model could follow into the wrong result:
+  - `/spec` lists the review's `Needs a run` rows as candidate spike questions, and adds them only
+    if the user picks them, instead of editing the spec straight after its review. It asks which
+    findings to fold in with one multi-select question, and always gives the implementation
+    prompt, spike questions or not.
+  - `/cold-review` saves a spec's full review without asking, as it already did its delta
+    review, so a later `/spec finish` doesn't run a second one. It runs the delta `diff:` line
+    as printed, through `git-read.py`.
+  - All three agent-running skills say exit 2 means the run never started, so they don't read an
+    earlier run's `run.err`, and take a fresh run dir rather than overwrite an earlier session's
+    replies.
+  - `/idea` and `/research` stop, pointing to the README, when `~/notes` isn't set up.
+    `/research` never moves an `adopted`, `parked` or `dropped` idea back to `exploring`.
+  - `/spec spike` resolves a `HEAD` read-at to a commit, which `prepare-spike.sh` needs. `/spec
+    done` reads the spec's repo with `-C` and finds its first commit through a rename.
 - Tests and evals that could pass a wrong answer, or miss a regression:
   - A table of 42 guard refusals (file writes, `gh` and git writes, `curl` sends, `sed -i`,
     `find -exec` and the rest), each checked for its reason; most had no test.

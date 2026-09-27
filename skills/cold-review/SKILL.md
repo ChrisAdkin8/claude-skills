@@ -45,7 +45,8 @@ Change the skeleton here, not there.
    diff base since the review (its header says how). Its last line is the `state:`:
    - `full`: no saved review. This is the full review; carry on.
    - `delta`: carry on as the delta review, following the delta notes in steps 3 to 5, with the
-     `diff:` command and the `logged:` lines it printed. With no `diff:` line (the review was
+     `diff:` command and the `logged:` lines it printed. Run the `diff:` command exactly as
+     printed: it goes through `~/.claude/hooks/git-read.py`, which `allowed-tools` covers. With no `diff:` line (the review was
      never committed), the reviewer works from the logged lines alone. Read that diff against the logged
      lines: if `headings:` names parts none of them accounts for, say so in one line; the
      reviewer covers them anyway, since they're in the diff, and offer to log them in the
@@ -158,15 +159,17 @@ Otherwise run the `cold-reviewer` agent, as a headless, sandboxed session: with 
 write the prompt to `<run dir>/brief.md`. The run dir is `~/.cache/agent-runs/<name>/cold-reviewer`
 (`cold-reviewer-delta` for a delta review), where `<name>` is `<repo dir name>--<document
 basename>`, or for a document outside a repo its directory's name and basename, e.g.
-`claude-skills--README`, since a reused run dir loses its replies.
+`claude-skills--README`, since a reused run dir loses its replies. If that run dir already holds a
+`reply.md` from an earlier session, add the next free `-<n>` suffix.
 Then run `~/.claude/hooks/run-agent.sh cold-reviewer <repo root, or the
 document's directory> <that run dir>` with the Bash tool and `run_in_background: true`, paths
 written with `~`. When it finishes, read `<run dir>/reply.md`. Exit 3 means the reply lacks
 the table and closing lines the skeleton asks for (an API error, a budget stop, or a reply out
 of format): write `followup.md` in the run
 dir asking for the reply again, in full, in that format, and run the same command with
-`--resume`; if that exits 3 too, tell the user and relay nothing. Any other non-zero exit means
-no reply, and `run.err` there says why. Tell the user in one line that the document is under cold review (or delta review), and end your
+`--resume`; if that exits 3 too, tell the user and relay nothing. Exit 2 means the run never
+started: the command's own output says why, and any `run.err` there is from an earlier run. Any
+other non-zero exit means no reply, and `run.err` there says why. Tell the user in one line that the document is under cold review (or delta review), and end your
 turn.
 
 ## 5. When the reviewer finishes
@@ -183,7 +186,9 @@ turn.
      The reviewer is read-only by design; you are not.
    - if you think a finding is wrong, say so and why in one line, but leave it in the list.
 3. **Offer, in one line each:** folding in the findings that affect correctness or a requirement,
-   and saving the review. Don't do either unasked.
+   and saving the review. Don't do either unasked, except that a spec's review, full or delta, is
+   saved without asking, as `/spec` does: `check-spec.py` and `review-state.py` read it, and an
+   unsaved review means a later `/spec finish` launches another.
    - **Folding in:** fold only the ones the user picks. Don't touch the rest. A document with a
      saved review logs each fold in its record, under `## Changes since the review`, as `- Not
      reviewed: <what changed>, from <review> row <n>, on <YYYY-MM-DD>.`, since the fix itself
@@ -197,5 +202,4 @@ turn.
      cold-reviewer: the changes logged as Not reviewed. Saved unchanged.` Then change each `Not
      reviewed:` line it covered to `Delta-reviewed on <YYYY-MM-DD>:`, keeping the rest of the
      line. For an older document whose review is at its end, add the delta there instead, beside
-     the review it follows. For a spec, save it without asking, as `/spec` does with the full
-     review: the spec's checker reads it.
+     the review it follows.

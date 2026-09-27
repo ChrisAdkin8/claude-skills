@@ -104,7 +104,7 @@ At `ideas` depth, and at `depth: full` when you ran the absence-claim hunt, foll
 
 ```
 Prior art:
-Queries, idea #1: "<plain words>"; "<problem>"; "<X for Y>"; "<name>" (each run on GitHub, arXiv, HN and the web)
+Queries, idea #1: "<plain words>"; "<problem>"; "<X for Y>"; "<name>" (each run on GitHub, arXiv, HN and the web; for an absence claim, GitHub, arXiv and HN only)
 Queries, idea #2: … (each run on GitHub, arXiv and HN)
 - <same | overlaps | adjacent>, idea #<n>: <name> <URL>: <what it does, in one line>
 ```

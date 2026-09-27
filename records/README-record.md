@@ -87,3 +87,4 @@ Needs a run: none
 - Not reviewed: Set up `~/notes`'s example topic-listing command drops the `topic:` label and any `# comment` before counting, in a code block, from CodeRabbit's review of PR 5, on 2026-09-27.
 - Not reviewed: the diagram's fallback image was changed to the dark version in GitHub's web editor (23984aa), and is now the light version again, on 2026-09-27.
 - Not reviewed: stage 4 says spikes are offered at the end of `/spec`, not run automatically; stage 5 links both `/implement` specs; What things cost says four runs cost $3.70 to $4.68; the Layout table adds `review-state.py` to mdcheck's users, and rows for the spec records, the diagram's folder and social preview, the test fixtures, CI, `CHANGELOG.md` and `CLAUDE.md`, and names the mdcheck and eval-runner tests, on 2026-09-27.
+- Not reviewed: the Layout table's `tests/fixtures/` row mentions the `depth: ideas` note, on 2026-09-27.

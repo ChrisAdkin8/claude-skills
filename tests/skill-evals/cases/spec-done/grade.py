@@ -11,7 +11,9 @@ spec = repo / "docs/specs/2026-09-20-rounding.md"
 record = repo / "docs/specs/records/2026-09-20-rounding-record.md"
 w1 = subprocess.run(["git", "-C", str(repo), "log", "--format=%h", "-1", "--grep", "(W1)"],
                     capture_output=True, text=True).stdout.strip()
-diff = subprocess.run(["git", "-C", str(repo), "diff", "--", str(spec)], capture_output=True, text=True).stdout
+head = dict(l.split("=", 1) for l in (repo / ".git/eval-hashes").read_text().split())["head"]
+# Against setup's HEAD, not the index: a skill that commits its edit mustn't hide it.
+diff = subprocess.run(["git", "-C", str(repo), "diff", head, "--", str(spec)], capture_output=True, text=True).stdout
 changed = [l for l in diff.splitlines() if l[:1] in "+-" and not l.startswith(("+++", "---"))]
 rec = record.read_text() if record.exists() else ""
 impl = rec.split("## Implementation", 1)[1] if "## Implementation" in rec else ""
@@ -27,7 +29,11 @@ checks = {
         re.search(r"(?i)(?:default|places)[^\n]{0,40}\b3\b|\b3\b[^\n]{0,40}(?:default|places)", impl)
     ),
     "check-spec passes": "RESULT: PASS" in check,
-    "the reply names W2 as not landed": bool(re.search(r"W2", result.get("result", ""))),
+    # W2 with a word saying it's still open, in the same sentence: "W2 has landed" isn't it.
+    "the reply names W2 as not landed": any(
+        re.search(r"(?i)\bW2\b", s) and re.search(r"(?i)not (?:yet )?(?:landed|done|built|implemented|in)|\b(?:hasn't|has not|wasn't|was not|was never|never)\b|\bopen\b|pending|outstanding|remain|still to|unlanded|missing|no commit", s)
+        for s in re.split(r"(?<=[.;\n])\s+", result.get("result", ""))
+    ),
 }
 for name, ok in checks.items():
     print(("ok   " if ok else "FAIL ") + name)

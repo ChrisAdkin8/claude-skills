@@ -37,7 +37,7 @@ apart: it gives any markdown file the same cold review `/spec` gives a spec. Not
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/workflow-narrow-dark.png">
-  <img src="docs/workflow-narrow.png" alt="Workflow diagram. Six stages run in order: Capture with /idea, Research with /research, Plan with
+  <img src="docs/workflow-narrow-dark.png" alt="Workflow diagram. Six stages run in order: Capture with /idea, Research with /research, Plan with
 /spec, Spike with /spec spike, Implement with /implement (planned, not built yet), and Close out
 with /spec done. Under each command, a line says whether the stage's work runs in your session or in
 a subagent: Research, Spike and Implement use subagents. Research also rebuilds the notes index; a

@@ -35,7 +35,7 @@ STAGES = [
         "Research",
         "notes",
         "/research",
-        "An agent researches it, citing every claim",
+        "An agent researches it, citing every claim; the index is rebuilt",
         "~/notes/research/",
     ),
     (3, "Plan", "repo", "/spec", "A spec in the repo, citing the code", "docs/specs/"),
@@ -65,7 +65,7 @@ STAGES = [
     ),
 ]
 CHECKS = {
-    2: [("research-verifier", "checks every source")],
+    2: [("research-verifier", "checks the key claims")],
     3: [
         ("check-spec.py", "citations, criteria"),
         ("spec-verifier", "every claim"),

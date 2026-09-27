@@ -1,4 +1,5 @@
-"""Tests for skills/spec/scripts/check-spec.py's handling of a saved cold review and spike results.
+"""Tests for skills/spec/scripts/check-spec.py: citations, work items, status, the record, the
+delta-review gate and spike results.
 
 Run with: python3 -m unittest discover -s ~/code/github.com/claude-skills/tests
 """
@@ -682,3 +683,90 @@ class CitationEdgeCases(unittest.TestCase):
         out, result = self.check("See docs/café.md:3.")
         self.assertEqual(result, "RESULT: FAIL", out)
         self.assertIn("had only 1 lines at read-at", out)
+
+
+class GateLoopholes(unittest.TestCase):
+    """Ways a spec used to pass checks it should fail, from the 2026-09-27 repo review."""
+
+    def setUp(self):
+        self.reviewed = FIXTURE.read_text().replace("status: draft", "status: reviewed")
+
+    def test_comment_in_a_code_block_does_not_end_the_record_review(self):
+        # A `# comment` in a shell block read as a heading and cut the delta review off.
+        review = RECORD + "\n```bash\n# re-run the checker\n```\n" + DELTA
+        record = review + "\n## Changes since the review\n\n- Not reviewed: W1 changed, on 2026-09-24.\n"
+        out, result = check(self.reviewed, record=record)
+        self.assertEqual(result, "RESULT: PASS", out)
+
+    def test_cold_review_heading_in_any_case_is_the_review(self):
+        record = UNREVIEWED.replace("## Cold review", "## Cold Review")
+        out, result = check(self.reviewed, record=record)
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("have had no delta review", out)
+        out, result = check(self.reviewed, record=record + DELTA.replace("Delta review", "Delta Review"))
+        self.assertIn("have had no delta review", out)  # the delta must sit in the review section
+
+    def test_unclosed_code_block_fails(self):
+        text = FIXTURE.read_text().replace(
+            "Nothing to cite, because read-at is none.", "Nothing to cite.\n\n```bash\nmake"
+        )
+        out, result = check(text)
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("is never closed", out)
+
+    def test_done_when_must_be_the_field_line(self):
+        base = FIXTURE.read_text()
+        prose = base.replace("- **Done when:** the tests pass.\n", "This step is done when W2 lands.\n")
+        out, result = check(prose)
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("W1 has no 'Done when'", out)
+        for placeholder in ("TBD", "TODO", "?", "..."):
+            with self.subTest(placeholder=placeholder):
+                out, result = check(base.replace("the tests pass.", placeholder))
+                self.assertIn("W1 has an empty 'Done when'", out)
+        out, result = check(base.replace("- **Done when:** the tests pass.", "- **Done when**, on k3s: it runs."))
+        self.assertEqual(result, "RESULT: PASS", out)
+
+
+class CitationLoopholes(unittest.TestCase):
+    check = Citations.check
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.repo = Path(tmp.name) / "repo"
+        self.read_at = git_repo(
+            self.repo,
+            {
+                "docs/howto.md": "one\ntwo\n",
+                "a/values.yaml": "x\n",
+                "b/values.yaml": "y\n",
+                "cr.txt": "a\rb\rc\rd\re\n",
+            },
+        )
+
+    def test_leading_rule_is_not_frontmatter(self):
+        # A `---` rule at the top read as frontmatter swallowed the spec: 0 citations, PASS.
+        text = "---\n# House spec\n\nSee docs/nothere.py:12 and docs/howto.md:999.\n\n---\n"
+        out, result = self.check("", spec_text=text)
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("docs/howto.md:999", out)
+        out, result = self.check("", spec_text="---\ntitle: x\n# House spec\n\nSee docs/howto.md:999.\n")
+        self.assertEqual(result, "RESULT: FAIL", out)  # unclosed frontmatter
+
+    def test_bare_filename_range_is_checked(self):
+        out, result = self.check("See howto.md:9999.")
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("howto.md:9999: the file had only 2 lines", out)
+        out, result = self.check("See howto.md:0.")
+        self.assertIn("invalid line range", out)
+
+    def test_ambiguous_bare_filename_fails_in_a_template_spec(self):
+        out, result = self.check("See values.yaml:1.")
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("could be a/values.yaml, b/values.yaml", out)
+
+    def test_lone_carriage_return_is_not_a_line_break(self):
+        out, result = self.check("See cr.txt:5.")
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("cr.txt:5: the file had only 1 lines", out)

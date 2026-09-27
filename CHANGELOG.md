@@ -3,10 +3,39 @@
 What changed, by day, drawn from the commit history. The repo has no releases or tags, so each
 section is a date. Within a day, changes are grouped by area.
 
+## 2026-09-28
+
+### Fixed
+
+- `/cold-review` gives the delta reviewer its diff as a `git` command. `review-state.py` prints it
+  through `git-read.py`, which the main session may run, but the reviewer's guard refuses that
+  script, so the reviewer couldn't read its diff. No eval caught it: both delta cases have no diff.
+
+### Changed
+
+- Another project's repo name is gone from a spec, its spike results and `BASELINE.md`. `CLAUDE.md` lists the
+  `cold-review:` and `tests:` commit prefixes, and asks for commits from the checkout, not
+  GitHub's web editor.
+- The docs match the code after the 2026-09-27 fixes: the guard's docstring lists its `search`
+  mode and new rules; the README lists `gh`, `jq` and `gcloud` under Requirements, six eval runs,
+  and web search apart from the unchecked documentation servers; the scripts' and tests' headers
+  give their current exit codes; the researcher treats an `API error` row as unverified; the
+  diagram's guard box says it checks web calls, search included.
+- `CLAUDE.md` says the README's `Not reviewed:` lines are a log: it has had its one delta review.
+
 ## 2026-09-27
 
 ### Security
 
+- The guard refuses a wrapper option it doesn't know. It read BSD `xargs -J` as a flag, so in
+  `xargs -J grep curl -d x https://…` it checked `grep` and let `curl` send data unchecked.
+- The guard refuses `eval`, which it checked by re-joining the words without their quoting. No
+  agent has used it.
+- `gh` and the research scripts run outside the sandbox, and a command joining them with others
+  seems to as well, so the guard lets them share a command only with text filters, `cd` and
+  loops, never `curl` or `git`.
+- Web search queries go through the guard: at most 200 characters, and no 40-character run of
+  letters and digits. The longest of 478 recorded queries is 139 characters.
 - The guard fails closed: it refuses the call when it crashes or gets input it doesn't expect,
   and refuses a write with no file path. Before, an unexpected error let the call through.
 - Shell history, cookies, Chrome's profile and keychains are denied to the Read tool as well as to
@@ -31,6 +60,22 @@ section is a date. Within a day, changes are grouped by area.
 
 ### Changed
 
+- Checks that specs and notes used to pass when they shouldn't:
+  - A `# comment` in a code block no longer ends a record's `## Cold review` section, and a
+    `## Cold review` quoted in a code block isn't taken for a saved review. The heading matches in
+    any case, so `## Cold Review` no longer turns off the delta-review gate.
+  - A `---` rule at the top, or frontmatter that's never closed, isn't frontmatter: the spec's
+    citations are checked, rather than 0 citations and a PASS.
+  - A code block that's never closed fails, instead of hiding the rest of the document.
+  - A bare-filename citation is range-checked when only one file has that name, and fails a
+    template spec when several do.
+  - `Done when` must be the field line itself, and `TBD`, `TODO`, `?` or `...` counts as empty.
+  - A lone carriage return isn't a line break when counting a cited file's lines.
+  - After Sources, an indented line after a blank line is prose, not a source. Indented prose in
+    the Candidate pool counts, and a candidate over 120 words fails.
+  - An *(unverified)* mark right after one sentence's full stop no longer covers the next sentence.
+  - In a shallow clone, `review-state.py` reports `no-base` rather than taking the clone's cut-off
+    commit for the review commit.
 - `check-note.py` fails a research note with no topic, or one that isn't `area` or
   `area/sub-area` in lowercase and hyphens, and warns on a topic no other note uses.
 - `check-note.py` and `build-index.py` share the topic pattern through `mdcheck.py`.
@@ -55,6 +100,48 @@ section is a date. Within a day, changes are grouped by area.
 - The README's diagram shows light in light mode; it showed the dark version to everyone. The
   README and `CLAUDE.md` list every test file and the CI, and give the fourth eval run's cost.
 - The diagram's renderer is pinned to one version, with its lockfile committed.
+- `review-state.py` prints its `diff:` line as a quoted `~/.claude/hooks/git-read.py` command,
+  which `/cold-review` may run without a prompt, and which works for paths with spaces.
+- `build-index.py` skips a broken link or a folder named `*.md` instead of crashing, escapes a
+  backslash in a title, and reads a note that starts with a byte-order mark.
+- `repo-health.sh` no longer reports a failure as a fact about a repo. It exits 1 when `gh` or
+  `jq` is missing or `gh` isn't logged in, says "not found or no access" only when GitHub says so
+  and "API error" otherwise, exits 1 when no repo could be read, and fetches four repos at a time.
+  `reddit-search.sh` and `gcp-skus.sh` check their tools first, and `gcp-skus.sh` URL-encodes the
+  page token. Tests for all three use stub `gh`, `curl` and `gcloud`.
+- Skill instructions that a model could follow into the wrong result:
+  - `/spec` lists the review's `Needs a run` rows as candidate spike questions, and adds them only
+    if the user picks them, instead of editing the spec straight after its review. It asks which
+    findings to fold in with one multi-select question, and always gives the implementation
+    prompt, spike questions or not.
+  - `/cold-review` saves a spec's full review without asking, as it already did its delta
+    review, so a later `/spec finish` doesn't run a second one. It runs the delta `diff:` line
+    as printed, through `git-read.py`.
+  - All three agent-running skills say exit 2 means the run never started, so they don't read an
+    earlier run's `run.err`, and take a fresh run dir rather than overwrite an earlier session's
+    replies.
+  - `/idea` and `/research` stop, pointing to the README, when `~/notes` isn't set up.
+    `/research` never moves an `adopted`, `parked` or `dropped` idea back to `exploring`.
+  - `/spec spike` resolves a `HEAD` read-at to a commit, which `prepare-spike.sh` needs. `/spec
+    done` reads the spec's repo with `-C` and finds its first commit through a rename.
+- Tests and evals that could pass a wrong answer, or miss a regression:
+  - A table of 43 guard refusals (file writes, `gh` and git writes, `curl` sends, `sed -i`,
+    `find -exec` and the rest), each checked for its reason; most had no test.
+  - The `delta-review` cases need the grade in the Affects cell. `cold-review-delta` rejects "no
+    unlogged change" and a base that doesn't exist. `cold-review-delta` fails a skill that commits, and `spec-done`
+    diffs against setup's HEAD, so a committed edit can't hide.
+  - The runner tests check that each cap and sandbox flag reaches `claude`, as does
+    `test_run_spike.py` for a spike's $2 and 60 turns.
+  - An ideas-depth fixture tests the Candidate pool and Shortlist checks for free.
+  - `test_prepare_spike.py` and `test_run_agent.py` use a home of their own, not `~/.cache`.
+  - `replay_guard.py` replays every Bash command from the headless runs, of any date, and fails if
+    one gets a different verdict now than it got when it ran.
+- Both eval runners refuse an empty cases folder instead of crashing on bash 3.2, clean up their
+  temp folders and eval notes if interrupted, and the skill runner counts only this run's results.
+  The agent runner fails a research case when `~/notes` isn't a git repo, since it can't see
+  changes there.
+- `mdcheck.py` holds the delta-review pattern, the record path and the secrets scan the checkers
+  each kept a copy of.
 
 ## 2026-09-26
 

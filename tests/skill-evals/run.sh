@@ -9,7 +9,7 @@
 #   SKILL_EVAL_MAX_USD  per-case cost ceiling, passed as --max-budget-usd (default 3)
 #   EVAL_CASES, EVAL_OUT  the cases and results directories (default: cases/ and
 #                         results/<timestamp>/ here); tests/test_eval_runners.py points them elsewhere
-# Exits 0 only if every case passed, 1 if any failed, 2 on a bad case name.
+# Exits 0 only if every case passed, 1 if any failed, 2 on a bad case name or no cases.
 set -uo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd -P)
@@ -18,13 +18,19 @@ mkdir -p "$out"
 cases=("$@")
 cases_dir=${EVAL_CASES:-$here/cases}
 [ ${#cases[@]} -eq 0 ] && while IFS= read -r c; do cases+=("$c"); done < <(ls "$cases_dir")
+# bash 3.2 calls "${cases[@]}" unbound when it's empty, so say why instead.
+[ ${#cases[@]} -gt 0 ] || { echo "no cases in $cases_dir" >&2; exit 2; }
 for c in "${cases[@]}"; do
   [ -d "$cases_dir/$c" ] || { echo "no such case: $c" >&2; exit 2; }
 done
 
+# Every fixture lives under one temp dir, so an interrupted run leaves none behind.
+tmp_root=$(mktemp -d)
+trap 'rm -rf "$tmp_root"' EXIT
+
 run_case() {
   local c=$1 dir="$cases_dir/$1" work
-  work=$(mktemp -d)
+  work=$(mktemp -d "$tmp_root/work.XXXXXX")
   "$dir/setup.sh" "$work" > "$out/$c.setup" 2>&1 || { echo "FAIL $c (setup)"; echo FAIL > "$out/$c.result"; return; }
   (cd "$work" && claude -p --output-format json --max-turns 60 --max-budget-usd "${SKILL_EVAL_MAX_USD:-3}" \
     --settings "$repo/hooks/agent-sandbox.json" --permission-mode acceptEdits \
@@ -38,13 +44,15 @@ run_case() {
 }
 for c in "${cases[@]}"; do run_case "$c" & done
 wait
-passed=$(cat "$out"/*.result 2>/dev/null | grep -c '^PASS$')
-total=$(python3 - "$out"/*.json <<'PY'
+# Only this run's cases: a reused EVAL_OUT may hold older results.
+passed=0
+for c in "${cases[@]}"; do grep -qx PASS "$out/$c.result" 2>/dev/null && passed=$((passed + 1)); done
+total=$(python3 - "${cases[@]/#/$out/}" <<'PY'
 import json, sys
 total = 0.0
 for path in sys.argv[1:]:
     try:
-        total += json.load(open(path)).get("total_cost_usd") or 0
+        total += json.load(open(path + ".json")).get("total_cost_usd") or 0
     except (OSError, ValueError):
         pass
 print(f"{total:.2f}")

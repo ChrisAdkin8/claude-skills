@@ -7,7 +7,6 @@ model. Run with: python3 -m unittest discover -s ~/code/github.com/claude-skills
 
 import json
 import os
-import shutil
 import subprocess
 import tempfile
 import unittest
@@ -15,7 +14,7 @@ import uuid
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[1] / "hooks" / "run-agent.sh"
-ROOT = Path.home() / ".cache" / "agent-runs"
+AGENTS = Path(__file__).resolve().parents[1] / "agents"
 STUB = """#!/usr/bin/env python3
 import json, os, sys
 calls = os.environ["STUB_CALLS"]
@@ -37,14 +36,19 @@ class RunAgent(unittest.TestCase):
         (bin_dir / "claude").write_text(STUB)
         (bin_dir / "claude").chmod(0o755)
         self.calls = self.tmp / "calls.jsonl"
+        # A home of its own, with the repo's agents, so runs land in no real ~/.cache.
+        home = self.tmp.resolve() / "home"
+        (home / ".claude").mkdir(parents=True)
+        (home / ".claude" / "agents").symlink_to(AGENTS)
+        self.root = home / ".cache" / "agent-runs"
         self.env = {
             **os.environ,
+            "HOME": str(home),
             "PATH": f"{bin_dir}:{os.environ['PATH']}",
             "STUB_CALLS": str(self.calls),
             "RUN_AGENT_LOG": str(self.tmp / "sessions.log"),
         }
         self.name = f"test-{uuid.uuid4().hex[:8]}"
-        self.addCleanup(shutil.rmtree, ROOT / self.name, True)
         self.work = self.tmp / "work"
         self.work.mkdir()
 
@@ -59,7 +63,7 @@ class RunAgent(unittest.TestCase):
         return run.returncode, run.stdout + run.stderr
 
     def run_dir(self, agent="cold-reviewer"):
-        return ROOT / self.name / agent
+        return self.root / self.name / agent
 
     def calls_made(self):
         return (
@@ -72,8 +76,8 @@ class RunAgent(unittest.TestCase):
         for args in (
             ("general-purpose", self.work, self.run_dir()),
             ("cold-reviewer", self.work, self.tmp / "elsewhere"),
-            ("cold-reviewer", self.work, ROOT / self.name),  # one level short
-            ("cold-reviewer", self.work, ROOT / self.name / ".." / "x" / "y"),
+            ("cold-reviewer", self.work, self.root / self.name),  # one level short
+            ("cold-reviewer", self.work, self.root / self.name / ".." / "x" / "y"),
             ("cold-reviewer", self.tmp / "missing", self.run_dir()),
             ("cold-reviewer", self.work, self.run_dir(), "--force"),
         ):

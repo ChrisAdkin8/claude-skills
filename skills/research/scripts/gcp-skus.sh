@@ -9,7 +9,8 @@
 #       e.g. gcp-skus.sh 6F81-5844-456A 'E2 Instance Core' europe-west2
 #
 # Prints one row per matching SKU: description, regions, unit and USD price per tier, then a
-# line to cite. Needs gcloud logged in; if it isn't, says so and exits 1.
+# line to cite. Needs gcloud (logged in), curl and jq; if one is missing, gcloud isn't logged in or
+# a request fails, it says so and exits 1. Exits 2 on bad arguments.
 set -euo pipefail
 
 api=https://cloudbilling.googleapis.com/v1
@@ -18,6 +19,9 @@ usage() {
   exit 2
 }
 [ $# -ge 2 ] || usage
+for tool in gcloud curl jq; do
+  command -v "$tool" > /dev/null || { echo "gcp-skus: needs gcloud, curl and jq on PATH" >&2; exit 1; }
+done
 
 token=$(gcloud auth print-access-token 2>/dev/null) || {
   echo "gcloud isn't logged in, so GCP prices can't be checked against a Google source; mark them (unverified)" >&2
@@ -30,7 +34,7 @@ fetch() {
   while :; do
     # The token goes to curl in a config on stdin, never in its arguments, where ps shows it.
     resp=$(printf 'header = "Authorization: Bearer %s"\n' "$token" |
-      curl -sf -K - "$url${page:+&pageToken=$page}") || {
+      curl -sf -K - "$url${page:+&pageToken=$(jq -rn --arg p "$page" '$p | @uri')}") || {
       echo "request failed: ${url%%\?*}" >&2
       exit 1
     }

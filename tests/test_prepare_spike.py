@@ -4,7 +4,7 @@ directory under ~/.cache/spec-spikes, whatever arguments it's given.
 Run with: python3 -m unittest discover -s ~/code/github.com/claude-skills/tests
 """
 
-import shutil
+import os
 import subprocess
 import tempfile
 import unittest
@@ -12,15 +12,6 @@ import uuid
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[1] / "skills" / "spec" / "scripts" / "prepare-spike.sh"
-ROOT = Path.home() / ".cache" / "spec-spikes"
-
-
-def prepare(*args):
-    """(exit code, stdout + stderr) from prepare-spike.sh."""
-    run = subprocess.run(
-        [str(SCRIPT), *map(str, args)], capture_output=True, text=True, check=False
-    )
-    return run.returncode, run.stdout + run.stderr
 
 
 def git(repo, *args):
@@ -46,20 +37,32 @@ class PrepareSpike(unittest.TestCase):
         )  # fmt: skip
         self.sha = git(self.repo, "rev-parse", "--short", "HEAD")
         (self.repo / "a.txt").write_text("edited since\n")
+        # A home of its own, so the script's `rm -rf` never runs in the real ~/.cache.
+        self.home = self.tmp.resolve() / "home"
+        self.home.mkdir()
+        self.env = {**os.environ, "HOME": str(self.home)}
+        self.root = self.home / ".cache" / "spec-spikes"
         self.name = f"test-prepare-spike-{uuid.uuid4().hex[:8]}"
-        self.addCleanup(shutil.rmtree, ROOT / self.name, ignore_errors=True)
-        self.scratch = ROOT / self.name / "spec" / "S1"
+        self.scratch = self.root / self.name / "spec" / "S1"
+
+    def prepare(self, *args):
+        """(exit code, stdout + stderr) from prepare-spike.sh."""
+        run = subprocess.run(
+            [str(SCRIPT), *map(str, args)], capture_output=True, text=True, check=False,
+            env=self.env,
+        )  # fmt: skip
+        return run.returncode, run.stdout + run.stderr
 
     def test_exports_the_repo_at_read_at(self):
         (self.scratch / "src").mkdir(parents=True)
         (self.scratch / "old.txt").write_text("from an earlier run\n")
-        code, out = prepare(self.scratch, self.repo, self.sha)
+        code, out = self.prepare(self.scratch, self.repo, self.sha)
         self.assertEqual(code, 0, out)
         self.assertEqual((self.scratch / "src" / "a.txt").read_text(), "at read-at\n")
         self.assertFalse((self.scratch / "old.txt").exists())
 
     def test_read_at_none_only_clears(self):
-        code, out = prepare(self.scratch, "none", "none")
+        code, out = self.prepare(self.scratch, "none", "none")
         self.assertEqual(code, 0, out)
         self.assertTrue(self.scratch.is_dir())
         self.assertFalse((self.scratch / "src").exists())
@@ -69,14 +72,14 @@ class PrepareSpike(unittest.TestCase):
         victim.mkdir()
         for scratch in (
             victim,  # anywhere else
-            ROOT / self.name / "S1",  # a level missing
-            ROOT / self.name / "spec" / "S1" / "deeper",
-            ROOT / self.name / ".." / ".." / "S1",
-            ROOT / self.name / "spec" / "S1 " / str(victim),  # an extra argument
-            f"{ROOT}/{self.name}/spec/S1 {victim}",
+            self.root / self.name / "S1",  # a level missing
+            self.root / self.name / "spec" / "S1" / "deeper",
+            self.root / self.name / ".." / ".." / "S1",
+            self.root / self.name / "spec" / "S1 " / str(victim),  # an extra argument
+            f"{self.root}/{self.name}/spec/S1 {victim}",
         ):
             with self.subTest(scratch=scratch):
-                code, out = prepare(scratch, "none", "none")
+                code, out = self.prepare(scratch, "none", "none")
                 self.assertEqual(code, 2, out)
         self.assertTrue(victim.is_dir())
 
@@ -84,10 +87,10 @@ class PrepareSpike(unittest.TestCase):
         outside = self.tmp / "outside"
         (outside / "spec" / "S1").mkdir(parents=True)
         (outside / "spec" / "S1" / "keep.txt").write_text("keep\n")
-        ROOT.mkdir(parents=True, exist_ok=True)
-        (ROOT / self.name).symlink_to(outside)
-        self.addCleanup((ROOT / self.name).unlink)
-        code, out = prepare(ROOT / self.name / "spec" / "S1", "none", "none")
+        self.root.mkdir(parents=True, exist_ok=True)
+        (self.root / self.name).symlink_to(outside)
+        self.addCleanup((self.root / self.name).unlink)
+        code, out = self.prepare(self.root / self.name / "spec" / "S1", "none", "none")
         self.assertEqual(code, 2, out)
         self.assertIn("outside", out)
         self.assertTrue((outside / "spec" / "S1" / "keep.txt").exists())
@@ -101,12 +104,12 @@ class PrepareSpike(unittest.TestCase):
             (self.repo, "none"),  # read-at none needs repo none
         ):
             with self.subTest(repo=repo, read_at=read_at):
-                code, out = prepare(self.scratch, repo, read_at)
+                code, out = self.prepare(self.scratch, repo, read_at)
                 self.assertEqual(code, 2, out)
         self.assertFalse(self.scratch.exists())
 
     def test_wrong_argument_count(self):
-        self.assertEqual(prepare(self.scratch)[0], 2)
+        self.assertEqual(self.prepare(self.scratch)[0], 2)
 
 
 if __name__ == "__main__":

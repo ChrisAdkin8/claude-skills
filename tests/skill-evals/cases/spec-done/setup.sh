@@ -108,3 +108,4 @@ g add calc.py && g commit -qm "feat: round_to (W1)
 Default places is 3, not the spec's 2: invoice lines are priced in mills,
 so two places lost the third digit. The Done when check therefore uses
 round_to(2.345, 2)."
+printf 'head=%s\n' "$(git rev-parse --short HEAD)" > .git/eval-hashes

@@ -168,5 +168,58 @@ class ReviewState(unittest.TestCase):
         self.assertEqual(got["headings"], "## Rollback", out)
 
 
+    def test_cold_review_quoted_in_code_is_not_a_review(self):
+        self.write(self.doc, DOC + "\n```markdown\n## Cold review\n\nReviewed on 2026-01-01 by cold-reviewer.\n```\n")
+        got, out = state(self.doc)
+        self.assertEqual(got["review"], "none", out)
+        self.assertEqual(got["state"], "full", out)
+
+    def test_comment_in_code_does_not_hide_the_delta_review(self):
+        self.repo_with_review()
+        self.write(
+            self.record,
+            REVIEW + "\n```bash\n# re-run the checker\n```\n\n### Delta review, 2026-09-21\n"
+            "\n- Not reviewed: Rollback changed, on 2026-09-21.\n",
+        )
+        got, out = state(self.doc)
+        self.assertEqual(got["delta-review"], "yes", out)
+        self.assertEqual(got["state"], "done", out)
+
+    def test_cold_review_heading_in_any_case(self):
+        self.repo_with_review()
+        self.write(self.record, REVIEW.replace("## Cold review", "## Cold Review")
+                   + "\n- Not reviewed: Rollback changed, on 2026-09-21.\n")
+        got, out = state(self.doc)
+        self.assertEqual(got["review"], "record", out)
+        self.assertEqual(got["state"], "delta", out)
+
+    def test_diff_line_is_quoted_and_runs_through_git_read(self):
+        self.root = self.root / "sp ace"
+        self.doc = self.root / "docs" / "my runbook.md"
+        self.record = self.root / "docs" / "records" / "my runbook-record.md"
+        self.repo_with_review()
+        self.write(self.doc, DOC + "\nMore.\n")
+        got, out = state(self.doc)
+        self.assertTrue(got["diff"].startswith("~/.claude/hooks/git-read.py -C "), out)
+        run = subprocess.run(
+            ["bash", "-c", got["diff"]], capture_output=True, text=True, check=False
+        )
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn("+More.", run.stdout)
+
+    def test_shallow_clone_cut_off_is_not_the_review_commit(self):
+        self.repo_with_review()
+        self.write(self.doc, DOC + "\n## Verify\n\nCheck it.\n")
+        self.commit("edit")
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        clone = Path(tmp.name) / "clone"
+        subprocess.run(
+            ["git", "clone", "-q", "--depth", "1", f"file://{self.root}", str(clone)], check=True
+        )
+        got, out = state(clone / "docs" / "runbook.md")
+        self.assertEqual(got["review-commit"], "none", out)
+        self.assertEqual(got["state"], "no-base", out)
+
 if __name__ == "__main__":
     unittest.main()

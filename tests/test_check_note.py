@@ -1,4 +1,5 @@
-"""Tests for skills/research/scripts/check-note.py's Verification and word-limit checks.
+"""Tests for skills/research/scripts/check-note.py: its structure, topic, Verification, word-limit
+and ideas-depth checks.
 
 Run with: python3 -m unittest discover -s ~/code/github.com/claude-skills/tests
 """
@@ -14,6 +15,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CHECKER = ROOT / "skills" / "research" / "scripts" / "check-note.py"
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "notes" / "verified-full.md"
+IDEAS = Path(__file__).resolve().parent / "fixtures" / "notes" / "ideas.md"
 HEADER = "Checked on 2026-09-15 by research-verifier: 1 of 2 claims confirmed."
 
 
@@ -197,6 +199,96 @@ class PoolRowsAreNotStale(unittest.TestCase):
         )
 
 
+
+class BudgetEscapes(unittest.TestCase):
+    """Text the word budget and the other checks used to miss."""
+
+    def test_indented_prose_after_a_blank_line_is_not_a_source(self):
+        pad = "    " + " ".join(["filler"] * 2000)
+        text = FIXTURE.read_text().replace(
+            "2. [Gadget spec](https://example.com/gadgets): boxes of 12.\n",
+            "2. [Gadget spec](https://example.com/gadgets): boxes of 12.\n\n" + pad + "\n",
+        )
+        out, result = check(text)
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("lines of prose after Sources", out)
+
+    def test_wrapped_source_is_still_a_source(self):
+        text = FIXTURE.read_text().replace(
+            "2. [Gadget spec](https://example.com/gadgets): boxes of 12.\n",
+            "2. [Gadget spec](https://example.com/gadgets):\n   boxes of 12.\n",
+        )
+        out, result = check(text)
+        self.assertEqual(result, "RESULT: PASS", out)
+
+    def test_unclosed_code_block_fails(self):
+        text = FIXTURE.read_text().replace("Run the tests.", "Run the tests.\n\n```bash\nmake test")
+        out, result = check(text)
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("is never closed", out)
+
+    def test_byte_order_mark_before_frontmatter(self):
+        out, result = check("\ufeff" + FIXTURE.read_text())
+        self.assertEqual(result, "RESULT: PASS", out)
+
+
+class IdeasDepth(unittest.TestCase):
+    """depth: ideas, which only the paid research-ideas eval exercised before: the Candidate pool
+    and the Shortlist rubric."""
+
+    def setUp(self):
+        self.text = IDEAS.read_text()
+
+    def fails_with(self, text, reason):
+        out, result = check(text)
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn(reason, out)
+
+    def test_fixture_passes(self):
+        out, result = check(self.text)
+        self.assertEqual(result, "RESULT: PASS", out)
+
+    def test_too_few_candidates(self):
+        pool = self.text.split("## Candidate pool\n", 1)[1]
+        kept = "\n".join(pool.strip().splitlines()[:10])
+        self.fails_with(self.text.replace(pool, "\n" + kept + "\n"), "at least 20 are required")
+
+    def test_untagged_and_unmarked_candidates(self):
+        self.fails_with(self.text.replace("- [tool] Candidate 2,", "- Candidate 2,"), "have no [lens] tag")
+        self.fails_with(
+            self.text.replace("Candidate 2, a widget tool idea. Cut: overlaps a stronger candidate.",
+                              "Candidate 2, a widget tool idea."),
+            "marked neither 'Cut: <reason>' nor 'Shortlisted #n'",
+        )
+
+    def test_lens_outside_scope(self):
+        self.fails_with(self.text.replace("- [tool] Candidate 2,", "- [game] Candidate 2,"),
+                        "lenses outside this note's scope: game")
+
+    def test_prose_in_the_pool_fails_indented_or_not(self):
+        for indent in ("", "    "):
+            with self.subTest(indent=repr(indent)):
+                prose = "\n".join(f"{indent}More thoughts, line {k}." for k in range(3))
+                self.fails_with(self.text + "\n" + prose + "\n", "lines of prose in the Candidate pool")
+
+    def test_very_long_candidate_fails(self):
+        long = " ".join(["word"] * 130)
+        self.fails_with(self.text.replace("Candidate 2, a widget", f"Candidate 2, {long}, a widget"),
+                        "candidates run over 120 words")
+
+    def test_shortlist_rubric(self):
+        self.fails_with(self.text.replace("| Why it flops |", "| Risk |"), "missing rubric columns: Why it flops")
+        self.fails_with(self.text.replace("| Baseline | Do nothing", "| 6 | Do nothing"), "no baseline row")
+        self.fails_with(self.text.replace("| a gif | a week |", "|  | a week |", 1), "rows with empty cells")
+        rows = [l for l in self.text.splitlines() if l.startswith(("| 4 |", "| 5 |"))]
+        self.fails_with("\n".join(l for l in self.text.splitlines() if l not in rows), "5 to 7 are required")
+
+    def test_pool_before_sources_fails(self):
+        head, pool = self.text.split("## Candidate pool\n", 1)
+        moved = head.replace("## Sources", "## Candidate pool\n" + pool + "\n## Sources")
+        out, result = check(moved)
+        self.assertEqual(result, "RESULT: FAIL", out)
+
 if __name__ == "__main__":
     unittest.main()
 
@@ -257,6 +349,22 @@ class UnverifiedMarks(unittest.TestCase):
     def test_mark_on_another_sentence_fails(self):
         text = self.text.replace("boxes of 12 [2].", "boxes of 12 [2] *(unverified)*.").replace(
             "3 kg each [1],", "3 kg each [1] *(unverified)*,"
+        )
+        out, result = check(text)
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("isn't marked *(unverified)*", out)
+
+    def test_mark_after_the_previous_sentence_is_not_this_ones(self):
+        # The mark follows the Widgets sentence's full stop, so it's that sentence's, not the
+        # Gadgets claim's that comes next.
+        text = (
+            FIXTURE.read_text()
+            .replace(
+                "| Gadgets ship in boxes of 12 | [2] | WRONG | corrected from boxes of 10, cited [2] |",
+                "| Gadgets ship in boxes of 12 | [2] | UNREACHABLE | marked *(unverified)* |",
+            )
+            .replace("boxes of 12 [2]. Confidence", "boxes of 12 [2] *(unverified)*. Confidence")
+            .replace("3 kg each [1]. Gadgets", "3 kg each [1]. *(unverified)* Gadgets")
         )
         out, result = check(text)
         self.assertEqual(result, "RESULT: FAIL", out)

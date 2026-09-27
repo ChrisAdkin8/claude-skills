@@ -21,20 +21,25 @@ added the review's "Reviewed on <date> by" line, searched in the record and the 
 (each followed through renames), so it survives a later move of the review into a record, or
 a rename of either. If the review is now in a record and that commit also changed a document
 that already existed, the diff base is the commit's parent, so folds saved in the same commit
-aren't missed. The diff names the document's old path too, if it was renamed since. Read-only:
-runs git log, show, cat-file, merge-base and diff, nothing else.
+aren't missed. The diff names the document's old path too, if it was renamed since, and is
+printed as a ~/.claude/hooks/git-read.py command, which /cold-review may run without a prompt.
+In a shallow clone, a review commit with no parent may be the clone's cut-off rather than the
+commit that added the review, so there is no base. Read-only: runs git log, show, cat-file,
+merge-base, rev-parse and diff, nothing else.
 """
 
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "research" / "scripts"))
-from mdcheck import NOT_REVIEWED, in_code, is_heading, section
+from mdcheck import (  # noqa: E402  shared with the checkers
+    DELTA_REVIEW, NOT_REVIEWED, in_code, is_heading, record_path, section, strip_code,
+)
 
 DATE_LINE = re.compile(r"Reviewed on (\d{4}-\d{2}-\d{2}) by")
-DELTA = re.compile(r"###\s+Delta review")
 HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", re.MULTILINE)
 
 
@@ -101,7 +106,7 @@ def main():
     if not doc.is_file():
         sys.exit(f"review-state: no such file: {doc}")
     out = {"document": str(doc)}
-    record = doc.parent / "records" / f"{doc.stem}-record.md"
+    record = record_path(doc)
     doc_lines = doc.read_text(errors="replace").splitlines()
     rec_lines = (
         record.read_text(errors="replace").splitlines() if record.is_file() else []
@@ -116,7 +121,7 @@ def main():
     out["review"] = where
     date = next((m.group(1) for l in review or [] if (m := DATE_LINE.search(l))), None)
     out["review-date"] = date or "none"
-    delta = any(DELTA.match(l) for l in review or [])
+    delta = any(DELTA_REVIEW.match(l) for l in strip_code(review or []))
     out["delta-review"] = "yes" if delta else "no"
     if where == "record" or rec_lines:
         logged = [l.strip() for l in rec_lines if NOT_REVIEWED.match(l)]
@@ -149,6 +154,10 @@ def main():
                 and found.strip()
             ]
             commit = oldest(root, hits)
+            shallow = (git(root, "rev-parse", "--is-shallow-repository") or "").strip() == "true"
+            if commit and shallow and git(root, "rev-parse", "--verify", "--quiet", f"{commit}^") is None:
+                # The clone's cut-off commit "adds" every line in it, so it isn't the review.
+                commit = None
             out["review-commit"] = commit or "none"
             if commit:
                 base = commit
@@ -162,7 +171,10 @@ def main():
         if base:
             # Both names if the document was renamed since, so the diff pairs them up.
             names = list(dict.fromkeys([path_at(root, base, rel), rel]))
-            out["diff"] = f"git -C {root} diff -M {base} -- {' '.join(names)}"
+            # Unquoted ~, so the shell expands it; everything after is quoted for the shell.
+            out["diff"] = "~/.claude/hooks/git-read.py " + shlex.join(
+                ["-C", str(root), "diff", "-M", base, "--", *names]
+            )
             stat = (git(root, "diff", "-M", "--stat", base, "--", *names) or "").strip()
             out["changed"] = "yes" if stat else "no"
             if stat:

@@ -7,8 +7,8 @@
 #   e.g. reddit-search.sh "rightsizing" kubernetes top year
 #
 # Prints a markdown table (date, subreddit, title, score, comments, URL), then a line to cite.
-# If there are no credentials, or Reddit refuses, it says "Reddit unavailable" and why, and
-# exits 1: write "Reddit unavailable" in the note rather than fetching reddit.com pages, which
+# If jq or curl is missing, there are no credentials, or Reddit refuses, it says "Reddit
+# unavailable" and why, and exits 1 (2 on bad arguments): write "Reddit unavailable" in the note rather than fetching reddit.com pages, which
 # return block pages to scripts. There is no fallback: the pullpush.io archive refuses agents
 # (HTTP 429, checked 2026-09-14).
 #
@@ -34,6 +34,7 @@ unavailable() {
   exit 1
 }
 [ $# -ge 1 ] && [ -n "$1" ] || usage
+command -v jq > /dev/null && command -v curl > /dev/null || unavailable "needs jq and curl on PATH"
 query=$1 sub=${2:-} sort=${3:-top} window=${4:-year}
 [[ -z $sub || $sub =~ ^[A-Za-z0-9_]{2,21}$ ]] || { echo "subreddit should be a name like kubernetes, without r/" >&2; exit 2; }
 [[ $sort =~ ^(top|relevance|new|comments)$ ]] || usage

@@ -19,8 +19,13 @@ the replay add those transcripts (the Bash half subject to --before, like the re
 this half grows as new runs add transcripts. It prints commands and paths, which come from the
 user's own transcripts: don't paste its output anywhere public.
 
-Exits 1 if a command the guard at --base blocked is allowed now, or if any recorded Read, Grep or
-Glob call is refused now: both are changes to look at before committing. It prints SKIP and exits
+Last, it replays every Bash command from the headless runs, of any date, through the guard as it
+is now, and compares that with what the guard decided at the time: a transcript records the hook's
+"Blocked by agent-guard" reply. This half keeps up with the agents as they run today.
+
+Exits 1 if a command the guard at --base blocked is allowed now, if any recorded Read, Grep or
+Glob call is refused now, or if a headless run's command gets a different verdict now than it got
+then: all are changes to look at before committing. It prints SKIP and exits
 0 when there's nothing to replay, as on a machine whose transcripts these aren't.
 """
 
@@ -156,6 +161,36 @@ def read_calls(path, agent=None):
                 )
 
 
+def recorded_bash(path):
+    """(command, blocked then) for each Bash call in a transcript, from the hook's reply."""
+    commands, blocked = {}, set()
+    for line in path.read_text(errors="replace").splitlines():
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        content = (entry.get("message") or {}).get("content")
+        for item in content if isinstance(content, list) else []:
+            if not isinstance(item, dict):
+                continue
+            if item.get("type") == "tool_use" and item.get("name") == "Bash":
+                if command := (item.get("input") or {}).get("command"):
+                    commands[item.get("id")] = command
+            elif item.get("type") == "tool_result":
+                reply = item.get("content")
+                if isinstance(reply, list):
+                    reply = "".join(p.get("text", "") for p in reply if isinstance(p, dict))
+                # The hook's own error, not a file that quotes the phrase (agent-sandbox.md does).
+                if (
+                    item.get("is_error")
+                    and isinstance(reply, str)
+                    and reply.lstrip().startswith("PreToolUse:")
+                    and "Blocked by agent-guard" in reply
+                ):
+                    blocked.add(item.get("tool_use_id"))
+    return [(command, key in blocked) for key, command in commands.items()]
+
+
 def bash_commands(obj):
     if isinstance(obj, dict):
         if obj.get("type") == "tool_use" and obj.get("name") == "Bash":
@@ -254,13 +289,30 @@ def main():
     for tool, tool_input, reason in refused:
         target = tool_input.get("file_path") or tool_input.get("path") or ""
         print(f"  - {tool} {target[:140]}\n    {reason[:160]}")
-    if not unique and not unique_reads:
+    changed = []
+    seen = set()
+    for f in sorted(headless):
+        for command, blocked_then in recorded_bash(f):
+            if (command, blocked_then) in seen:
+                continue
+            seen.add((command, blocked_then))
+            now, reason = verdict(new, command, session_results(f))
+            if (now == "blocked") != blocked_then:
+                changed.append((command, "blocked" if blocked_then else "allowed", now, reason))
+    print(
+        f"\n{len(seen)} unique Bash commands from {len(headless)} headless runs, any date; "
+        f"verdict changed since they ran: {len(changed)}"
+    )
+    for command, then, now, reason in changed:
+        print(f"  - {then} then, {now} now: {command[:140]!r}\n    {(reason or '')[:160]}")
+    if not unique and not unique_reads and not seen:
         print("\nSKIP: no recorded agent transcripts here, so nothing was checked")
         return 0
-    if newly_allowed or refused:
+    if newly_allowed or refused or changed:
         print(
             f"\nFAIL: {len(newly_allowed)} commands allowed that --base blocked, "
-            f"{len(refused)} recorded reads refused"
+            f"{len(refused)} recorded reads refused, {len(changed)} headless commands "
+            "with a different verdict now"
         )
         return 1
     return 0

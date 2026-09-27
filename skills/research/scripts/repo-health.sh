@@ -6,8 +6,14 @@
 # Stars measure attention; the other columns measure whether anyone still maintains the project.
 # Bot commits and bot contributors (dependabot, renovate, github-actions, ...) are counted apart from
 # human ones, because a repo that only bots touch looks busy but is not maintained. A failure on one
-# repo prints an error row and moves on to the next.
+# repo prints an error row and moves on to the next: "not found or no access" only when GitHub says
+# so, "API error" for anything else (a rate limit, the network). Exits 1 if gh or jq is missing,
+# gh isn't logged in, or no repo could be read, so a failure never reads as a fact about the repos.
+# Exits 2 on an argument that isn't owner/repo.
 set -uo pipefail
+
+command -v gh > /dev/null && command -v jq > /dev/null ||
+  { echo "repo-health: needs gh and jq on PATH" >&2; exit 1; }
 
 since=$(date -u -v-90d +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d '90 days ago' +%Y-%m-%dT%H:%M:%SZ)
 year_ago=$(date -u -v-365d +%Y-%m-%d 2>/dev/null || date -u -d '365 days ago' +%Y-%m-%d)
@@ -87,11 +93,19 @@ scan_history() {
 row() {
   local repo=$1 owner=${1%%/*} name=${1#*/}
   local meta stars archived licence issues_prs commits rel_date rel_kind hist human authors last_human capped plus contribs
-  meta=$(gh api graphql -f query="$meta_q" -f owner="$owner" -f name="$name" -f since="$since" 2>/dev/null |
-    jq -ce '.data.repository // empty') || {
-    echo "| $repo | not found or no access | | | | | | | | |"
+  local resp err
+  err=$(mktemp)
+  resp=$(gh api graphql -f query="$meta_q" -f owner="$owner" -f name="$name" -f since="$since" 2>"$err")
+  meta=$(jq -ce '.data.repository // empty' <<<"$resp" 2>/dev/null) || {
+    if jq -e 'any(.errors[]?; .type == "NOT_FOUND")' <<<"$resp" > /dev/null 2>&1; then
+      echo "| $repo | not found or no access | | | | | | | | |"
+    else
+      echo "| $repo | API error: $(head -1 "$err" | tr '|' '/' | cut -c1-100) | | | | | | | | |"
+    fi
+    rm -f "$err"
     return
   }
+  rm -f "$err"
 
   stars=$(jq -r .stargazerCount <<<"$meta")
   archived=$(jq -r .isArchived <<<"$meta")
@@ -155,19 +169,29 @@ for repo in "$@"; do
   }
 done
 
+gh auth status > /dev/null 2>&1 ||
+  { echo "repo-health: gh isn't logged in, so repo health can't be checked; mark it (unverified)" >&2; exit 1; }
+
 echo '| Repo | Stars | Commits 90d (human) | Human authors 90d | Last human commit | Contributors | Last release | Open issues / PRs | Licence | Flags |'
 echo '|---|---:|---:|---:|---|---:|---|---:|---|---|'
 
-# Fetch all repos in parallel, then print the rows in the order given.
+# Fetch four repos at a time (GitHub's secondary rate limit dislikes bursts), then print the rows
+# in the order given.
 tmp=$(mktemp -d) || exit 1
 trap 'rm -rf "$tmp"' EXIT
 i=0
 for repo in "$@"; do
   row "$repo" >"$tmp/$i" &
   i=$((i + 1))
+  [ $((i % 4)) -eq 0 ] && wait
 done
 wait
-for ((j = 0; j < i; j++)); do cat "$tmp/$j"; done
+failed=0
+for ((j = 0; j < i; j++)); do
+  cat "$tmp/$j"
+  grep -qE '^\| [^|]+ \| (not found or no access|API error)' "$tmp/$j" && failed=$((failed + 1))
+done
 
 echo
 echo "Checked $today via the GitHub GraphQL and REST APIs. Human counts exclude bot accounts. \"+\" marks a lower bound (scan or API cap). Commits are on the default branch."
+[ "$failed" -lt "$i" ]

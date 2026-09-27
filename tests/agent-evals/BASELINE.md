@@ -111,7 +111,7 @@ by these agents.
 
 ## Spikes on a real spec
 
-Step 7 ran on `~/code/github.com/another-repo/docs/specs/2026-09-13-rightsizing-pr-action.md`
+Step 7 ran on a real spec in another local repo
 on 2026-09-17, which is where W6, W7 and W8 came from. Two spikes ran, both `--model sonnet`
 through `run-spike.sh`:
 
@@ -518,3 +518,104 @@ Skill evals: `spec-done` PASS (11 turns, $0.35). `cold-review-delta` FAILed its 
 following renames), and the grader's pattern wanted the commit straight after `diff`. The skill's
 diff was right, from the runbook's first commit. With the pattern allowing options, a re-run
 passed every check (4 turns, $0.28).
+
+## Checker loopholes (2026-09-27)
+
+`check-spec.py`, `check-note.py`, `review-state.py`, `build-index.py` and `mdcheck.py` close the
+loopholes the second 2026-09-27 repo review found, and `review-state.py` prints its `diff:` line
+as a quoted `~/.claude/hooks/git-read.py` command. No agent or skill instruction file changed, and
+the checkers give the same results on all 32 notes in `~/notes`, this repo's 4 specs and the index;
+on 16 specs in other repos, one bare `values.yaml:163-164` is now reported as ambiguous. So the
+agent cases weren't run. Skill evals: `spec-done` PASS (5 turns, $0.30), `cold-review-delta` PASS
+(3 turns, $0.27), which takes the new `diff:` line. Total $0.57.
+
+## Graders and runners tightened (2026-09-27)
+
+Graders that passed a wrong answer are fixed, and each was replayed against every saved reply:
+- `delta-review` and `delta-review-record` need `correctness` or `requirement` in the Affects
+  cell, not anywhere in the row. All 19 saved replies still pass; a row graded "neither: a
+  correctness nit" now fails.
+- `cold-review-delta` no longer counts "there is no unlogged change" as naming one, resolves the
+  diff base with its `^` or `~1` (`created^` doesn't exist), and fails if the skill committed
+  anything. All 9 saved replies still pass the wording check.
+- `spec-done` diffs the spec against setup's HEAD, so a committed edit can't hide, and needs W2
+  named as not landed in the same sentence. All 7 saved replies pass; "W2 has landed" fails.
+
+No agent or skill instruction file changed, so only the cases whose graders changed were run:
+
+| Case | Result | Turns | Cost |
+|---|---|---:|---:|
+| delta-review | PASS | 7 | $0.24 |
+| delta-review-record | PASS | 7 | $0.24 |
+| cold-review-delta (skill) | PASS | 3 | $0.27 |
+| spec-done (skill) | PASS | 9 | $0.34 |
+
+Total $1.09.
+
+## Skill instructions fixed (2026-09-27)
+
+`/spec`, `/cold-review`, `/research`, `/idea`, the spike and done steps and the research verifier's
+Prior art line take the fixes from the second 2026-09-27 repo review. All ten agent cases in
+parallel, on the default model:
+
+| Case | Result | Turns | Cost |
+|---|---|---:|---:|
+| absence-claim | PASS | 23 | $0.47 |
+| cold-review-skip | PASS | 6 | $0.15 |
+| delta-review | PASS | 12 | $0.27 |
+| delta-review-record | PASS | 7 | $0.31 |
+| record-skip | PASS | 7 | $0.20 |
+| research-ideas | PASS | 55 | $2.18 |
+| research-quick | PASS | 11 | $0.33 |
+| spec-miscite | PASS | 5 | $0.17 |
+| spike-inherited | PASS | 6 | $0.17 |
+| wrong-figure | PASS | 6 | $0.14 |
+
+Total $4.39. Skill evals: `cold-review-delta` PASS (5 turns, $0.28), `spec-done` PASS (10 turns,
+$0.36); total $0.64.
+
+## Guard hardening (2026-09-27)
+
+The guard refuses `eval` and wrapper options it doesn't know, lets `gh` and the research scripts
+share a command only with text filters, and checks web search queries; the researcher and
+research-verifier hook WebSearch to it, and `agent-sandbox.md` says so. All ten agent cases:
+
+| Case | Result | Turns | Cost |
+|---|---|---:|---:|
+| absence-claim | PASS | 11 | $0.32 |
+| cold-review-skip | PASS | 7 | $0.19 |
+| delta-review | PASS | 6 | $0.21 |
+| delta-review-record | PASS | 7 | $0.20 |
+| record-skip | PASS | 6 | $0.18 |
+| research-ideas | PASS | 56 | $2.02 |
+| research-quick | PASS | 16 | $0.36 |
+| spec-miscite | PASS | 9 | $0.20 |
+| spike-inherited | PASS | 4 | $0.14 |
+| wrong-figure | PASS | 6 | $0.19 |
+
+Total $4.00.
+
+## Docs sweep and the delta reviewer's diff (2026-09-28)
+
+`/cold-review` gives the delta reviewer its diff as `git`, which its guard allows, not the
+`git-read.py` form `review-state.py` prints; `cold-review-delta` gains a check for it. The
+researcher treats an `API error` row from `repo-health.sh` as unverified. All ten agent cases:
+
+| Case | Result | Turns | Cost |
+|---|---|---:|---:|
+| absence-claim | FAIL, then PASS | 2, then 14 | $0.55, then $0.28 |
+| cold-review-skip | PASS | 7 | $0.15 |
+| delta-review | PASS | 7 | $0.20 |
+| delta-review-record | PASS | 9 | $0.24 |
+| record-skip | PASS | 7 | $0.14 |
+| research-ideas | PASS | 51 | $1.96 |
+| research-quick | PASS | 12 | $0.31 |
+| spec-miscite | PASS | 9 | $0.17 |
+| spike-inherited | PASS | 6 | $0.13 |
+| wrong-figure | PASS | 6 | $0.15 |
+
+Total $4.01, and $0.28 for the re-run. `absence-claim`'s first run found the right answer, a
+WRONG row and `Bottom line holds: no`, but the verifier then sent a second, short message when
+late search results came back, and the runner grades only the last one. Nothing this change
+touched affects the verifier; the re-run passed. Skill evals: `cold-review-delta` PASS (5 turns,
+$0.28), with the new check; `spec-done` PASS (8 turns, $0.36); total $0.64.

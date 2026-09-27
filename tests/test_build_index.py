@@ -174,5 +174,23 @@ class BuildIndex(unittest.TestCase):
         self.assertTrue(any(l.startswith("- [Caf") and "(research/b.md)" in l for l in lines))
 
 
+    def test_odd_entries_are_skipped_not_a_crash(self):
+        self.write("research/a.md", note("Note A", "final", "kubernetes"))
+        (self.root / "research" / "broken.md").symlink_to(self.root / "nowhere.md")
+        (self.root / "research" / "dir.md").mkdir()
+        lines = self.lines()
+        self.assertIn("- [Note A](research/a.md) · final", lines)
+        self.assertFalse(any("broken" in l or "dir.md" in l for l in lines))
+
+    def test_backslash_in_a_title_does_not_break_the_link(self):
+        self.write("research/a.md", note("Path C:\\temp\\", "final", "kubernetes"))
+        self.assertIn("- [Path C:\\\\temp\\\\](research/a.md) · final", self.lines())
+
+    def test_byte_order_mark_before_frontmatter(self):
+        self.write("research/a.md", "\ufeff" + note("Note A", "final", "kubernetes"))
+        lines = self.lines()
+        self.assertIn("## kubernetes", lines)
+        self.assertIn("- [Note A](research/a.md) · final", lines)
+
 if __name__ == "__main__":
     unittest.main()

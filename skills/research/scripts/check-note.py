@@ -30,8 +30,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from mdcheck import (  # noqa: E402  shared with check-spec.py
-    CITE, INLINE_CODE, SECRETS, SEPARATOR, TOPIC, count_words, flow_list, frontmatter,
-    has_account_id, is_heading, section, strip_code,
+    CITE, INLINE_CODE, SEPARATOR, TOPIC, count_words, flow_list, frontmatter,
+    has_account_id, is_heading, secrets_in, section, strip_code, unclosed_fence,
 )
 import mdcheck  # noqa: E402
 
@@ -142,6 +142,7 @@ def normalise(text):
 
 CITE_MARK = re.compile(r"\s*\[\d+(?:\s*[,–-]\s*\d+)*\](?!\()")
 SENTENCE_END = re.compile(r"[.!?](?=\s|$)")
+LEADING_MARK = re.compile(r"\s*\*?\(unverified[^)]*\)\*?")
 
 
 def claim_text(text):
@@ -162,6 +163,9 @@ def marked_unverified(para, span):
     """Whether the sentence holding the claim carries an (unverified) mark, not just some
     other sentence of the paragraph. The mark may follow the sentence's full stop."""
     start = max((m.end() for m in SENTENCE_END.finditer(para, 0, span[0])), default=0)
+    # A mark straight after the previous sentence's full stop is that sentence's.
+    if lead := LEADING_MARK.match(para, start):
+        start = lead.end()
     end = next((m.end() for m in SENTENCE_END.finditer(para, span[1])), len(para))
     return "(unverified" in para[start : end + len(" (unverified)")]
 
@@ -280,17 +284,19 @@ def stray_after_sources(body, depth):
     src_at = heading_index(body, "## Sources")
     if src_at is None:
         return []
-    stray, in_pool = [], False
+    stray, in_pool, in_source = [], False, False
     for line in body[src_at + 1 :]:
         if is_heading(line):
             in_pool = depth == "ideas" and line.startswith("## Candidate pool")
         text = line.strip()
+        # An indented line continues the source right above it; after a blank line it's prose.
+        continues = in_source and line[:1] in (" ", "\t") and bool(text)
+        in_source = bool(SOURCE.match(text)) or continues
         if (
             in_pool
             or not text
             or line.startswith("## Verification")
-            or SOURCE.match(text)
-            or line[:1] in (" ", "\t")
+            or in_source
             or text.startswith(("|", "Checked on"))
         ):
             continue
@@ -421,7 +427,8 @@ def check_pool(pool, scope, fails, warns):
             candidates.append((m.group(1).strip().lower(), text))
         elif re.match(r"[-*]\s", text):
             untagged.append(text)
-        elif not line[:1].isspace():
+        else:
+            # Indented or not: prose here escapes the word budget either way.
             prose.append(text)
     if untagged:
         fails.append(
@@ -458,7 +465,12 @@ def check_pool(pool, scope, fails, warns):
             f"{len(unmarked)} candidates are marked neither 'Cut: <reason>' nor "
             f"'Shortlisted #n' (first: '{unmarked[0][:50]}')"
         )
-    if long := [text for _, text in candidates if len(text.split()) > 60]:
+    if huge := [text for _, text in candidates if len(text.split()) > 120]:
+        fails.append(
+            f"{len(huge)} candidates run over 120 words (first: '{huge[0][:40]}'); a candidate "
+            "is one line, and prose there escapes the word budget"
+        )
+    elif long := [text for _, text in candidates if len(text.split()) > 60]:
         warns.append(
             f"{len(long)} candidates run over 60 words (first: '{long[0][:40]}'); keep them to one line"
         )
@@ -581,6 +593,8 @@ def main():
     check_topic(fields, note, fails, warns)
     check_related(fields.get("related", ""), fails, warns)
 
+    if (open_at := unclosed_fence(lines[start:])) is not None:
+        fails.append(f"a code block opened on body line {open_at} is never closed, so the rest reads as code")
     body = strip_code(lines[start:])
     for heading in REQUIRED[depth]:
         if section(body, heading) is None:
@@ -675,9 +689,8 @@ def main():
             "template text left in: " + "; ".join(f"'{p[:50]}'" for p in leftovers)
         )
 
-    for pattern, what in SECRETS:
-        if pattern.search(text):
-            fails.append(f"contains what looks like {what}")
+    for what in secrets_in(text):
+        fails.append(f"contains what looks like {what}")
     if has_account_id(text):
         warns.append("contains a 12-digit number: make sure it isn't an AWS account ID")
 

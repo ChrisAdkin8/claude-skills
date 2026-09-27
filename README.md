@@ -142,8 +142,8 @@ launches it, and passes on what it finds.
   such as build scripts and config. Where a claim can only be settled by running a command, it
   says so rather than guessing the result.
 - **You pick which findings get fixed.** The skill edits the document only for those. It asks
-  before saving the review to the document's record. The one exception is a spec's delta review,
-  which it saves without asking, as `/spec` does.
+  before saving the review to the document's record, except for a spec's review, full or delta,
+  which it saves without asking, as `/spec` does, since the spec's checks read it.
 - **Each document gets one full review.** After that, running `/cold-review` again gives one delta
   review of the changes logged since, and no more.
 - **`/cold-review prompt <file>`** writes the reviewer's instructions for you to run in a new
@@ -158,6 +158,9 @@ launches it, and passes on what it finds.
   They haven't been tried anywhere else. On Linux, the sandbox needs the `bubblewrap` tool, and
   the special case for `gh` (see [below](#how-the-agents-are-contained)) may not be needed.
 - **`python3`** for the checkers and tests. Some spikes use `uv`.
+- **`gh`, logged in, and `jq`** for the researcher's project-health checks. GCP prices also need
+  `gcloud`, logged in. Without them the scripts say so, and the note marks those figures
+  *(unverified)*.
 - **A `~/notes` git repo**, set up as [below](#set-up-notes).
 
 ## Install
@@ -271,12 +274,14 @@ Some things run outside the sandbox, and not all of them are checked by the guar
 - `gh`, and the three research scripts that need credentials or call `gh` (`repo-health.sh`,
   `gcp-skus.sh`, `reddit-search.sh`). On macOS, `gh` can't make secure web connections inside the
   sandbox, so `agent-sandbox.json` lets these run outside it. They're still shell commands, so the
-  guard checks them.
+  guard checks them, and it lets them share a command only with text filters such as `jq` and
+  `grep`, never with `curl` or `git`, which must stay inside the sandbox.
 - Claude Code's own file-reading and web-fetching tools, which the sandbox never covers. The guard
   checks both, and Claude Code's permission settings also block reads of sensitive files.
-- Web search and the researcher's documentation servers (AWS and Terraform). **Nothing checks
-  these.** The only limit is which agents may use them. Web search is given to the researcher and
-  the research-verifier. The documentation servers are given only to the researcher. Each agent's
+- Web search. The guard caps its queries at 200 characters and refuses one that holds what looks
+  like a token. Web search is given to the researcher and the research-verifier.
+- The researcher's documentation servers (AWS and Terraform). **Nothing checks these.** The only
+  limit is that only the researcher has them. Each agent's
   file lists its tools by name.
 
 Every agent is also told these rules: [`hooks/agent-sandbox.md`](hooks/agent-sandbox.md) is added
@@ -291,7 +296,7 @@ Spikes are contained differently. They don't run under the guard; their own sand
   environment variable overrides both.
 - **Each spike** is capped at $2 and 60 turns. Assume a spike that fetches anything from the web
   costs close to the cap.
-- **The agent evaluations** (see [Checks](#checks)) spend real money too. Four full runs of
+- **The agent evaluations** (see [Checks](#checks)) spend real money too. Six full runs of
   their ten cases on 2026-09-27 cost between $3.70 and $4.68. Each case is capped at $5 (the
   `research-ideas` case at $10), and the cases run at the same time, so a run that goes wrong can
   cost far more.
@@ -310,7 +315,7 @@ A cap stops a run only after the turn that crosses it, so a run can go over by u
 | `skills/research/scripts/check-note.py` | checks a research note |
 | `skills/research/scripts/mdcheck.py` | markdown helpers shared by `check-note.py`, `check-spec.py`, `build-index.py` and `review-state.py` |
 | `skills/research/scripts/build-index.py` | rebuilds `~/notes/index.md`, the notes by topic; `/research` runs it before its commit |
-| `skills/research/scripts/repo-health.sh`, `gcp-skus.sh`, `reddit-search.sh` | gather evidence for the `researcher` agent |
+| `skills/research/scripts/repo-health.sh`, `gcp-skus.sh`, `reddit-search.sh` | gather evidence for the `researcher` and `research-verifier` agents |
 | `skills/spec/` | `/spec` |
 | `skills/spec/scripts/check-spec.py` | checks a spec |
 | `skills/spec/template.md`, `record-template.md` | the layouts of a spec and its record |
@@ -327,13 +332,13 @@ A cap stops a run only after the turn that crosses it, so a run can go over by u
 | `hooks/agent-sandbox.json` | the agents' sandbox settings |
 | `hooks/agent-sandbox.md`, `sandbox-prompt.py` | the rules added to every agent's instructions |
 | `hooks/agent-guard.py` | the guard |
-| `hooks/git-read.py` | runs read-only git commands for `/spec` and `/cold-review` |
+| `hooks/git-read.py` | runs read-only git commands for `/research`, `/spec` and `/cold-review` |
 | `docs/specs/` | the specs for changes to this repo; their records are in `docs/specs/records/`, spike results in `docs/specs/spikes/` |
 | `docs/workflow*.png`, `docs/social-preview.png` | the diagram and the repo's social preview, drawn by `docs/diagram/workflow.py` |
 | `docs/diagram/` | the script that draws them, and `render.mjs`, which turns its SVGs into PNGs |
 | `records/` | the review history of this README |
-| `tests/test_*.py` | fast tests for the guard, the two checkers (`check-note.py` and `check-spec.py`), `build-index.py`, `review-state.py`, `git-read.py`, `prepare-spike.sh`, `run-spike.sh`, `run-agent.sh` and `mdcheck.py`, that the eval runners exit 1 on a failure, and that the guard and both sandbox settings deny the same paths |
-| `tests/fixtures/` | a sample research note and spec the tests check |
+| `tests/test_*.py` | fast tests for the guard, the two checkers (`check-note.py` and `check-spec.py`), `build-index.py`, `review-state.py`, `git-read.py`, `prepare-spike.sh`, `run-spike.sh`, `run-agent.sh`, `mdcheck.py` and the three research scripts, that the eval runners exit 1 on a failure and 2 with no cases, pass their caps and sandbox to `claude` and clean up after themselves, and that the guard and both sandbox settings deny the same paths |
+| `tests/fixtures/` | sample research notes (one of them `depth: ideas`) and a spec the tests check |
 | `tests/replay_guard.py` | runs real recorded commands and file reads through the guard |
 | `tests/agent-evals/` | runs the verifiers and the cold reviewer against documents with planted mistakes, and the researcher on sample questions |
 | `tests/skill-evals/` | runs whole skills against throwaway repos |

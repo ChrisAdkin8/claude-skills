@@ -20,7 +20,9 @@ reviewed:` lines in Open questions, Route/Changes/Expect/Box lines under spike q
 still read, with a WARN to move it to the record.
 
 Checks only what can be checked mechanically: that every citation points at a file and at lines
-that existed, whether cited files have changed since, work items and acceptance criteria, and,
+that existed, whether cited files have changed since, work items and acceptance criteria, that no code block is
+left open, no secrets, no `Not reviewed:` changes without a delta review on a reviewed or
+in-progress spec, and,
 for specs written from the skill template, sections and leftover template text. Whether a cited
 line says what the spec claims is the spec-verifier agent's job.
 """
@@ -34,8 +36,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "research" / "scripts"))
 from mdcheck import (  # noqa: E402  shared with check-note.py
-    CITE, INLINE_CODE, NOT_REVIEWED, SECRETS, SEPARATOR, count_words, frontmatter,
-    has_account_id, in_code, is_heading, line_count, section, strip_code,
+    CITE, DELTA_REVIEW, INLINE_CODE, NOT_REVIEWED, SEPARATOR, count_words, frontmatter,
+    has_account_id, in_code, is_heading, line_count, record_path, secrets_in, section,
+    strip_code, unclosed_fence,
 )
 import mdcheck  # noqa: E402
 
@@ -95,9 +98,11 @@ RESULTS_PATH = re.compile(r"(?<![\w./~-])[\w.-][\w./-]*/spikes/[\w.-]+-results\.
 # The ledger of changes made after the cold review, and the delta review of them.
 ROUND_LINE = re.compile(r"\s*[-*]\s+Verifier round 2 ran on")
 IMPLEMENTATION = "## Implementation"
-DELTA_REVIEW = re.compile(r"###\s+Delta review")
 WORK_ITEM = re.compile(r"^#{2,3}\s+W(\d+)\b")
-DONE_WHEN = re.compile(r"done when", re.IGNORECASE)
+# The field line itself, `- **Done when:** ...` or `**Done when**, on k3s:`, not prose that says
+# "this step is done when W2 lands".
+DONE_WHEN = re.compile(r"\s*(?:[-*+]\s+|\d+[.)]\s+)?(?:\*\*|__)?done when\b(?:\*\*|__)?", re.I)
+PLACEHOLDER = re.compile(r"(?:tbd|tbc|todo|n/a|\?+|\.\.\.|…)", re.IGNORECASE)
 ACCEPTANCE = "## Acceptance criteria"
 EMPTY_FIELD = re.compile(r"^\s*-\s+\*\*[^*]+:\*\*\s*$")
 NESTED_ITEM = re.compile(r"\s+(?:[-*]|\d+\.)\s+\S")
@@ -106,13 +111,15 @@ NESTED_ITEM = re.compile(r"\s+(?:[-*]|\d+\.)\s+\S")
 def git(repo, *args, strip=True):
     # quotePath off: ls-tree would print a non-ASCII path quoted and escaped. errors="replace": a
     # cited file needn't be UTF-8.
+    # Decoded here, not with text=True, which would turn a lone \r into a line break.
     result = subprocess.run(
         ["git", "-c", "core.quotePath=off", "-C", str(repo), *args],
-        capture_output=True, text=True, errors="replace", check=False,
+        capture_output=True, check=False,
     )  # fmt: skip
     if result.returncode != 0:
         return None
-    return result.stdout.rstrip("\n") if strip else result.stdout
+    out = result.stdout.decode(errors="replace")
+    return out.rstrip("\n") if strip else out
 
 
 def split_cold_review(lines, warns):
@@ -121,7 +128,7 @@ def split_cold_review(lines, warns):
     author couldn't fix without editing the reviewer's words. The secrets check still reads it."""
     code = in_code(lines)  # a `## Cold review` quoted in a code block isn't the section
     at = next(
-        (i for i, line in enumerate(lines) if not code[i] and line.startswith("## Cold review")),
+        (i for i, line in enumerate(lines) if not code[i] and line.lower().startswith("## cold review")),
         None,
     )
     if at is None:
@@ -154,11 +161,6 @@ def body_status(body):
         if "this is a RECORD" in line:
             return "done"
     return None
-
-
-def record_path(spec):
-    """Where a spec's record lives: records/<basename>-record.md beside it."""
-    return spec.parent / "records" / f"{spec.stem}-record.md"
 
 
 def read_record(path):
@@ -213,7 +215,7 @@ class Snapshot:
 
 
 def working_length(path):
-    return line_count(path.read_text(errors="replace"))
+    return line_count(path.read_bytes().decode(errors="replace"))
 
 
 def check_range(snap, rel, start, end, ref, fails, warns):
@@ -297,6 +299,15 @@ def check_citations(body, snap, templated, fails, warns):
             elif "/" not in rel and rel in snap.by_name:
                 count += 1
                 bare.append(ref)
+                owners = snap.by_name[rel]
+                if len(owners) == 1:
+                    # Only one file it can mean, so its range is checked too: `howto.md:9999`
+                    # mustn't pass because the name is short.
+                    cited.add(owners[0])
+                    check_range(snap, owners[0], start, end, ref, fails, warns)
+                    last_file, last_bad = owners[0], None
+                    continue
+                unresolved.append(f"{ref} (could be {', '.join(sorted(owners)[:3])})")
             elif (
                 CODE_EXT.search(rel)
                 or Path(rel).name in EXTENSIONLESS
@@ -343,10 +354,11 @@ def has_nested_list(lines, i):
 def done_when(chunk):
     """Return a problem with a work item's 'Done when', or None if it has content."""
     for i, line in enumerate(chunk):
-        m = DONE_WHEN.search(line)
+        m = DONE_WHEN.match(line)
         if not m:
             continue
-        if line[m.end() :].strip(" *:"):
+        rest = line[m.end() :].strip(" *_:,")
+        if rest and not PLACEHOLDER.fullmatch(rest):
             return None
         # Criteria may follow as a nested list.
         if has_nested_list(chunk, i):
@@ -428,6 +440,9 @@ def main():
     record_lines, record_review, record_changes, implemented = read_record(record)
     review = legacy_review + record_review
     fields, start = frontmatter(lines)
+    if (open_at := unclosed_fence(lines[start:])) is not None:
+        # Everything after it would read as code, so no check would see it.
+        fails.append(f"a code block opened on body line {open_at} is never closed")
     body = strip_code(lines[start:])
     # A template spec has the template's frontmatter or its Work items section; a renamed
     # heading mustn't be enough to switch off the template's checks.
@@ -586,11 +601,10 @@ def main():
             )
 
     # Secrets and account IDs.
-    for pattern, what in SECRETS:
-        if pattern.search("\n".join([text, *legacy_review])):
-            fails.append(f"contains what looks like {what}")
-        if pattern.search("\n".join(record_lines)):
-            fails.append(f"its record {record.name} contains what looks like {what}")
+    for what in secrets_in("\n".join([text, *legacy_review])):
+        fails.append(f"contains what looks like {what}")
+    for what in secrets_in("\n".join(record_lines)):
+        fails.append(f"its record {record.name} contains what looks like {what}")
     if has_account_id("\n".join(record_lines)):
         warns.append(f"its record {record.name} contains a 12-digit number: make sure it isn't an AWS account ID")
     if has_account_id("\n".join([text, *legacy_review])):
@@ -602,9 +616,8 @@ def main():
     }
     for path in sorted(r for r in results if r.is_file()):
         content = path.read_text(errors="replace")
-        for pattern, what in SECRETS:
-            if pattern.search(content):
-                fails.append(f"spike results {path.name} contain what looks like {what}")
+        for what in secrets_in(content):
+            fails.append(f"spike results {path.name} contain what looks like {what}")
         if has_account_id(content):
             warns.append(
                 f"spike results {path.name} contain a 12-digit number: make sure it isn't an "
@@ -654,7 +667,7 @@ def main():
     open_questions = section(body, "## Open questions") or []
     legacy_changes = [l for l in open_questions if NOT_REVIEWED.match(l)]
     unreviewed = legacy_changes + record_changes
-    delta = any(DELTA_REVIEW.match(l) for l in review)
+    delta = any(DELTA_REVIEW.match(l) for l in strip_code(review))
     residue = []
     if legacy_review:
         residue.append("the '## Cold review' section")

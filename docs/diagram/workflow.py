@@ -110,7 +110,7 @@ REVIEW_STEPS = [
 GUARDS = [
     ("Own session", "a headless claude -p run"),
     ("OS sandbox", "no credentials; allowlisted network"),
-    ("Guard hook", "checks shell, file and fetch calls"),
+    ("Guard hook", "checks shell, file and web calls"),
     ("Cost caps", "$5–10 per agent, $2 per spike"),
 ]
 LEGEND = [

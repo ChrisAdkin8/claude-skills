@@ -53,7 +53,7 @@ The topics proposed, for W6 to start from (the user approves or edits them there
 | claude-code/spike-loop | 2026-09-13-spike-loop-interest-review |
 | kubernetes/kubernetes-dojo | 2026-09-14-kubernetes-dojo-critical-review, 2026-09-14-kubernetes-dojo-post-fix-review |
 | kubernetes/tools | 2026-09-25-versitygw-release-licence-maintenance |
-| perfectscale/build | 2026-09-13-another-repo-loop, 2026-09-15-perfectscale-api-rag-corpus, 2026-09-16-perfectscale-mcp-server-build, 2026-09-22-perfectscale-dra-kueue-nvlink |
+| perfectscale/build | a 2026-09-13 PR-loop note, 2026-09-15-perfectscale-api-rag-corpus, 2026-09-16-perfectscale-mcp-server-build, 2026-09-22-perfectscale-dra-kueue-nvlink |
 | perfectscale/ideas | 2026-09-13-perfectscale-ai-mindshare-ideas, 2026-09-15-perfectscale-api-data-ideas |
 | perfectscale/market | 2026-09-16-perfectscale-ai-feature-gaps, 2026-09-25-doit-finops-gtm-strategy |
 | rag/pipelines | 2026-09-16-hashi-kb-pluggable-wrangling, 2026-09-17-python-rag-pipeline-taskfile, 2026-09-24-portable-low-scaffolding-rag-stack |

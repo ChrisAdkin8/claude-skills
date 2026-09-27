@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Agent evaluations for the /research and /spec agents. Each case sends one brief to one
+# Agent evaluations for the /research, /spec and /cold-review agents. Each case sends one brief to one
 # subagent with `claude -p --agent`, as the skill would, and grades the reply against expect.txt.
 #
 # Usage: run.sh [case ...]        all cases by default; cases run in parallel
@@ -21,7 +21,8 @@
 # ~/notes/research/.eval-<case>-<timestamp>.md. After the run the note is copied to the results
 # as <case>.note.md, checked with check-note.py --headroom (it must pass), graded against the
 # case's note-expect.txt (same format as expect.txt), and deleted. The run also fails such a case
-# if anything else in ~/notes changed while it ran. Optional turns.txt raises the turn limit
+# if anything else in ~/notes changed while it ran, or if ~/notes isn't a git repo, since
+# then changes can't be seen. Optional turns.txt raises the turn limit
 # from 40, and usd.txt sets the case's own cost ceiling in place of AGENT_EVAL_MAX_USD.
 #
 # The agents run with their own frontmatter tools pre-approved and their own PreToolUse hook
@@ -29,7 +30,8 @@
 # access to ~/.claude, ~/notes and this repo (~/.claude/skills, agents and hooks are symlinks into
 # it), with no MCP servers and no saved session. Every run costs real tokens: run by hand after changing an
 # agent or skill file, not on every commit. Results land in results/<timestamp>/ (git-ignored).
-# Exits 0 only if every case passed, 1 if any failed or ended in an error, 2 on a bad case name.
+# Exits 0 only if every case passed, 1 if any failed or ended in an error, 2 on a bad case name or no
+# cases.
 set -uo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -47,6 +49,12 @@ cases=("$@")
 if [ ${#cases[@]} -eq 0 ]; then
   while IFS= read -r c; do cases+=("$c"); done < <(ls "$cases_dir")
 fi
+# bash 3.2 calls "${cases[@]}" unbound when it's empty, so say why instead.
+[ ${#cases[@]} -gt 0 ] || { echo "no cases in $cases_dir" >&2; exit 2; }
+# Work dirs live under one temp dir, and eval notes are named by $stamp, so an interrupted run
+# leaves neither behind.
+tmp_root=$(mktemp -d)
+trap 'rm -rf "$tmp_root"; rm -f "$HOME"/notes/research/.eval-*-"$stamp".md' EXIT
 
 run_case() {
   local c=$1 dir="$cases_dir/$1" agent tools brief work
@@ -58,7 +66,7 @@ run_case() {
     -e "s#{{DATE}}#$today#g" -e "s#{{NOTE}}#$note#g" "$dir/brief.txt")
   turns=$(cat "$dir/turns.txt" 2>/dev/null || echo 40)
   usd=$(cat "$dir/usd.txt" 2>/dev/null || echo "$max_usd")
-  work=$(mktemp -d)
+  work=$(mktemp -d "$tmp_root/work.XXXXXX")
   "$repo/hooks/sandbox-prompt.py" > "$out/$c.sandbox.md"
   (cd "$work" && claude -p --agent "$agent" --output-format json --max-turns "$turns" \
     --allowedTools "$tools" --add-dir "$HOME/.claude" "$HOME/notes" "$repo" \
@@ -76,7 +84,14 @@ run_case() {
 }
 
 # What in ~/notes has changed, leaving out the eval notes themselves.
-notes_status() { git -C "$HOME/notes" status --porcelain --untracked-files=all | grep -v '/\.eval-'; }
+# Without a git repo there, changes can't be seen, so it says so and the research cases fail.
+notes_status() {
+  if git -C "$HOME/notes" rev-parse --git-dir > /dev/null 2>&1; then
+    git -C "$HOME/notes" status --porcelain --untracked-files=all | grep -v '/\.eval-'
+  else
+    echo "NOT A GIT REPO"
+  fi
+}
 
 for c in "${cases[@]}"; do
   [ -d "$cases_dir/$c" ] || { echo "no such case: $c" >&2; exit 2; }
@@ -128,7 +143,9 @@ for case in cases:
                 negate = line.startswith("!")
                 if (re.search(line[1:] if negate else line, text) is not None) == negate:
                     misses.append(("note matched " if negate else "note has no match for ") + line)
-        if (out / "notes-before").read_text() != (out / "notes-after").read_text():
+        if "NOT A GIT REPO" in (out / "notes-before").read_text():
+            misses.append("~/notes isn't a git repo, so changes to it can't be checked")
+        elif (out / "notes-before").read_text() != (out / "notes-after").read_text():
             misses.append("something else in ~/notes changed during the run (see notes-before/after)")
     if misses:
         print(f"FAIL {case} ({info}): " + "; ".join(misses))

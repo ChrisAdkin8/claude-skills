@@ -5,8 +5,9 @@ __pycache__/
 /tests/agent-evals/results/
 # Skills Claude Code syncs from the claude.ai account into ~/.claude/skills, which links here.
 /skills/synced/
-tests/skill-evals/results/
+/tests/skill-evals/results/
 # The diagram's renderer and its intermediate SVGs: `npm install` and `workflow.py --svg` recreate them.
 /docs/diagram/node_modules/
-/docs/diagram/package-lock.json
 /docs/diagram/build/
+# Per-machine Claude Code settings for this repo.
+/.claude/settings.local.json

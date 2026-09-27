@@ -5,7 +5,19 @@ section is a date. Within a day, changes are grouped by area.
 
 ## 2026-09-27
 
+### Security
+
+- The guard fails closed: it refuses the call when it crashes or gets input it doesn't expect,
+  and refuses a write with no file path. Before, an unexpected error let the call through.
+- Shell history, cookies, Chrome's profile and keychains are denied to the Read tool as well as to
+  shell commands, and to spikes. A test checks that the guard and both settings files deny the same
+  paths.
+
 ### Added
+
+- CI: GitHub Actions runs the unit tests on macOS on each push to `main` and each pull request,
+  and lints with ruff (errors only) and shellcheck (warnings and above).
+- Tests for `mdcheck.py`, `git-read.py`, `run-spike.sh` and the two eval runners.
 
 - A mind-map index for `~/notes`. Every research note gets a `topic` (an area, and optionally a
   sub-area), and `/research`'s last step rebuilds `~/notes/index.md` from those topics with the new
@@ -31,6 +43,18 @@ section is a date. Within a day, changes are grouped by area.
   `research-ideas` eval case's $10 cap, a Topics section for `~/notes/CLAUDE.md`, what the worked
   example's verifier actually checked, and where unfiled notes go in the index.
 - `CLAUDE.md` gives the agent evals' current cost and the `research-ideas` case's cap.
+- One code-block walker, heading rule and citation pattern in `mdcheck.py`, used by every
+  checker. `#2 on Hacker News` no longer ends a section, and form feeds no longer add lines.
+- `check-spec.py` ignores a `## Cold review` quoted in a code block, and counts `Makefile:40` and
+  other extensionless files as citations.
+- `review-state.py` follows a renamed document and names every section a change touches.
+- `build-index.py` wraps a link path holding a space or bracket in angle brackets.
+- Both eval runners exit 1 when a case fails, and have separate cost caps, `AGENT_EVAL_MAX_USD` and
+  `SKILL_EVAL_MAX_USD`. Four graders check the finding rather than a keyword.
+- `replay_guard.py` prints SKIP when there's nothing to replay, and exits 1 on a regression.
+- The README's diagram shows light in light mode; it showed the dark version to everyone. The
+  README and `CLAUDE.md` list every test file and the CI, and give the fourth eval run's cost.
+- The diagram's renderer is pinned to one version, with its lockfile committed.
 
 ## 2026-09-26
 

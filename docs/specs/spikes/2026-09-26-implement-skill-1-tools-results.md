@@ -41,14 +41,14 @@ FAIL: test_needs_a_brief (test_run_agent.RunAgent.test_needs_a_brief)
 
 ```
 ### test_prepare_spike failures: writes under ~/.cache/spec-spikes refused
-PermissionError: [Errno 1] Operation not permitted: '/Users/chrisadkin/.cache/spec-spikes/test-prepare-spike-3b454d64'
-FileNotFoundError: [Errno 2] No such file or directory: '/Users/chrisadkin/.cache/spec-spikes/test-prepare-spike-7fb83a74/spec/S1/src'
-PermissionError: [Errno 1] Operation not permitted: '/tmp/claude-501/.../outside' -> '/Users/chrisadkin/.cache/spec-spikes/test-prepare-spike-17d61e86'  (symlink target)
+PermissionError: [Errno 1] Operation not permitted: '~/.cache/spec-spikes/test-prepare-spike-3b454d64'
+FileNotFoundError: [Errno 2] No such file or directory: '~/.cache/spec-spikes/test-prepare-spike-7fb83a74/spec/S1/src'
+PermissionError: [Errno 1] Operation not permitted: '/tmp/claude-501/.../outside' -> '~/.cache/spec-spikes/test-prepare-spike-17d61e86'  (symlink target)
 
 ### test_run_agent failures: writes under ~/.cache/agent-runs refused (a *different* path than
 ### ~/.cache/spec-spikes, not named in the brief), plus one read denial:
-PermissionError: [Errno 1] Operation not permitted: '/Users/chrisadkin/.cache/agent-runs/test-67ca9645'
-AssertionError: 'brief.md' not found in 'run-agent: no agent file: /Users/chrisadkin/.claude/agents/cold-reviewer.md\n'
+PermissionError: [Errno 1] Operation not permitted: '~/.cache/agent-runs/test-67ca9645'
+AssertionError: 'brief.md' not found in 'run-agent: no agent file: ~/.claude/agents/cold-reviewer.md\n'
 
 ### tests/test_check_spec.py: ALL tests pass, including the git-based Citations class that
 ### git_repo() (test_check_spec.py:471's helper) builds in a tempfile.TemporaryDirectory():
@@ -60,7 +60,7 @@ test_uncommitted_lines_warn (test_check_spec.Citations.test_uncommitted_lines_wa
 0
 
 ### probe: reading the real ~/.claude template path is denied, confirming the mechanism Expect named
-ERROR PermissionError [Errno 1] Operation not permitted: '/Users/chrisadkin/.claude/skills/spec/template.md'
+ERROR PermissionError [Errno 1] Operation not permitted: '~/.claude/skills/spec/template.md'
 ```
 
 #### Verdict

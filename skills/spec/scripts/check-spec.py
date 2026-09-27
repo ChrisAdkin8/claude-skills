@@ -34,8 +34,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "research" / "scripts"))
 from mdcheck import (  # noqa: E402  shared with check-note.py
-    INLINE_CODE, NOT_REVIEWED, SECRETS, SEPARATOR, count_words, frontmatter, has_account_id,
-    section, strip_code,
+    CITE, INLINE_CODE, NOT_REVIEWED, SECRETS, SEPARATOR, count_words, frontmatter,
+    has_account_id, in_code, is_heading, line_count, section, strip_code,
 )
 import mdcheck  # noqa: E402
 
@@ -54,11 +54,18 @@ WORD_WARN, WORD_FAIL = 3000, 4000  # template specs
 # superseded it's a record, and length only warns.
 LIVE = ("draft", "reviewed", "in-progress")
 HOUSE_WORD_WARN = 5000  # house-format specs follow their repo's own norms
-# `path/to/file.py:12` or `file.py:12-20`. The lookbehind stops matches starting mid-URL
-# (https://host/x.py:1) or mid-token; the lookahead stops `:1.2` version strings but lets a
-# citation end a sentence.
+# Files usually named without an extension, which are citations like any `file.py`.
+EXTENSIONLESS = (
+    "Makefile", "GNUmakefile", "Dockerfile", "Containerfile", "Justfile", "Jenkinsfile",
+    "Vagrantfile", "Gemfile", "Rakefile", "Procfile", "Brewfile", "CODEOWNERS",
+)  # fmt: skip
+# `path/to/file.py:12`, `file.py:12-20` or `Makefile:40`. The lookbehind stops matches starting
+# mid-URL (https://host/x.py:1) or mid-token; the lookahead stops `:1.2` version strings but lets
+# a citation end a sentence.
 CITATION = re.compile(
-    r"(?<![\w/:.@-])((?:[\w.-]+/)+[\w.-]+|[\w-][\w.-]*\.\w+):(\d+)(?:[-–](\d+))?(?!\w|\.\d)"
+    r"(?<![\w/:.@-])((?:[\w.-]+/)+[\w.-]+|[\w-][\w.-]*\.\w+|"
+    + "|".join(EXTENSIONLESS)
+    + r"):(\d+)(?:[-–](\d+))?(?!\w|\.\d)"
 )
 # `:48`, `(:48)`, (:48) or (:14, :36-40), continuing the last full citation in the paragraph.
 # Group 1 is the list of `:N` or `:N-M` items.
@@ -68,8 +75,6 @@ SHORTHAND = re.compile(
 SHORT_ITEM = re.compile(r":(\d+)(?:[-–](\d+))?")
 # ~/path:12 or /abs/path:12: outside the cite repo, so they can't be checked.
 ABSOLUTE = re.compile(r"(?<![\w/.:-])(~?/[\w./-]+\.\w+):(\d+)(?:[-–](\d+))?(?!\w|\.\d)")
-# [4], [1, 7] or [8-9] outside inline code, but not a markdown link [4](url).
-SOURCE_REF = re.compile(r"\[(\d+(?:\s*[,–-]\s*\d+)*)\](?!\()")
 READ_AT_LINE = re.compile(r"[Rr]ead at (?:commit )?`?([0-9a-f]{7,40})\b")
 # Bare filenames with these extensions are citations even if nothing matches; others
 # (example.com:443) may be hosts.
@@ -99,9 +104,12 @@ NESTED_ITEM = re.compile(r"\s+(?:[-*]|\d+\.)\s+\S")
 
 
 def git(repo, *args, strip=True):
+    # quotePath off: ls-tree would print a non-ASCII path quoted and escaped. errors="replace": a
+    # cited file needn't be UTF-8.
     result = subprocess.run(
-        ["git", "-C", str(repo), *args], capture_output=True, text=True, check=False
-    )
+        ["git", "-c", "core.quotePath=off", "-C", str(repo), *args],
+        capture_output=True, text=True, errors="replace", check=False,
+    )  # fmt: skip
     if result.returncode != 0:
         return None
     return result.stdout.rstrip("\n") if strip else result.stdout
@@ -111,11 +119,16 @@ def split_cold_review(lines, warns):
     """Split off a saved '## Cold review' section. It records the reviewer's reply unchanged, so
     it's left out of the word count and the citation, link and template checks, which the
     author couldn't fix without editing the reviewer's words. The secrets check still reads it."""
-    at = next((i for i, line in enumerate(lines) if line.startswith("## Cold review")), None)
+    code = in_code(lines)  # a `## Cold review` quoted in a code block isn't the section
+    at = next(
+        (i for i, line in enumerate(lines) if not code[i] and line.startswith("## Cold review")),
+        None,
+    )
     if at is None:
         return lines, []
     end = next(
-        (j for j in range(at + 1, len(lines)) if lines[j].startswith("## ")), len(lines)
+        (j for j in range(at + 1, len(lines)) if not code[j] and lines[j].startswith("## ")),
+        len(lines),
     )
     if end < len(lines):
         warns.append(
@@ -189,7 +202,7 @@ class Snapshot:
             # Unstripped: trailing blank lines are lines a citation can point at, and
             # working_length counts them too.
             blob = git(self.repo, "show", f"{self.read_at}:{rel}", strip=False)
-            self._lengths[rel] = len(blob.splitlines()) if blob is not None else None
+            self._lengths[rel] = line_count(blob) if blob is not None else None
         return self._lengths[rel]
 
     def exists(self, rel):
@@ -200,7 +213,7 @@ class Snapshot:
 
 
 def working_length(path):
-    return len(path.read_text(errors="replace").splitlines())
+    return line_count(path.read_text(errors="replace"))
 
 
 def check_range(snap, rel, start, end, ref, fails, warns):
@@ -237,7 +250,7 @@ def check_citations(body, snap, templated, fails, warns):
     last_file = None  # the file a `:48` shorthand refers to
     last_bad = None  # the last full citation, if it didn't resolve to a checkable file
     for line in body:
-        if not line.strip() or line.startswith("#"):
+        if not line.strip() or is_heading(line):
             last_file = last_bad = (
                 None  # a shorthand only continues within its paragraph
             )
@@ -284,7 +297,11 @@ def check_citations(body, snap, templated, fails, warns):
             elif "/" not in rel and rel in snap.by_name:
                 count += 1
                 bare.append(ref)
-            elif CODE_EXT.search(rel) or ("/" in rel and "." in Path(rel).name.lstrip(".")):
+            elif (
+                CODE_EXT.search(rel)
+                or Path(rel).name in EXTENSIONLESS
+                or ("/" in rel and "." in Path(rel).name.lstrip("."))
+            ):
                 unresolved.append(ref)
             else:
                 # No file extension and nothing on disk: svc/name:9090, ghcr.io/o/app:2,
@@ -400,7 +417,7 @@ def main():
             return 1
         repo = Path(top)
 
-    lines = spec.read_text().splitlines()
+    lines = spec.read_text(errors="replace").splitlines()
     if not any(line.strip() for line in lines):
         print(f"FAIL: {spec} is empty")
         print("RESULT: FAIL")
@@ -492,7 +509,7 @@ def main():
         bare_refs = [
             line.strip()[:50]
             for line in body
-            if SOURCE_REF.search(INLINE_CODE.sub("", line))
+            if CITE.search(INLINE_CODE.sub("", line))
             and not re.search(r"https?://", line)
         ]
         if bare_refs:

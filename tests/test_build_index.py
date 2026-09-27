@@ -151,6 +151,19 @@ class BuildIndex(unittest.TestCase):
         self.write("research/a.md", note("A [draft] note", "final", "a"))
         self.assertIn("- [A \\[draft\\] note](research/a.md)", self.build()[1])
 
+    def test_quoted_title_keeps_its_hash(self):
+        self.write("research/a.md", note('"Fix for issue #42"', "final", "kubernetes"))
+        self.assertIn("- [Fix for issue #42](research/a.md) · final", self.lines())
+
+    def test_note_that_is_not_utf8_does_not_stop_the_index(self):
+        self.write("research/a.md", note("Note A", "final", "kubernetes"))
+        (self.root / "research" / "b.md").write_bytes(
+            note("Caf\xe9 note", "draft", "kubernetes").encode("latin-1")
+        )
+        lines = self.lines()
+        self.assertIn("- [Note A](research/a.md) · final", lines)
+        self.assertTrue(any(l.startswith("- [Caf") and "(research/b.md)" in l for l in lines))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -140,6 +140,33 @@ class ReviewState(unittest.TestCase):
         self.assertEqual(got["base"], hashes["created"])
         self.assertEqual(got["headings"], "## Restore; ## Rollback")
 
+    def test_edits_before_a_rename_still_found(self):
+        _, saved = self.repo_with_review()
+        self.write(self.doc, DOC + "\n## Verify\n\nCheck it.\n")
+        self.commit("edit")
+        new_doc = self.root / "docs" / "playbook.md"
+        self.git("mv", str(self.doc), str(new_doc))
+        self.git("mv", str(self.record), str(self.root / "docs" / "records" / "playbook-record.md"))
+        self.commit("rename")
+        got, out = state(new_doc)
+        self.assertEqual(got["review-commit"], saved, out)
+        self.assertEqual(got["state"], "unlogged", out)
+        self.assertIn("## Verify", got["headings"])
+        self.assertIn("docs/runbook.md docs/playbook.md", got["diff"])
+
+    def test_headings_cover_every_changed_line(self):
+        self.repo_with_review()
+        self.write(self.doc, DOC + "\n## Verify\n\nCheck it.\n")
+        got, out = state(self.doc)
+        # The hunk starts on the blank line ending Rollback, and runs into the new section.
+        self.assertEqual(got["headings"], "## Rollback; ## Verify", out)
+
+    def test_code_block_heading_is_not_a_section(self):
+        self.repo_with_review()
+        self.write(self.doc, DOC + "\n```\n# a comment\nrun\n```\n")
+        got, out = state(self.doc)
+        self.assertEqual(got["headings"], "## Rollback", out)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -142,8 +142,8 @@ launches it, and passes on what it finds.
   such as build scripts and config. Where a claim can only be settled by running a command, it
   says so rather than guessing the result.
 - **You pick which findings get fixed.** The skill edits the document only for those. It asks
-  before saving the review to the document's record. The one exception is a spec's delta review,
-  which it saves without asking, as `/spec` does.
+  before saving the review to the document's record, except for a spec's review, full or delta,
+  which it saves without asking, as `/spec` does, since the spec's checks read it.
 - **Each document gets one full review.** After that, running `/cold-review` again gives one delta
   review of the changes logged since, and no more.
 - **`/cold-review prompt <file>`** writes the reviewer's instructions for you to run in a new

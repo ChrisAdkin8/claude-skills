@@ -551,3 +551,25 @@ No agent or skill instruction file changed, so only the cases whose graders chan
 | spec-done (skill) | PASS | 9 | $0.34 |
 
 Total $1.09.
+
+## Skill instructions fixed (2026-09-27)
+
+`/spec`, `/cold-review`, `/research`, `/idea`, the spike and done steps and the research verifier's
+Prior art line take the fixes from the second 2026-09-27 repo review. All ten agent cases in
+parallel, on the default model:
+
+| Case | Result | Turns | Cost |
+|---|---|---:|---:|
+| absence-claim | PASS | 23 | $0.47 |
+| cold-review-skip | PASS | 6 | $0.15 |
+| delta-review | PASS | 12 | $0.27 |
+| delta-review-record | PASS | 7 | $0.31 |
+| record-skip | PASS | 7 | $0.20 |
+| research-ideas | PASS | 55 | $2.18 |
+| research-quick | PASS | 11 | $0.33 |
+| spec-miscite | PASS | 5 | $0.17 |
+| spike-inherited | PASS | 6 | $0.17 |
+| wrong-figure | PASS | 6 | $0.14 |
+
+Total $4.39. Skill evals: `cold-review-delta` PASS (5 turns, $0.28), `spec-done` PASS (10 turns,
+$0.36); total $0.64.

@@ -624,3 +624,61 @@ class WorkItems(unittest.TestCase):
         )
         out, result = check(text)
         self.assertEqual(result, "RESULT: PASS", out)
+
+
+class MarkdownEdgeCases(unittest.TestCase):
+    """Code blocks, odd bytes and odd file names don't throw the checker off."""
+
+    def test_cold_review_quoted_in_a_code_block_is_not_the_section(self):
+        base = FIXTURE.read_text()
+        text = base.replace(
+            "Nothing to cite, because read-at is none.",
+            "Nothing to cite, because read-at is none. A record looks like this:\n\n"
+            "```markdown\n## Cold review\n\nReviewed on 2026-09-15 by cold-reviewer.\n```",
+        )
+        out, result = check(text)
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertNotIn("missing section", out)
+        self.assertNotIn("review history kept in the spec", out)
+        # The quoted block is code, so only the sentence before it adds words.
+        self.assertEqual(words(out), words(check(base)[0]) + 5)
+
+
+class CitationEdgeCases(unittest.TestCase):
+    check = Citations.check
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.repo = Path(tmp.name) / "repo"
+        self.repo.mkdir()
+        (self.repo / "latin.txt").write_bytes(b"caf\xe9\n")
+        self.read_at = git_repo(
+            self.repo,
+            {"Makefile": "all:\n\techo hi\n", "ff.c": "a\fb\fc\nd\ne\n", "docs/café.md": "one\n"},
+        )
+
+    def test_extensionless_file_is_checked(self):
+        out, result = self.check("The build runs from Makefile:2 and Makefile:40.")
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("Makefile:40: the file had only 2 lines at read-at", out)
+        self.assertNotIn("Makefile:2:", out)
+
+    def test_file_that_is_not_utf8(self):
+        out, result = self.check("The word is at latin.txt:1.")
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertNotIn("Traceback", out)
+
+    def test_form_feeds_do_not_add_lines(self):
+        out, result = self.check("See ff.c:3.")
+        self.assertIn("RESULT: PASS", result, out)
+        out, result = self.check("See ff.c:5.")
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("ff.c:5: the file had only 3 lines", out)
+
+    def test_non_ascii_path_checked_at_read_at(self):
+        # Quoted by ls-tree, the path wasn't found at read-at, so the grown file passed.
+        git_repo(self.repo, {"docs/café.md": "one\ntwo\nthree\n"}, "grow")
+        out, result = self.check("See docs/café.md:3.")
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("had only 1 lines at read-at", out)

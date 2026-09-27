@@ -56,10 +56,10 @@ How to read it:
 - It follows one change from idea to merged code, top to bottom.
 - Each numbered stage shows the command you run, what it does and where its output goes.
 - Under each command: whether the stage's work runs in your session, or in a *subagent*, a
-  separate headless Claude session that hasn't seen your conversation.
+  separate headless Claude session that hasn't seen your conversation. "Planned" there means the
+  command isn't built yet.
 - Purple boxes are the agents and scripts that check the work.
 - The pink box is a check that runs only if the spec was edited after its cold review.
-- A dashed command box is planned, not built yet.
 - Dashed lines are shortcuts and loops off the main path.
 - The two bands at the bottom cover `/cold-review` and the limits every agent runs under.
 

@@ -102,7 +102,7 @@ def build(root):
     for area in sorted(tree):
         lines += [f"## {area}", ""]
         # Straight-under-area notes come first, or they'd sit under the last ### heading.
-        if tree[area][""]:
+        if tree[area].get(""):
             lines += branch(tree[area][""]) + [""]
         for sub in sorted(s for s in tree[area] if s):
             lines += [f"### {sub}", ""] + branch(tree[area][sub]) + [""]

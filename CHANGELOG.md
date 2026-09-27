@@ -75,6 +75,21 @@ section is a date. Within a day, changes are grouped by area.
   which `/cold-review` may run without a prompt, and which works for paths with spaces.
 - `build-index.py` skips a broken link or a folder named `*.md` instead of crashing, escapes a
   backslash in a title, and reads a note that starts with a byte-order mark.
+- Tests and evals that could pass a wrong answer, or miss a regression:
+  - A table of 42 guard refusals (file writes, `gh` and git writes, `curl` sends, `sed -i`,
+    `find -exec` and the rest), each checked for its reason; most had no test.
+  - The `delta-review` cases need the grade in the Affects cell. `cold-review-delta` rejects "no
+    unlogged change" and a base that doesn't exist. Both skill graders fail a skill that commits.
+  - The runner tests check that each cap and sandbox flag reaches `claude`, as does
+    `test_run_spike.py` for a spike's $2 and 60 turns.
+  - An ideas-depth fixture tests the Candidate pool and Shortlist checks for free.
+  - `test_prepare_spike.py` and `test_run_agent.py` use a home of their own, not `~/.cache`.
+  - `replay_guard.py` replays every Bash command from the headless runs, of any date, and fails if
+    one gets a different verdict now than it got when it ran.
+- Both eval runners refuse an empty cases folder instead of crashing on bash 3.2, clean up their
+  temp folders and eval notes if interrupted, and the skill runner counts only this run's results.
+  The agent runner fails a research case when `~/notes` isn't a git repo, since it can't see
+  changes there.
 - `mdcheck.py` holds the delta-review pattern, the record path and the secrets scan the checkers
   each kept a copy of.
 

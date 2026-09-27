@@ -14,6 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CHECKER = ROOT / "skills" / "research" / "scripts" / "check-note.py"
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "notes" / "verified-full.md"
+IDEAS = Path(__file__).resolve().parent / "fixtures" / "notes" / "ideas.md"
 HEADER = "Checked on 2026-09-15 by research-verifier: 1 of 2 claims confirmed."
 
 
@@ -229,6 +230,63 @@ class BudgetEscapes(unittest.TestCase):
         out, result = check("\ufeff" + FIXTURE.read_text())
         self.assertEqual(result, "RESULT: PASS", out)
 
+
+class IdeasDepth(unittest.TestCase):
+    """depth: ideas, which only the paid research-ideas eval exercised before: the Candidate pool
+    and the Shortlist rubric."""
+
+    def setUp(self):
+        self.text = IDEAS.read_text()
+
+    def fails_with(self, text, reason):
+        out, result = check(text)
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn(reason, out)
+
+    def test_fixture_passes(self):
+        out, result = check(self.text)
+        self.assertEqual(result, "RESULT: PASS", out)
+
+    def test_too_few_candidates(self):
+        pool = self.text.split("## Candidate pool\n", 1)[1]
+        kept = "\n".join(pool.strip().splitlines()[:10])
+        self.fails_with(self.text.replace(pool, "\n" + kept + "\n"), "at least 20 are required")
+
+    def test_untagged_and_unmarked_candidates(self):
+        self.fails_with(self.text.replace("- [tool] Candidate 2,", "- Candidate 2,"), "have no [lens] tag")
+        self.fails_with(
+            self.text.replace("Candidate 2, a widget tool idea. Cut: overlaps a stronger candidate.",
+                              "Candidate 2, a widget tool idea."),
+            "marked neither 'Cut: <reason>' nor 'Shortlisted #n'",
+        )
+
+    def test_lens_outside_scope(self):
+        self.fails_with(self.text.replace("- [tool] Candidate 2,", "- [game] Candidate 2,"),
+                        "lenses outside this note's scope: game")
+
+    def test_prose_in_the_pool_fails_indented_or_not(self):
+        for indent in ("", "    "):
+            with self.subTest(indent=repr(indent)):
+                prose = "\n".join(f"{indent}More thoughts, line {k}." for k in range(3))
+                self.fails_with(self.text + "\n" + prose + "\n", "lines of prose in the Candidate pool")
+
+    def test_very_long_candidate_fails(self):
+        long = " ".join(["word"] * 130)
+        self.fails_with(self.text.replace("Candidate 2, a widget", f"Candidate 2, {long}, a widget"),
+                        "candidates run over 120 words")
+
+    def test_shortlist_rubric(self):
+        self.fails_with(self.text.replace("| Why it flops |", "| Risk |"), "missing rubric columns: Why it flops")
+        self.fails_with(self.text.replace("| Baseline | Do nothing", "| 6 | Do nothing"), "no baseline row")
+        self.fails_with(self.text.replace("| a gif | a week |", "|  | a week |", 1), "rows with empty cells")
+        rows = [l for l in self.text.splitlines() if l.startswith(("| 4 |", "| 5 |"))]
+        self.fails_with("\n".join(l for l in self.text.splitlines() if l not in rows), "5 to 7 are required")
+
+    def test_pool_before_sources_fails(self):
+        head, pool = self.text.split("## Candidate pool\n", 1)
+        moved = head.replace("## Sources", "## Candidate pool\n" + pool + "\n## Sources")
+        out, result = check(moved)
+        self.assertEqual(result, "RESULT: FAIL", out)
 
 if __name__ == "__main__":
     unittest.main()

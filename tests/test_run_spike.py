@@ -84,6 +84,16 @@ class RunSpike(unittest.TestCase):
             call["argv"][call["argv"].index("--settings") + 1], "settings.json"
         )
         self.assertEqual(call["argv"][-1], "the brief")  # $(cat) drops the newline
+        # The caps and containment the README promises: $2, 60 turns, no project settings,
+        # writes only inside the scratch dir, no MCP servers.
+        argv = call["argv"]
+        flag = lambda name: argv[argv.index(name) + 1]  # noqa: E731
+        self.assertEqual(flag("--max-budget-usd"), "2")
+        self.assertEqual(flag("--max-turns"), "60")
+        self.assertEqual(flag("--setting-sources"), "user")
+        self.assertEqual(flag("--allowedTools"), "Read Grep Glob Bash Write(./**) Edit(./**)")
+        self.assertIn("--strict-mcp-config", argv)
+        self.assertIn("--no-session-persistence", argv)
         self.assertTrue(call["uv"].endswith("/.cache/spec-spikes/.uv-cache"))
         self.assertIn("done", (self.root / "repo/spec/S1/run.json").read_text())
 

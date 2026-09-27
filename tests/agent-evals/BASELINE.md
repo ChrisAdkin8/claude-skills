@@ -528,3 +528,26 @@ the checkers give the same results on all 32 notes in `~/notes`, this repo's 4 s
 on 16 specs in other repos, one bare `values.yaml:163-164` is now reported as ambiguous. So the
 agent cases weren't run. Skill evals: `spec-done` PASS (5 turns, $0.30), `cold-review-delta` PASS
 (3 turns, $0.27), which takes the new `diff:` line. Total $0.57.
+
+## Graders and runners tightened (2026-09-27)
+
+Graders that passed a wrong answer are fixed, and each was replayed against every saved reply:
+- `delta-review` and `delta-review-record` need `correctness` or `requirement` in the Affects
+  cell, not anywhere in the row. All 19 saved replies still pass; a row graded "neither: a
+  correctness nit" now fails.
+- `cold-review-delta` no longer counts "there is no unlogged change" as naming one, resolves the
+  diff base with its `^` or `~1` (`created^` doesn't exist), and fails if the skill committed
+  anything. All 9 saved replies still pass the wording check.
+- `spec-done` diffs the spec against setup's HEAD, so a committed edit can't hide, and needs W2
+  named as not landed in the same sentence. All 7 saved replies pass; "W2 has landed" fails.
+
+No agent or skill instruction file changed, so only the cases whose graders changed were run:
+
+| Case | Result | Turns | Cost |
+|---|---|---:|---:|
+| delta-review | PASS | 7 | $0.24 |
+| delta-review-record | PASS | 7 | $0.24 |
+| cold-review-delta (skill) | PASS | 3 | $0.27 |
+| spec-done (skill) | PASS | 9 | $0.34 |
+
+Total $1.09.

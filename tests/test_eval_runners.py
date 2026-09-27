@@ -18,7 +18,9 @@ TESTS = Path(__file__).resolve().parent
 AGENT_RUN = TESTS / "agent-evals" / "run.sh"
 SKILL_RUN = TESTS / "skill-evals" / "run.sh"
 STUB = """#!/usr/bin/env python3
-import json
+import json, os, sys
+with open(os.environ["STUB_ARGV"], "a") as f:
+    f.write(json.dumps(sys.argv[1:]) + "\\n")
 print(json.dumps({"subtype": "success", "is_error": False, "num_turns": 1,
                   "total_cost_usd": 0.01, "result": "the reply says yes"}))
 """
@@ -40,6 +42,7 @@ class Runners(unittest.TestCase):
             "PATH": f"{bin_dir}:{os.environ['PATH']}",
             "EVAL_CASES": str(self.cases),
             "EVAL_OUT": str(self.tmp / "out"),
+            "STUB_ARGV": str(self.tmp / "argv.jsonl"),
         }
 
     def run_script(self, script, *cases):
@@ -51,6 +54,14 @@ class Runners(unittest.TestCase):
             check=False,
         )
         return run.returncode, run.stdout + run.stderr
+
+    def argv(self):
+        """The arguments of each claude call, in the order they were made."""
+        path = self.tmp / "argv.jsonl"
+        return [json.loads(l) for l in path.read_text().splitlines()] if path.exists() else []
+
+    def flag(self, argv, name):
+        return argv[argv.index(name) + 1] if name in argv else None
 
     def agent_case(self, name, expect):
         case = self.cases / name
@@ -123,10 +134,76 @@ class Runners(unittest.TestCase):
                 self.assertEqual(code, 2, out)
 
     def test_results_stay_out_of_the_real_folders(self):
+        real = [TESTS / "skill-evals" / "results", TESTS / "agent-evals" / "results"]
+        before = [sorted(p.iterdir()) if p.exists() else [] for p in real]
         self.skill_case("good", passes=True)
+        self.agent_case("fine", "says yes\n")
         self.run_script(SKILL_RUN)
+        self.run_script(AGENT_RUN)
         result = json.loads((self.tmp / "out" / "good.json").read_text())
         self.assertEqual(result["result"], "the reply says yes")
+        self.assertEqual([sorted(p.iterdir()) if p.exists() else [] for p in real], before)
+
+    def test_agent_evals_pass_caps_and_sandbox(self):
+        self.agent_case("plain", "says yes\n")
+        self.agent_case("raised", "says yes\n")
+        (self.cases / "raised" / "usd.txt").write_text("10\n")
+        (self.cases / "raised" / "turns.txt").write_text("70\n")
+        code, out = self.run_script(AGENT_RUN)
+        self.assertEqual(code, 0, out)
+        calls = self.argv()
+        caps = sorted((self.flag(a, "--max-budget-usd"), self.flag(a, "--max-turns")) for a in calls)
+        self.assertEqual(caps, [("10", "70"), ("5", "40")])
+        for argv in calls:
+            self.assertEqual(self.flag(argv, "--setting-sources"), "user")
+            self.assertTrue(self.flag(argv, "--settings").endswith("hooks/agent-sandbox.json"))
+            self.assertIn("--strict-mcp-config", argv)
+            self.assertEqual(self.flag(argv, "--agent"), "cold-reviewer")
+
+    def test_agent_eval_cap_override(self):
+        self.agent_case("plain", "says yes\n")
+        self.env["AGENT_EVAL_MAX_USD"] = "2"
+        self.run_script(AGENT_RUN)
+        (argv,) = self.argv()
+        self.assertEqual(self.flag(argv, "--max-budget-usd"), "2")
+
+    def test_skill_evals_pass_caps_and_sandbox(self):
+        self.skill_case("good", passes=True)
+        self.run_script(SKILL_RUN)
+        self.env["SKILL_EVAL_MAX_USD"] = "1"
+        self.run_script(SKILL_RUN)
+        first, second = self.argv()
+        self.assertEqual(self.flag(first, "--max-budget-usd"), "3")
+        self.assertEqual(self.flag(second, "--max-budget-usd"), "1")
+        self.assertEqual(self.flag(first, "--max-turns"), "60")
+        self.assertTrue(self.flag(first, "--settings").endswith("hooks/agent-sandbox.json"))
+        self.assertIn("--strict-mcp-config", first)
+
+    def test_no_cases_is_an_error_not_a_crash(self):
+        for script in (AGENT_RUN, SKILL_RUN):
+            with self.subTest(script=script.parent.name):
+                code, out = self.run_script(script)
+                self.assertEqual(code, 2, out)
+                self.assertIn("no cases in", out)
+                self.assertNotIn("unbound variable", out)
+
+    def test_skill_evals_count_only_this_runs_results(self):
+        self.skill_case("good", passes=True)
+        (self.tmp / "out").mkdir()
+        (self.tmp / "out" / "stale.result").write_text("PASS\n")
+        code, out = self.run_script(SKILL_RUN)
+        self.assertEqual(code, 0, out)
+        self.assertIn("1 of 1 passed", out)
+
+    def test_fixtures_are_cleaned_up(self):
+        self.skill_case("good", passes=True)
+        (self.cases / "good" / "setup.sh").write_text(
+            f"#!/bin/sh\necho \"$1\" >> {self.tmp}/works\n"
+        )
+        self.run_script(SKILL_RUN)
+        (work,) = (self.tmp / "works").read_text().split()
+        self.assertFalse(Path(work).exists())
+        self.assertFalse(Path(work).parent.exists())  # the temp root too
 
 
 if __name__ == "__main__":

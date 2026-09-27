@@ -82,4 +82,4 @@ s = s.replace("If the restore fails, run `make backup` first next time.",
 p.write_text(s)
 PY
 g commit -qam "docs: a real rollback step"
-printf 'created=%s\nsaved=%s\nmoved=%s\n' "$created" "$saved" "$moved" > .git/eval-hashes
+printf 'created=%s\nsaved=%s\nmoved=%s\nhead=%s\n' "$created" "$saved" "$moved" "$(git rev-parse --short HEAD)" > .git/eval-hashes

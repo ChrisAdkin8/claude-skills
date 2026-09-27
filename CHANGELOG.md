@@ -3,6 +3,28 @@
 What changed, by day, drawn from the commit history. The repo has no releases or tags, so each
 section is a date. Within a day, changes are grouped by area.
 
+## 2026-09-27
+
+### Added
+
+- A mind-map index for `~/notes`. Every research note gets a `topic` (an area, and optionally a
+  sub-area), and `/research`'s last step rebuilds `~/notes/index.md` from those topics with the new
+  `build-index.py`: research notes grouped under their topics, with their ideas and decisions
+  under them. Markmap shows it as a clickable mind map; the README says how to open it.
+- The researcher sets a `topic` on each note, reusing one already in use where it fits.
+
+### Changed
+
+- `check-note.py` fails a research note with no topic, or one that isn't `area` or
+  `area/sub-area` in lowercase and hyphens, and warns on a topic no other note uses.
+- `check-note.py` and `build-index.py` share the topic pattern through `mdcheck.py`.
+
+## 2026-09-26
+
+### Added
+
+- This changelog, drawn from the commit history.
+
 ## 2026-09-25
 
 ### Security

@@ -448,3 +448,27 @@ file changed, so this is the grader's wording check being brittle, not a regress
 Live check: `/research quick` on the Markmap VS Code extension's link clicks, run in the
 implementing session, ended in `~/notes` commit 2045a57 naming the note and `index.md`. It found
 `build-index.py` printing one topic too many per area with sub-areas only (fixed, with a test).
+
+## Notes index W7: a missing or malformed topic fails (2026-09-27)
+
+W7 of `docs/specs/2026-09-27-notes-mindmap-index.md`: `check-note.py` now FAILs a note with no
+topic, or one that isn't `area` or `area/sub-area` in lowercase and hyphens; a topic no other
+note uses stays a WARN. W6 gave every note in `~/notes/research` a topic first (`~/notes` commit
+bc059f6). Research notes failing `check-note.py`: 1 before and 1 after (the rag-forge taskfile
+note's dead `related` paths), so topics add no failures. All ten cases in parallel:
+
+| Case | Result | Turns | Cost |
+|---|---|---:|---:|
+| absence-claim | PASS | 21 | $0.28 |
+| cold-review-skip | PASS | 7 | $0.15 |
+| delta-review | PASS | 5 | $0.20 |
+| delta-review-record | PASS | 8 | $0.22 |
+| record-skip | PASS | 5 | $0.13 |
+| research-ideas | PASS | 54 | $2.02 |
+| research-quick | PASS | 11 | $0.26 |
+| spec-miscite | PASS | 6 | $0.14 |
+| spike-inherited | PASS | 8 | $0.15 |
+| wrong-figure | PASS | 6 | $0.14 |
+
+Total $3.70. The ideas researcher reused an existing topic, `side-projects/ideas`, with no
+first-use WARN; the quick one chose a new `python/packages` and got the WARN, as designed.

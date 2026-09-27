@@ -34,6 +34,7 @@ unavailable() {
   exit 1
 }
 [ $# -ge 1 ] && [ -n "$1" ] || usage
+command -v jq > /dev/null && command -v curl > /dev/null || unavailable "needs jq and curl on PATH"
 query=$1 sub=${2:-} sort=${3:-top} window=${4:-year}
 [[ -z $sub || $sub =~ ^[A-Za-z0-9_]{2,21}$ ]] || { echo "subreddit should be a name like kubernetes, without r/" >&2; exit 2; }
 [[ $sort =~ ^(top|relevance|new|comments)$ ]] || usage

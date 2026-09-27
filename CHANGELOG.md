@@ -75,6 +75,11 @@ section is a date. Within a day, changes are grouped by area.
   which `/cold-review` may run without a prompt, and which works for paths with spaces.
 - `build-index.py` skips a broken link or a folder named `*.md` instead of crashing, escapes a
   backslash in a title, and reads a note that starts with a byte-order mark.
+- `repo-health.sh` no longer reports a failure as a fact about a repo. It exits 1 when `gh` or
+  `jq` is missing or `gh` isn't logged in, says "not found or no access" only when GitHub says so
+  and "API error" otherwise, exits 1 when no repo could be read, and fetches four repos at a time.
+  `reddit-search.sh` and `gcp-skus.sh` check their tools first, and `gcp-skus.sh` URL-encodes the
+  page token. Tests for all three use stub `gh`, `curl` and `gcloud`.
 - Skill instructions that a model could follow into the wrong result:
   - `/spec` lists the review's `Needs a run` rows as candidate spike questions, and adds them only
     if the user picks them, instead of editing the spec straight after its review. It asks which

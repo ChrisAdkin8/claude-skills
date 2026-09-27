@@ -8,7 +8,7 @@ skill you're editing to be the one you're running.
 
 - `python3 -m unittest discover -s tests` — deterministic tests for the guard, both checkers,
   `build-index.py`, `review-state.py`, `git-read.py`, `prepare-spike.sh`, `run-spike.sh`,
-  `run-agent.sh` and `mdcheck.py`, that the eval runners exit 1 on a failure, and that the
+  `run-agent.sh`, `mdcheck.py` and the research scripts, that the eval runners exit 1 on a failure, and that the
   guard's and both sandbox settings' deny lists agree. CI runs these, with ruff and shellcheck.
 - `python3 tests/replay_guard.py` — the guard against real recorded commands and file reads.
 - After changing an agent or skill file, run `tests/agent-evals/run.sh` by hand. A full run cost

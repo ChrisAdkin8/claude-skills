@@ -18,6 +18,9 @@ usage() {
   exit 2
 }
 [ $# -ge 2 ] || usage
+for tool in gcloud curl jq; do
+  command -v "$tool" > /dev/null || { echo "gcp-skus: needs gcloud, curl and jq on PATH" >&2; exit 1; }
+done
 
 token=$(gcloud auth print-access-token 2>/dev/null) || {
   echo "gcloud isn't logged in, so GCP prices can't be checked against a Google source; mark them (unverified)" >&2
@@ -30,7 +33,7 @@ fetch() {
   while :; do
     # The token goes to curl in a config on stdin, never in its arguments, where ps shows it.
     resp=$(printf 'header = "Authorization: Bearer %s"\n' "$token" |
-      curl -sf -K - "$url${page:+&pageToken=$page}") || {
+      curl -sf -K - "$url${page:+&pageToken=$(jq -rn --arg p "$page" '$p | @uri')}") || {
       echo "request failed: ${url%%\?*}" >&2
       exit 1
     }

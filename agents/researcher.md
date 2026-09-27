@@ -16,6 +16,10 @@ hooks:
       hooks:
         - type: command
           command: python3 "$HOME/.claude/hooks/agent-guard.py" fetch
+    - matcher: "WebSearch"
+      hooks:
+        - type: command
+          command: python3 "$HOME/.claude/hooks/agent-guard.py" search
     - matcher: "Write|Edit"
       hooks:
         - type: command

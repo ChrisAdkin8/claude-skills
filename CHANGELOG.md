@@ -7,6 +7,15 @@ section is a date. Within a day, changes are grouped by area.
 
 ### Security
 
+- The guard refuses a wrapper option it doesn't know. It read BSD `xargs -J` as a flag, so in
+  `xargs -J grep curl -d x https://…` it checked `grep` and let `curl` send data unchecked.
+- The guard refuses `eval`, which it checked by re-joining the words without their quoting. No
+  agent has used it.
+- `gh` and the research scripts run outside the sandbox, and a command joining them with others
+  seems to as well, so the guard lets them share a command only with text filters, `cd` and
+  loops, never `curl` or `git`.
+- Web search queries go through the guard: at most 200 characters, and no 40-character run of
+  letters and digits. The longest of 478 recorded queries is 139 characters.
 - The guard fails closed: it refuses the call when it crashes or gets input it doesn't expect,
   and refuses a write with no file path. Before, an unexpected error let the call through.
 - Shell history, cookies, Chrome's profile and keychains are denied to the Read tool as well as to

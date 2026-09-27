@@ -90,3 +90,4 @@ Needs a run: none
 - Not reviewed: the Layout table's `tests/fixtures/` row mentions the `depth: ideas` note, on 2026-09-27.
 - Not reviewed: Cold review of any document says `/cold-review` saves a spec's full review without asking, as well as its delta review, on 2026-09-27.
 - Not reviewed: the Layout table's `tests/test_*.py` row adds the three research scripts, on 2026-09-27.
+- Not reviewed: How the agents are contained says the guard lets `gh` and the research scripts share a command only with text filters, and caps web search queries, on 2026-09-27.

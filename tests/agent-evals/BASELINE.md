@@ -573,3 +573,24 @@ parallel, on the default model:
 
 Total $4.39. Skill evals: `cold-review-delta` PASS (5 turns, $0.28), `spec-done` PASS (10 turns,
 $0.36); total $0.64.
+
+## Guard hardening (2026-09-27)
+
+The guard refuses `eval` and wrapper options it doesn't know, lets `gh` and the research scripts
+share a command only with text filters, and checks web search queries; the researcher and
+research-verifier hook WebSearch to it, and `agent-sandbox.md` says so. All ten agent cases:
+
+| Case | Result | Turns | Cost |
+|---|---|---:|---:|
+| absence-claim | PASS | 11 | $0.32 |
+| cold-review-skip | PASS | 7 | $0.19 |
+| delta-review | PASS | 6 | $0.21 |
+| delta-review-record | PASS | 7 | $0.20 |
+| record-skip | PASS | 6 | $0.18 |
+| research-ideas | PASS | 56 | $2.02 |
+| research-quick | PASS | 16 | $0.36 |
+| spec-miscite | PASS | 9 | $0.20 |
+| spike-inherited | PASS | 4 | $0.14 |
+| wrong-figure | PASS | 6 | $0.19 |
+
+Total $4.00.

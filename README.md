@@ -271,11 +271,13 @@ Some things run outside the sandbox, and not all of them are checked by the guar
 - `gh`, and the three research scripts that need credentials or call `gh` (`repo-health.sh`,
   `gcp-skus.sh`, `reddit-search.sh`). On macOS, `gh` can't make secure web connections inside the
   sandbox, so `agent-sandbox.json` lets these run outside it. They're still shell commands, so the
-  guard checks them.
+  guard checks them, and it lets them share a command only with text filters such as `jq` and
+  `grep`, never with `curl` or `git`, which must stay inside the sandbox.
 - Claude Code's own file-reading and web-fetching tools, which the sandbox never covers. The guard
   checks both, and Claude Code's permission settings also block reads of sensitive files.
-- Web search and the researcher's documentation servers (AWS and Terraform). **Nothing checks
-  these.** The only limit is which agents may use them. Web search is given to the researcher and
+- Web search, whose queries the guard caps at 200 characters and refuses if they hold what looks
+  like a token, and the researcher's documentation servers (AWS and Terraform), which **nothing
+  checks**. The only other limit is which agents may use them. Web search is given to the researcher and
   the research-verifier. The documentation servers are given only to the researcher. Each agent's
   file lists its tools by name.
 

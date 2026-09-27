@@ -417,3 +417,34 @@ W3 of `docs/specs/2026-09-27-notes-mindmap-index.md`: the researcher's frontmatt
 Total $4.46. The researcher chose `topic: python` (quick) and `topic: ai/research-agents`
 (ideas). Both got the first-use WARN, as expected while no note in `~/notes/research` has a
 topic yet; W6's backfill gives the researcher topics to reuse.
+
+## Notes index W5: /research's Finish step rebuilds the index (2026-09-27)
+
+W5 of `docs/specs/2026-09-27-notes-mindmap-index.md`: section 3 of `skills/research/SKILL.md`
+gains step 8, which runs `build-index.py ~/notes`, and the commit step (now 9) names `index.md`.
+No agent file changed. All ten agent cases in parallel, on the default model:
+
+| Case | Result | Turns | Cost |
+|---|---|---:|---:|
+| absence-claim | PASS | 20 | $0.31 |
+| cold-review-skip | PASS | 6 | $0.14 |
+| delta-review | PASS | 7 | $0.20 |
+| delta-review-record | PASS | 7 | $0.24 |
+| record-skip | PASS | 7 | $0.17 |
+| research-ideas | PASS | 67 | $2.47 |
+| research-quick | PASS | 11 | $0.31 |
+| spec-miscite | PASS | 6 | $0.14 |
+| spike-inherited | PASS | 5 | $0.15 |
+| wrong-figure | PASS | 6 | $0.14 |
+
+Total $4.27.
+
+Skill evals: `spec-done` PASS (11 turns, $0.35). `cold-review-delta` FAILed its first run
+(5 turns, $0.28) on one check only, "it's a delta review": the reply said "its second review, of
+just what changed" rather than the words "delta review", with the right diff base and the
+unlogged Rollback edit named. A re-run passed every check (4 turns, $0.27). No `/cold-review`
+file changed, so this is the grader's wording check being brittle, not a regression.
+
+Live check: `/research quick` on the Markmap VS Code extension's link clicks, run in the
+implementing session, ended in `~/notes` commit 2045a57 naming the note and `index.md`. It found
+`build-index.py` printing one topic too many per area with sub-areas only (fixed, with a test).

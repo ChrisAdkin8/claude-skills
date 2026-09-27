@@ -216,8 +216,8 @@ A cap stops a run only after the turn that crosses it, so a run can go over by u
   - `ideation-rules.md` and `ideas-finish.md`, the extra steps for `/research ideas`;
   - `scripts/check-note.py`, which checks a research note, and `scripts/mdcheck.py`, markdown
     helpers it shares with `check-spec.py` and `build-index.py`;
-  - `scripts/build-index.py`, which rebuilds `index.md` in `~/notes`, the notes arranged by
-    `topic` as an outline that Markmap shows as a mind map;
+  - `scripts/build-index.py`, which `/research` runs before its commit to rebuild `index.md` in
+    `~/notes`: the notes arranged by `topic` as an outline that Markmap shows as a mind map;
   - `scripts/repo-health.sh`, `gcp-skus.sh` and `reddit-search.sh`, which the `researcher` agent
     runs to gather evidence.
 - `skills/spec/`: `/spec`, with:

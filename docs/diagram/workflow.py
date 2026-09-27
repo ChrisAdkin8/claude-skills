@@ -28,7 +28,8 @@ MONO = "Menlo, Monaco, monospace"
 
 # ------------------------------------------------------------------ content
 # (number, title, colour key, command or None for a new session, what happens, output,
-#  whether its work runs in a subagent: a separate headless session)
+#  whether its work runs in a subagent: a separate headless session, and whether its command
+#  is only planned, not built yet: drawn dashed)
 STAGES = [
     (1, "Capture", "notes", "/idea", "Save the idea as a note", "~/notes/ideas/", False),
     (
@@ -58,6 +59,7 @@ STAGES = [
         "Implement the spec, W1 first, test first; a verifier re-runs the checks",
         "implement/ branch",
         True,
+        True,
     ),
     (
         6,
@@ -81,6 +83,17 @@ LOOP_BACK = "Research proved wrong? Update the note"
 # The line under each stage's command, saying where its work runs.
 RUNS = {True: "work runs in a subagent", False: "runs in your session"}
 RUNS_SHORT = {True: "subagent", False: "in session"}
+RUNS_PLANNED, RUNS_PLANNED_SHORT = "planned: in a subagent", "planned"
+
+
+def planned(st):
+    return len(st) > 7 and st[7]
+
+
+def runs(st, short=False):
+    if planned(st):
+        return RUNS_PLANNED_SHORT if short else RUNS_PLANNED
+    return (RUNS_SHORT if short else RUNS)[st[6]]
 QUICK = [("/spec quick", True), (" skips review and spikes", False)]
 DELTA_HEAD = "Spec edited after its review?"
 DELTA_BODY = [
@@ -261,7 +274,19 @@ class Canvas:
 
     # shared pieces
     def pill(self, x, y, w, h, stage, key, size=19.0):
-        if stage[3]:
+        if stage[3] and planned(stage):
+            ink = "#FFFFFF" if key == "block" else self.t["pill"]
+            self.rect(x, y, w, h, "none", stroke=ink, r=8, sw=2, dash="6 5")
+            self.text(
+                x + 14,
+                y + h / 2 + size * 0.35,
+                stage[3],
+                size=size,
+                fill=ink,
+                mono=True,
+                weight="bold",
+            )
+        elif stage[3]:
             self.rect(x, y, w, h, "#111827" if key == "block" else self.t["pill"], r=8)
             self.text(
                 x + 14,
@@ -401,7 +426,7 @@ def wide(theme):
         c.number(x + 30, TOP + 26, st[0], key)
         c.text(x + 56, TOP + 35, st[1], size=24, fill="#FFFFFF", weight="bold")
         c.pill(x + PAD, TOP + 72, IW, 42, st, "card")
-        c.text(x + PAD, TOP + 138, RUNS[st[6]], size=16, fill=t["muted"], weight="bold" if st[6] else "normal")
+        c.text(x + PAD, TOP + 138, runs(st), size=16, fill=t["muted"], weight="bold" if st[6] else "normal")
         c.lines(x + PAD, BODY_Y, bodies[i], size=19, lh=25)
         c.output(x + PAD, CARD_B - 64 - 18, IW, 64, key, st[5])
     for i in range(5):
@@ -572,7 +597,7 @@ def narrow(theme):
         c.number(RX + 30, y + 30, n, key)
         c.text(RX + 56, y + 38, st[1], size=22, fill="#FFFFFF", weight="bold")
         c.pill(RX + 16, y + 54, BW - 32, 34, st, "block", size=17)
-        c.text(RX + 16, y + 110, RUNS[st[6]], size=15, fill="#FFFFFF", weight="bold" if st[6] else "normal")
+        c.text(RX + 16, y + 110, runs(st), size=15, fill="#FFFFFF", weight="bold" if st[6] else "normal")
         c.lines(DX, y + 40, body, size=19, lh=25)
         c.output(RX + RW - OW - 16, y + 18, OW, 64, key, st[5], size=15)
         if chips:
@@ -733,7 +758,7 @@ def social(theme):
         c.number(x + 28, TOP + 36, st[0], key)
         c.text(x + 50, TOP + 45, st[1], size=24, fill="#FFFFFF", weight="bold")
         c.pill(x + 14, TOP + 84, BW - 28, 48, st, "block", size=19)
-        c.text(x + 16, TOP + 160, RUNS_SHORT[st[6]], size=17, fill="#FFFFFF", weight="bold" if st[6] else "normal")
+        c.text(x + 16, TOP + 160, runs(st, short=True), size=17, fill="#FFFFFF", weight="bold" if st[6] else "normal")
         if i < 5:
             ay = TOP + BH / 2
             c.arrow([(x + BW + 3, ay), (x + BW + GAP - 3, ay)], t["muted"], width=3)

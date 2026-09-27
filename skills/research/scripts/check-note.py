@@ -14,6 +14,10 @@ Once a note has a Verification table, its word limit tolerates up to 10 % over w
 the Finish step never has to cut verified content to fit; --headroom has no tolerance. The
 Verification header's first "N of M" must be the table's CONFIRMED count and row count.
 
+`topic` is one `area` or `area/sub-area`, lowercase and hyphenated; build-index.py makes the
+notes index from it. A missing or malformed topic is a WARN, and so is one no other note in the
+same folder uses (dotfiles don't count), which nudges the researcher to reuse a topic.
+
 Prints FAIL, WARN and INFO lines and exits 1 if anything failed. Checks only what can be
 checked mechanically; whether the sources support the claims is the verifier agent's job.
 """
@@ -35,6 +39,7 @@ TEMPLATE = {"ideas": TEMPLATES / "research-ideas.md"}  # any other depth: resear
 WORD_BUDGET = {"full": 1500, "quick": 600, "ideas": 2400}
 HEADROOM_BUDGET = {"full": 1300, "quick": 500, "ideas": 2100}
 STATUSES = ("draft", "final", "outdated")
+TOPIC = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*(?:/[a-z0-9]+(?:-[a-z0-9]+)*)?")
 VERDICTS = ("CONFIRMED", "MISCITED", "WRONG", "UNSUPPORTED", "UNREACHABLE")
 REQUIRED = {
     "full": [
@@ -216,6 +221,32 @@ def check_related(value, fails, warns):
                 f"related entry {entry} doesn't exist: fix the path, or remove it if the "
                 "file was deleted"
             )
+
+
+def check_topic(fields, note, warns):
+    """build-index.py files each research note under its topic, so it needs one, in a form the
+    index can nest, and reused rather than near-duplicated."""
+    topic = fields.get("topic", "")
+    if not topic:
+        warns.append("frontmatter 'topic' is empty")
+        return
+    if not TOPIC.fullmatch(topic):
+        warns.append(
+            f"topic is {topic!r}; expected area or area/sub-area, lowercase and hyphenated"
+        )
+        return
+    for other in note.parent.glob("*.md"):
+        if other.name.startswith(".") or other.resolve() == note.resolve():
+            continue
+        try:
+            if frontmatter(other.read_text().splitlines())[0].get("topic") == topic:
+                return
+        except (OSError, UnicodeDecodeError):
+            continue
+    warns.append(
+        f"no other note in {note.parent} has topic {topic!r}: reuse one if it fits "
+        "(~/notes/CLAUDE.md, Topics, lists them)"
+    )
 
 
 def after_sources(depth):
@@ -550,6 +581,7 @@ def main():
         fails.append(f"status is {status!r}; expected one of {', '.join(STATUSES)}")
     if fields.get("tags", "[]") in ("", "[]"):
         warns.append("frontmatter 'tags' is empty")
+    check_topic(fields, note, warns)
     check_related(fields.get("related", ""), fails, warns)
 
     body = strip_code(lines[start:])

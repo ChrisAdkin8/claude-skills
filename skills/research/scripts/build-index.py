@@ -42,21 +42,25 @@ Don't edit by hand. -->
 
 
 def notes(root, kind):
-    """(path relative to root, frontmatter) for each note of this kind, sorted by filename."""
-    return [
-        (
-            path.relative_to(root).as_posix(),
-            frontmatter(path.read_text(errors="replace").splitlines())[0],
-        )
-        for path in sorted((root / kind).glob("*.md"))
-        if not path.name.startswith(".")
-    ]
+    """(path relative to root, frontmatter) for each note of this kind, sorted by filename. A
+    broken link, a folder named *.md or an unreadable file is skipped, not a crash."""
+    found = []
+    for path in sorted((root / kind).glob("*.md")):
+        if path.name.startswith(".") or not path.is_file():
+            continue
+        try:
+            text = path.read_text(errors="replace")
+        except OSError:
+            continue
+        found.append((path.relative_to(root).as_posix(), frontmatter(text.splitlines())[0]))
+    return found
 
 
 def item(rel, fields):
     """One outline line: the note's title as a link, and its status."""
     title = fields.get("title") or Path(rel).stem
-    title = title.replace("[", "\\[").replace("]", "\\]")
+    # A backslash first, so `C:\\temp\\` can't escape the closing bracket.
+    title = title.replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]")
     status = fields.get("status")
     return f"- [{title}]({destination(rel)})" + (f" · {status}" if status else "")
 

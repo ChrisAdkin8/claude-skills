@@ -393,3 +393,82 @@ the agent cases above stand.
 
 Skill evals: `cold-review-delta` PASS (3 turns, $0.27, down from 7 turns with the script),
 `spec-done` PASS (11 turns, $0.34). No eval runs `/spec quick` or two `/research` runs at once.
+
+## Notes index W3: the researcher sets a topic (2026-09-27)
+
+W3 of `docs/specs/2026-09-27-notes-mindmap-index.md`: the researcher's frontmatter rule adds
+`topic`, and both researcher cases' `note-expect.txt` require a `topic:` line of the form
+`area` or `area/sub-area`. `check-note.py` warns on topics (W1) and `build-index.py` exists
+(W4); neither fails a note yet. All ten cases in parallel, on the default model:
+
+| Case | Result | Turns | Cost |
+|---|---|---:|---:|
+| absence-claim | PASS | 18 | $0.42 |
+| cold-review-skip | PASS | 5 | $0.14 |
+| delta-review | PASS | 6 | $0.23 |
+| delta-review-record | PASS | 8 | $0.20 |
+| record-skip | PASS | 6 | $0.15 |
+| research-ideas | PASS | 67 | $2.44 |
+| research-quick | PASS | 12 | $0.38 |
+| spec-miscite | PASS | 8 | $0.17 |
+| spike-inherited | PASS | 4 | $0.12 |
+| wrong-figure | PASS | 6 | $0.20 |
+
+Total $4.46. The researcher chose `topic: python` (quick) and `topic: ai/research-agents`
+(ideas). Both got the first-use WARN, as expected while no note in `~/notes/research` has a
+topic yet; W6's backfill gives the researcher topics to reuse.
+
+## Notes index W5: /research's Finish step rebuilds the index (2026-09-27)
+
+W5 of `docs/specs/2026-09-27-notes-mindmap-index.md`: section 3 of `skills/research/SKILL.md`
+gains step 8, which runs `build-index.py ~/notes`, and the commit step (now 9) names `index.md`.
+No agent file changed. All ten agent cases in parallel, on the default model:
+
+| Case | Result | Turns | Cost |
+|---|---|---:|---:|
+| absence-claim | PASS | 20 | $0.31 |
+| cold-review-skip | PASS | 6 | $0.14 |
+| delta-review | PASS | 7 | $0.20 |
+| delta-review-record | PASS | 7 | $0.24 |
+| record-skip | PASS | 7 | $0.17 |
+| research-ideas | PASS | 67 | $2.47 |
+| research-quick | PASS | 11 | $0.31 |
+| spec-miscite | PASS | 6 | $0.14 |
+| spike-inherited | PASS | 5 | $0.15 |
+| wrong-figure | PASS | 6 | $0.14 |
+
+Total $4.27.
+
+Skill evals: `spec-done` PASS (11 turns, $0.35). `cold-review-delta` FAILed its first run
+(5 turns, $0.28) on one check only, "it's a delta review": the reply said "its second review, of
+just what changed" rather than the words "delta review", with the right diff base and the
+unlogged Rollback edit named. A re-run passed every check (4 turns, $0.27). No `/cold-review`
+file changed, so this is the grader's wording check being brittle, not a regression.
+
+Live check: `/research quick` on the Markmap VS Code extension's link clicks, run in the
+implementing session, ended in `~/notes` commit 2045a57 naming the note and `index.md`. It found
+`build-index.py` printing one topic too many per area with sub-areas only (fixed, with a test).
+
+## Notes index W7: a missing or malformed topic fails (2026-09-27)
+
+W7 of `docs/specs/2026-09-27-notes-mindmap-index.md`: `check-note.py` now FAILs a note with no
+topic, or one that isn't `area` or `area/sub-area` in lowercase and hyphens; a topic no other
+note uses stays a WARN. W6 gave every note in `~/notes/research` a topic first (`~/notes` commit
+bc059f6). Research notes failing `check-note.py`: 1 before and 1 after (the rag-forge taskfile
+note's dead `related` paths), so topics add no failures. All ten cases in parallel:
+
+| Case | Result | Turns | Cost |
+|---|---|---:|---:|
+| absence-claim | PASS | 21 | $0.28 |
+| cold-review-skip | PASS | 7 | $0.15 |
+| delta-review | PASS | 5 | $0.20 |
+| delta-review-record | PASS | 8 | $0.22 |
+| record-skip | PASS | 5 | $0.13 |
+| research-ideas | PASS | 54 | $2.02 |
+| research-quick | PASS | 11 | $0.26 |
+| spec-miscite | PASS | 6 | $0.14 |
+| spike-inherited | PASS | 8 | $0.15 |
+| wrong-figure | PASS | 6 | $0.14 |
+
+Total $3.70. The ideas researcher reused an existing topic, `side-projects/ideas`, with no
+first-use WARN; the quick one chose a new `python/packages` and got the WARN, as designed.

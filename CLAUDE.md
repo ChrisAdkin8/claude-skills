@@ -7,12 +7,12 @@ skill you're editing to be the one you're running.
 ## Before committing
 
 - `python3 -m unittest discover -s tests` — deterministic tests for the guard, both checkers,
-  `review-state.py`, `prepare-spike.sh` and `run-agent.sh`.
+  `build-index.py`, `review-state.py`, `prepare-spike.sh` and `run-agent.sh`.
 - `python3 tests/replay_guard.py` — the guard against real recorded commands and file reads.
 - After changing an agent or skill file, run `tests/agent-evals/run.sh` by hand. A full run cost
-  $4.02 on 2026-09-25 and each case is capped at $5, so it isn't automatic. Add a dated section to
-  `tests/agent-evals/BASELINE.md` with every case's result and cost, including the cases you didn't
-  expect to change.
+  $3.70 to $4.46 on 2026-09-27 and each case is capped at $5 (`research-ideas` at $10), so it
+  isn't automatic. Add a dated section to `tests/agent-evals/BASELINE.md` with every case's result
+  and cost, including the cases you didn't expect to change.
 - After changing a skill's steps, run `tests/skill-evals/run.sh` by hand too (about $0.30 a case,
   capped at $3), and record its results in the same `BASELINE.md` section.
 - A change to `skills/spec/` or `agents/spec-*` usually needs `check-spec.py` run over

@@ -14,6 +14,11 @@ Once a note has a Verification table, its word limit tolerates up to 10 % over w
 the Finish step never has to cut verified content to fit; --headroom has no tolerance. The
 Verification header's first "N of M" must be the table's CONFIRMED count and row count.
 
+`topic` is one `area` or `area/sub-area`, lowercase and hyphenated; build-index.py makes the
+notes index from it. A missing or malformed topic is a FAIL. One no other note in the same
+folder uses (dotfiles don't count) is a WARN, since every topic is new once; it nudges the
+researcher to reuse a topic.
+
 Prints FAIL, WARN and INFO lines and exits 1 if anything failed. Checks only what can be
 checked mechanically; whether the sources support the claims is the verifier agent's job.
 """
@@ -25,8 +30,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from mdcheck import (  # noqa: E402  shared with check-spec.py
-    INLINE_CODE, SECRETS, SEPARATOR, count_words, frontmatter, has_account_id, level, section,
-    strip_code,
+    INLINE_CODE, SECRETS, SEPARATOR, TOPIC, count_words, flow_list, frontmatter, has_account_id,
+    level, section, strip_code,
 )
 import mdcheck  # noqa: E402
 
@@ -129,11 +134,6 @@ def first_table(lines):
     return (rows[0], rows[1:]) if rows else ([], [])
 
 
-def flow_list(value):
-    """Items of a frontmatter flow list, `[a, b]`."""
-    return [e.strip().strip("'\"") for e in value.strip("[]").split(",") if e.strip()]
-
-
 def normalise(text):
     """Lower-case, with links reduced to their text, without markdown emphasis, code ticks or
     escapes, whitespace collapsed."""
@@ -216,6 +216,32 @@ def check_related(value, fails, warns):
                 f"related entry {entry} doesn't exist: fix the path, or remove it if the "
                 "file was deleted"
             )
+
+
+def check_topic(fields, note, fails, warns):
+    """build-index.py files each research note under its topic, so it needs one, in a form the
+    index can nest, and reused rather than near-duplicated."""
+    topic = fields.get("topic", "")
+    if not topic:
+        fails.append("frontmatter 'topic' is empty")
+        return
+    if not TOPIC.fullmatch(topic):
+        fails.append(
+            f"topic is {topic!r}; expected area or area/sub-area, lowercase and hyphenated"
+        )
+        return
+    for other in note.parent.glob("*.md"):
+        if other.name.startswith(".") or other.resolve() == note.resolve():
+            continue
+        try:
+            if frontmatter(other.read_text().splitlines())[0].get("topic") == topic:
+                return
+        except (OSError, UnicodeDecodeError):
+            continue
+    warns.append(
+        f"no other note in {note.parent} has topic {topic!r}: reuse one if it fits "
+        "(~/notes/CLAUDE.md, Topics, lists them)"
+    )
 
 
 def after_sources(depth):
@@ -550,6 +576,7 @@ def main():
         fails.append(f"status is {status!r}; expected one of {', '.join(STATUSES)}")
     if fields.get("tags", "[]") in ("", "[]"):
         warns.append("frontmatter 'tags' is empty")
+    check_topic(fields, note, fails, warns)
     check_related(fields.get("related", ""), fails, warns)
 
     body = strip_code(lines[start:])

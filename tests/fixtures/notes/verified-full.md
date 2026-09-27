@@ -4,6 +4,7 @@ created: 2026-09-15
 status: final # draft | final | outdated
 depth: full # full | quick
 tags: [test-fixture]
+topic: test-fixture
 related: []
 question: "Is this fixture a valid, verified full-depth research note?"
 ---

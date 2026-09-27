@@ -1,7 +1,8 @@
-"""Markdown helpers shared by check-note.py and ~/.claude/skills/spec/scripts/check-spec.py.
+"""Markdown helpers shared by check-note.py, build-index.py and
+~/.claude/skills/spec/scripts/check-spec.py.
 
-Not run on its own. Each checker loads it by path, so a fix here reaches both: frontmatter,
-code fences, sections, template leftovers, and the secret and account-ID patterns.
+Not run on its own. Each script loads it by path, so a fix here reaches all of them: frontmatter,
+code fences, sections, template leftovers, the topic form, and the secret and account-ID patterns.
 """
 
 import re
@@ -30,8 +31,16 @@ ARN_ACCOUNT = re.compile(r"\barn:aws[\w-]*:[\w-]*:[\w-]*:\d{12}(?::|/|$)", re.MU
 # check-spec's delta-review gate and /cold-review's review-state.py count these, so a
 # hand-written variant mustn't slip past them.
 NOT_REVIEWED = re.compile(r"\s*(?:[-*]\s+)?[*_]*not reviewed[*_]*\s*:", re.IGNORECASE)
+# A research note's `topic`: area or area/sub-area, each lowercase and hyphenated. check-note.py
+# warns on anything else, and build-index.py files anything else as Unfiled.
+TOPIC = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*(?:/[a-z0-9]+(?:-[a-z0-9]+)*)?")
 FENCE = re.compile(r"\s*(`{3,}|~{3,})")
 CLOSE = re.compile(r"`{3,}|~{3,}")  # a closing fence has nothing after it
+
+
+def flow_list(value):
+    """Items of a frontmatter flow list, `[a, b]`."""
+    return [e.strip().strip("'\"") for e in value.strip("[]").split(",") if e.strip()]
 
 
 def has_account_id(text):

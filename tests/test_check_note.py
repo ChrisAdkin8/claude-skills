@@ -17,11 +17,14 @@ FIXTURE = Path(__file__).resolve().parent / "fixtures" / "notes" / "verified-ful
 HEADER = "Checked on 2026-09-15 by research-verifier: 1 of 2 claims confirmed."
 
 
-def check(text, *flags):
-    """(output, result line) from check-note.py on a note with this text."""
+def check(text, *flags, siblings=None):
+    """(output, result line) from check-note.py on a note with this text, alone in its folder
+    unless siblings maps other filenames to their text."""
     with tempfile.TemporaryDirectory() as tmp:
         note = Path(tmp) / "note.md"
         note.write_text(text)
+        for name, sibling in (siblings or {}).items():
+            (Path(tmp) / name).write_text(sibling)
         run = subprocess.run(
             [sys.executable, str(CHECKER), *flags, str(note)],
             capture_output=True,
@@ -297,3 +300,47 @@ class Markdown(unittest.TestCase):
             with self.subTest(where=where):
                 out, _ = check(FIXTURE.read_text().replace("### Counter-evidence", block + "### Counter-evidence"))
                 self.assertIn("isn't an AWS account ID", out)
+
+
+def with_topic(topic):
+    """The fixture with its topic replaced; None removes the line."""
+    line = f"topic: {topic}\n" if topic is not None else ""
+    return FIXTURE.read_text().replace("topic: test-fixture\n", line, 1)
+
+
+class Topic(unittest.TestCase):
+    """build-index.py files notes by topic, so a missing or malformed one fails; a topic no
+    other note uses only warns, since every topic is new once."""
+
+    def test_missing_topic_fails(self):
+        for text in (with_topic(None), with_topic("")):
+            with self.subTest(text=text[:0]):
+                out, result = check(text)
+                self.assertEqual(result, "RESULT: FAIL", out)
+                self.assertIn("FAIL: frontmatter 'topic' is empty", out)
+
+    def test_malformed_topic_fails(self):
+        for topic in ("a/b/c", "Kubernetes", "a b", "a/"):
+            with self.subTest(topic=topic):
+                out, result = check(with_topic(topic))
+                self.assertEqual(result, "RESULT: FAIL", out)
+                self.assertIn(f"FAIL: topic is '{topic}'", out)
+
+    def test_well_formed_topic_is_quiet(self):
+        for topic in ("kubernetes", "claude-code/research-skill", "aws2/s3"):
+            with self.subTest(topic=topic):
+                out, _ = check(with_topic(topic), siblings={"other.md": with_topic(topic)})
+                self.assertNotIn("topic", out)
+
+    def test_first_use_warns(self):
+        out, result = check(with_topic("kubernetes"), siblings={"other.md": with_topic("aws")})
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertRegex(out, r"WARN: no other note in .* has topic 'kubernetes'")
+
+    def test_topic_in_use_is_quiet(self):
+        out, _ = check(with_topic("kubernetes"), siblings={"other.md": with_topic("kubernetes")})
+        self.assertNotIn("has topic", out)
+
+    def test_dotfile_sibling_does_not_count(self):
+        out, _ = check(with_topic("kubernetes"), siblings={".eval-x.md": with_topic("kubernetes")})
+        self.assertIn("has topic 'kubernetes'", out)

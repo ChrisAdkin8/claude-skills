@@ -45,7 +45,7 @@ def notes(root, kind):
     return [
         (
             path.relative_to(root).as_posix(),
-            frontmatter(path.read_text().splitlines())[0],
+            frontmatter(path.read_text(errors="replace").splitlines())[0],
         )
         for path in sorted((root / kind).glob("*.md"))
         if not path.name.startswith(".")

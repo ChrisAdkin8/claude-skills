@@ -30,8 +30,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from mdcheck import (  # noqa: E402  shared with check-spec.py
-    INLINE_CODE, SECRETS, SEPARATOR, TOPIC, count_words, flow_list, frontmatter, has_account_id,
-    level, section, strip_code,
+    CITE, INLINE_CODE, SECRETS, SEPARATOR, TOPIC, count_words, flow_list, frontmatter,
+    has_account_id, is_heading, level, section, strip_code,
 )
 import mdcheck  # noqa: E402
 
@@ -86,8 +86,6 @@ RUBRIC = (
 CANDIDATE = re.compile(r"^\s*[-*]\s+\[([^\]]+)\]")
 CANDIDATE_MARK = re.compile(r"\bcut:|\bshortlisted\b", re.IGNORECASE)
 EVIDENCE_NOTE = "attention-evidence.md"
-# [12], [1, 7], [8-9] or [8–9], but not a markdown link [12](url).
-CITE = re.compile(r"\[(\d+(?:\s*[,–-]\s*\d+)*)\](?!\()")
 SOURCE = re.compile(r"^(\d+)\.\s")
 UNVERIFIED_MARK = re.compile(r"\*\((?:inferred|unverified)[^)]*\)\*")
 
@@ -137,7 +135,8 @@ def first_table(lines):
 def normalise(text):
     """Lower-case, with links reduced to their text, without markdown emphasis, code ticks or
     escapes, whitespace collapsed."""
-    text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", text)
+    # A URL may hold one level of brackets: .../wiki/Widget_(thing).
+    text = re.sub(r"\[([^\]]*)\]\((?:[^()]|\([^()]*\))*\)", r"\1", text)
     return " ".join(re.sub(r"[*`\\]", "", text).lower().split())
 
 
@@ -172,8 +171,11 @@ def cited_numbers(line):
     for group in CITE.findall(INLINE_CODE.sub("", line)):
         for part in re.split(r"\s*,\s*", group):
             ends = [int(n) for n in re.split(r"\s*[–-]\s*", part)]
-            # [2019-2024] is a span of years, not citations; nor is anything past 999.
+            # [2019-2024] is a span of years, not citations; nor is anything past 999. Sources
+            # number from 1, so [0] is code (`args[0]` outside backticks), not a citation.
             if max(ends) > 999 or (len(ends) == 2 and not 0 <= ends[1] - ends[0] <= 50):
+                continue
+            if ends == [0]:
                 continue
             nums.update(range(ends[0], ends[-1] + 1) if len(ends) == 2 else ends)
     return nums
@@ -188,7 +190,7 @@ def cited_claims(prose):
         stripped = line.strip()
         if stripped.startswith("|"):
             count += bool(cited_numbers(stripped))
-        elif stripped and not stripped.startswith("#"):
+        elif stripped and not is_heading(stripped):
             text.append(stripped)
             continue
         if text:
@@ -234,9 +236,9 @@ def check_topic(fields, note, fails, warns):
         if other.name.startswith(".") or other.resolve() == note.resolve():
             continue
         try:
-            if frontmatter(other.read_text().splitlines())[0].get("topic") == topic:
+            if frontmatter(other.read_text(errors="replace").splitlines())[0].get("topic") == topic:
                 return
-        except (OSError, UnicodeDecodeError):
+        except OSError:
             continue
     warns.append(
         f"no other note in {note.parent} has topic {topic!r}: reuse one if it fits "
@@ -258,7 +260,7 @@ def check_after_sources(body, depth, fails):
         return
     seen = []
     for line in body[src_at + 1 :]:
-        if not line.startswith("#"):
+        if not is_heading(line):
             continue
         heading = next((h for h in allowed if line.startswith(h)), None)
         if heading is None:
@@ -280,7 +282,7 @@ def stray_after_sources(body, depth):
         return []
     stray, in_pool = [], False
     for line in body[src_at + 1 :]:
-        if line.startswith("#"):
+        if is_heading(line):
             in_pool = depth == "ideas" and line.startswith("## Candidate pool")
         text = line.strip()
         if (
@@ -301,7 +303,7 @@ def paragraphs(lines):
     reads as one piece of text."""
     out, current = [], []
     for line in lines + [""]:
-        if line.strip() and not line.startswith("#"):
+        if line.strip() and not is_heading(line):
             current.append(line)
         elif current:
             out.append(normalise(" ".join(current)))
@@ -558,7 +560,7 @@ def main():
         print(f"FAIL: {note} does not exist")
         print("RESULT: FAIL")
         return 1
-    lines = note.read_text().splitlines()
+    lines = note.read_text(errors="replace").splitlines()
     fails, warns, infos = [], [], []
 
     fields, start = frontmatter(lines)

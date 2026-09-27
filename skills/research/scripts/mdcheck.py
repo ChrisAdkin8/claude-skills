@@ -2,7 +2,7 @@
 ~/.claude/skills/spec/scripts/check-spec.py.
 
 Not run on its own. Each script loads it by path, so a fix here reaches all of them: frontmatter,
-code fences, sections, template leftovers, the topic form, and the secret and account-ID patterns.
+code fences, headings, sections, citations, template leftovers, the topic form, and the secret and account-ID patterns.
 """
 
 import re
@@ -34,8 +34,13 @@ NOT_REVIEWED = re.compile(r"\s*(?:[-*]\s+)?[*_]*not reviewed[*_]*\s*:", re.IGNOR
 # A research note's `topic`: area or area/sub-area, each lowercase and hyphenated. check-note.py
 # warns on anything else, and build-index.py files anything else as Unfiled.
 TOPIC = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*(?:/[a-z0-9]+(?:-[a-z0-9]+)*)?")
-FENCE = re.compile(r"\s*(`{3,}|~{3,})")
+FENCE = re.compile(r"\s*(`{3,}|~{3,})(.*)")
 CLOSE = re.compile(r"`{3,}|~{3,}")  # a closing fence has nothing after it
+# A heading is 1-6 `#` then a space or the end of the line: `#2 on Hacker News` is prose.
+HEADING = re.compile(r"#{1,6}(?:\s|$)")
+# [12], [1, 7], [8-9] or [8–9], but not a markdown link [12](url). check-note.py and check-spec.py
+# both read research citations with it.
+CITE = re.compile(r"\[(\d+(?:\s*[,–-]\s*\d+)*)\](?!\()")
 
 
 def flow_list(value):
@@ -68,32 +73,47 @@ def frontmatter(lines):
             continue
         if ":" in line:
             key, _, value = line.partition(":")
-            key = key.strip()
-            value = value.split(" #")[0].strip()
+            key, value = key.strip(), value.strip()
             # `status: "reviewed"` is YAML for reviewed; a checker comparing the raw text
-            # would miss it.
-            if len(value) > 1 and value[0] == value[-1] and value[0] in "\"'":
-                value = value[1:-1]
+            # would miss it. A ` #` starts a comment, but not inside quotes: `"Fix #42"`.
+            if value[:1] in ("'", '"') and (end := value.find(value[0], 1)) > 0:
+                value = value[1:end]
+            else:
+                value = value.split(" #")[0].strip()
             fields[key] = value
     return fields, len(lines)
 
 
-def strip_code(lines):
-    """Drop fenced code blocks: commands, their output and diagrams. A fence is ``` or ~~~, and
-    only a run of the same character at least as long closes it, so a ```` block can hold a
-    ``` one."""
-    out, fence = [], None
+def in_code(lines):
+    """For each line, whether it's part of a fenced code block, its fences included. A fence is
+    ``` or ~~~, and only a run of the same character at least as long closes it, so a ````
+    block can hold a ``` one. A ``` line with another backtick after it is inline code, not a
+    fence. Every check that skips code walks the lines with this, so they agree on where code
+    starts and ends."""
+    flags, fence = [], None
     for line in lines:
         m = FENCE.match(line)
         if fence is None:
-            if m:
+            opens = bool(m) and not (m.group(1)[0] == "`" and "`" in m.group(2))
+            if opens:
                 fence = m.group(1)
-            else:
-                out.append(line)
-        elif m and CLOSE.fullmatch(line.strip()) and line.strip()[0] == fence[0]:
-            if len(line.strip()) >= len(fence):
-                fence = None
-    return out
+            flags.append(opens)
+        else:
+            flags.append(True)
+            closing = line.strip()
+            if m and CLOSE.fullmatch(closing) and closing[0] == fence[0]:
+                if len(closing) >= len(fence):
+                    fence = None
+    return flags
+
+
+def strip_code(lines):
+    """Drop fenced code blocks: commands, their output and diagrams."""
+    return [line for line, code in zip(lines, in_code(lines)) if not code]
+
+
+def is_heading(line):
+    return bool(HEADING.match(line))
 
 
 def level(line):
@@ -106,11 +126,17 @@ def section(lines, heading):
         if line.startswith(heading):
             body = []
             for nxt in lines[i + 1 :]:
-                if nxt.startswith("#") and level(nxt) <= level(heading):
+                if is_heading(nxt) and level(nxt) <= level(heading):
                     break
                 body.append(nxt)
             return body
     return None
+
+
+def line_count(text):
+    """Lines as git and editors count them. str.splitlines also splits on form feeds, \\x1c-\\x1e,
+    \\x85 and \\u2028, so a file holding them would seem to have more lines than it does."""
+    return text.count("\n") + (bool(text) and not text.endswith("\n"))
 
 
 def template_prompts(template, skip=("#", "|", "---")):

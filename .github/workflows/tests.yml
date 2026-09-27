@@ -15,11 +15,18 @@ jobs:
   unit:
     # macOS, as the skills run: its bash 3.2 and BSD tools are what the scripts must work with.
     runs-on: macos-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Link ~/.claude to the checkout, as an install does
         run: |
           mkdir -p ~/.claude
           for d in skills agents hooks; do ln -s "$PWD/$d" ~/.claude/$d; done
       - name: Unit tests
         run: python3 -m unittest discover -s tests
+      # Errors only: pyflakes and syntax for Python, warnings and above for shell.
+      - name: Lint
+        run: |
+          pipx run ruff==0.16.7 check --isolated --select E9,F .
+          command -v shellcheck >/dev/null || brew install shellcheck
+          git ls-files -z '*.sh' | xargs -0 shellcheck -S warning

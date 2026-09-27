@@ -31,7 +31,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from mdcheck import (  # noqa: E402  shared with check-spec.py
     CITE, INLINE_CODE, SECRETS, SEPARATOR, TOPIC, count_words, flow_list, frontmatter,
-    has_account_id, is_heading, level, section, strip_code,
+    has_account_id, is_heading, section, strip_code,
 )
 import mdcheck  # noqa: E402
 

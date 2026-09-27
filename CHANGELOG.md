@@ -3,6 +3,26 @@
 What changed, by day, drawn from the commit history. The repo has no releases or tags, so each
 section is a date. Within a day, changes are grouped by area.
 
+## 2026-09-28
+
+### Fixed
+
+- `/cold-review` gives the delta reviewer its diff as a `git` command. `review-state.py` prints it
+  through `git-read.py`, which the main session may run, but the reviewer's guard refuses that
+  script, so the reviewer couldn't read its diff. No eval caught it: both delta cases have no diff.
+
+### Changed
+
+- Another project's repo name is gone from a spec, its spike results and `BASELINE.md`. `CLAUDE.md` lists the
+  `cold-review:` and `tests:` commit prefixes, and asks for commits from the checkout, not
+  GitHub's web editor.
+- The docs match the code after the 2026-09-27 fixes: the guard's docstring lists its `search`
+  mode and new rules; the README lists `gh`, `jq` and `gcloud` under Requirements, six eval runs,
+  and web search apart from the unchecked documentation servers; the scripts' and tests' headers
+  give their current exit codes; the researcher treats an `API error` row as unverified; the
+  diagram's guard box says it checks web calls, search included.
+- `CLAUDE.md` says the README's `Not reviewed:` lines are a log: it has had its one delta review.
+
 ## 2026-09-27
 
 ### Security
@@ -105,10 +125,11 @@ section is a date. Within a day, changes are grouped by area.
   - `/spec spike` resolves a `HEAD` read-at to a commit, which `prepare-spike.sh` needs. `/spec
     done` reads the spec's repo with `-C` and finds its first commit through a rename.
 - Tests and evals that could pass a wrong answer, or miss a regression:
-  - A table of 42 guard refusals (file writes, `gh` and git writes, `curl` sends, `sed -i`,
+  - A table of 43 guard refusals (file writes, `gh` and git writes, `curl` sends, `sed -i`,
     `find -exec` and the rest), each checked for its reason; most had no test.
   - The `delta-review` cases need the grade in the Affects cell. `cold-review-delta` rejects "no
-    unlogged change" and a base that doesn't exist. Both skill graders fail a skill that commits.
+    unlogged change" and a base that doesn't exist. `cold-review-delta` fails a skill that commits, and `spec-done`
+    diffs against setup's HEAD, so a committed edit can't hide.
   - The runner tests check that each cap and sandbox flag reaches `claude`, as does
     `test_run_spike.py` for a spike's $2 and 60 turns.
   - An ideas-depth fixture tests the Candidate pool and Shortlist checks for free.

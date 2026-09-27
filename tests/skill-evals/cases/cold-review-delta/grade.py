@@ -38,6 +38,9 @@ checks = {
     # parent, `created`; `saved` itself would still see every change since.
     "the diff starts at the review, not the move": bool(bases)
     and all(r in (hashes["created"], hashes["saved"]) for r in resolved),
+    # The reviewer's guard refuses git-read.py, so the prompt must give it the diff as `git`.
+    "the reviewer's diff is a git command it may run": bool(bases)
+    and not re.search(r"git-read\.py[^\n]*\bdiff\b", reply),
     "the logged change is quoted": "overwrites `data/`" in reply,
     # Named as unlogged, in one paragraph or bullet: Rollback alone is also a section name.
     "the unlogged Rollback edit is named": any(

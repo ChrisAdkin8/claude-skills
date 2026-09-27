@@ -20,7 +20,9 @@ reviewed:` lines in Open questions, Route/Changes/Expect/Box lines under spike q
 still read, with a WARN to move it to the record.
 
 Checks only what can be checked mechanically: that every citation points at a file and at lines
-that existed, whether cited files have changed since, work items and acceptance criteria, and,
+that existed, whether cited files have changed since, work items and acceptance criteria, that no code block is
+left open, no secrets, no `Not reviewed:` changes without a delta review on a reviewed or
+in-progress spec, and,
 for specs written from the skill template, sections and leftover template text. Whether a cited
 line says what the spec claims is the spec-verifier agent's job.
 """

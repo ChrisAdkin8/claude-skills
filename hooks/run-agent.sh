@@ -17,7 +17,7 @@
 # Exit 2: the run couldn't start. Any other non-zero exit is claude's own, with run.err saying why.
 #
 # Each run is capped at $RUN_AGENT_MAX_USD (default $10 for the researcher, $5 for the others;
-# the costliest recorded run to 2026-09-25 was $1.02) and 200 turns. --max-budget-usd stops a
+# the costliest recorded researcher run, the research-ideas eval, was $2.59 on 2026-09-27) and 200 turns. --max-budget-usd stops a
 # run only after the turn that crosses it, so a run can go over by up to one turn.
 #
 # Each run's agent and session ID are appended to ~/.cache/agent-runs/sessions.log (or
@@ -25,10 +25,10 @@
 #
 # Why headless: Claude Code's sandbox can't be set per subagent, and these agents read untrusted
 # web pages and repos. Run this way, each gets its agent file (prompt, tools, hooks) plus
-# hooks/agent-sandbox.json: OS-level read denies for credentials, no writes outside its work
-# dir, secret environment variables removed, and Bash network limited to an allowlist. The
+# hooks/agent-sandbox.json: OS-level read denies for credentials, no writes under ~/code,
+# ~/notes or ~/.claude (its work dir included), secret environment variables removed, and Bash network limited to an allowlist. The
 # PreToolUse guard in the agent's frontmatter still runs, for what the sandbox can't see (gh and
-# the excluded scripts, git and curl semantics, WebFetch URL sizes). The agent evals run the
+# the excluded scripts, git and curl semantics, WebFetch URL sizes, WebSearch queries). The agent evals run the
 # agents the same way (tests/agent-evals/run.sh).
 #
 # --setting-sources user: the agent starts in the work dir, often a repo it is reviewing, and

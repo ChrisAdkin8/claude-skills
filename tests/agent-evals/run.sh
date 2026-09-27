@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Agent evaluations for the /research and /spec agents. Each case sends one brief to one
+# Agent evaluations for the /research, /spec and /cold-review agents. Each case sends one brief to one
 # subagent with `claude -p --agent`, as the skill would, and grades the reply against expect.txt.
 #
 # Usage: run.sh [case ...]        all cases by default; cases run in parallel
@@ -21,7 +21,8 @@
 # ~/notes/research/.eval-<case>-<timestamp>.md. After the run the note is copied to the results
 # as <case>.note.md, checked with check-note.py --headroom (it must pass), graded against the
 # case's note-expect.txt (same format as expect.txt), and deleted. The run also fails such a case
-# if anything else in ~/notes changed while it ran. Optional turns.txt raises the turn limit
+# if anything else in ~/notes changed while it ran, or if ~/notes isn't a git repo, since
+# then changes can't be seen. Optional turns.txt raises the turn limit
 # from 40, and usd.txt sets the case's own cost ceiling in place of AGENT_EVAL_MAX_USD.
 #
 # The agents run with their own frontmatter tools pre-approved and their own PreToolUse hook
@@ -29,7 +30,8 @@
 # access to ~/.claude, ~/notes and this repo (~/.claude/skills, agents and hooks are symlinks into
 # it), with no MCP servers and no saved session. Every run costs real tokens: run by hand after changing an
 # agent or skill file, not on every commit. Results land in results/<timestamp>/ (git-ignored).
-# Exits 0 only if every case passed, 1 if any failed or ended in an error, 2 on a bad case name.
+# Exits 0 only if every case passed, 1 if any failed or ended in an error, 2 on a bad case name or no
+# cases.
 set -uo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)

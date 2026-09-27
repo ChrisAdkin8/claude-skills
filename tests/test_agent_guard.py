@@ -1,4 +1,5 @@
-"""Tests for hooks/agent-guard.py: which Bash commands the /research and /spec agents may run.
+"""Tests for hooks/agent-guard.py: what the /research, /spec and /cold-review agents' Bash, Read,
+Grep, Glob, WebFetch, WebSearch and Write calls may do.
 
 Each case runs the guard as its hook would: the command in the hook's JSON on stdin, exit 0 to
 allow and exit 2 to block. Run with: python3 -m unittest discover -s ~/code/github.com/claude-skills/tests

@@ -22,8 +22,10 @@ skill you're editing to be the one you're running.
 
 ## Conventions
 
-- Commit messages: `spec:`, `research:`, `evals:`, `guard:`, `repo:`, `readme:` — the area, then what
-  changed. Branch before committing; never push unless asked.
+- Commit messages: `spec:`, `research:`, `cold-review:`, `evals:`, `tests:`, `guard:`, `repo:`,
+  `readme:` — the area, then what changed. Branch before committing; never push unless asked.
+- Commit from this checkout, not GitHub's web editor: its commits carry no prefix, skip the README
+  record, and may use another email address.
 - Files refer to themselves and each other by `~/.claude/...` paths, which the symlinks keep valid.
   Don't rewrite them as repo-relative paths; the guard resolves them to recognise its own scripts.
 - Specs live in `docs/specs/`, and `/spec`'s step 7 writes spike results to `docs/specs/spikes/`.
@@ -31,7 +33,8 @@ skill you're editing to be the one you're running.
   machine-managed: don't edit or commit it.
 - No secrets, credentials or account IDs anywhere, including in test fixtures and spec citations.
 - Log every README change as a dated `- Not reviewed: ...` line at the end of
-  `records/README-record.md`, so its next delta review covers it.
+  `records/README-record.md`. The README has had its one full and one delta review, so
+  `/cold-review` won't review these again; they record what changed since.
 
 ## The workflow diagram
 

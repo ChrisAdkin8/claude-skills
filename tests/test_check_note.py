@@ -1,4 +1,5 @@
-"""Tests for skills/research/scripts/check-note.py's Verification and word-limit checks.
+"""Tests for skills/research/scripts/check-note.py: its structure, topic, Verification, word-limit
+and ideas-depth checks.
 
 Run with: python3 -m unittest discover -s ~/code/github.com/claude-skills/tests
 """

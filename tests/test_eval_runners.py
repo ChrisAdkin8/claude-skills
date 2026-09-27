@@ -1,5 +1,7 @@
 """Tests for tests/agent-evals/run.sh and tests/skill-evals/run.sh: they exit 1 when a case fails,
-0 only when every case passes, and 2 on a case that doesn't exist.
+0 only when every case passes, and 2 on a case that doesn't exist or when there are none. They
+pass their caps and sandbox settings to claude, clean up their fixtures, and the skill runner
+counts only this run's results.
 
 A stub `claude` first on PATH prints a canned JSON result, so nothing is sent to a model. The
 runners are pointed at fake cases in a temporary directory (EVAL_CASES), and write their results

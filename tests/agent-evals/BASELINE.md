@@ -752,3 +752,20 @@ Sonnet's failures, dealt with case by case:
   Opus with the new brief: PASS (2 turns, $0.05).
 The saved sonnet and opus replies for `absence-claim` and `cold-review-skip` from the W5 baseline
 both pass the new patterns.
+
+W7: a progress checklist near the top of `/research`, `/spec` and `/cold-review`. No agent file
+changed, and the agent evals don't run the skills, so only the skill evals ran:
+
+| Case | Model | Result | Turns | Cost |
+|---|---|---|---:|---:|
+| cold-review-delta | sonnet | PASS | 11 | $0.28 |
+| cold-review-delta | opus | PASS | 4 | $0.28 |
+| research-quick-flow | sonnet | PASS | 27 | $0.61 |
+| research-quick-flow | opus | PASS | 23 | $0.56 |
+| spec-done | sonnet | PASS | 11 | $0.27 |
+| spec-done | opus | PASS | 7 | $0.34 |
+| spec-quick | sonnet | PASS | 24 | $0.51 |
+| spec-quick | opus | PASS | 13 | $0.44 |
+
+Totals $1.67 on Sonnet and $1.62 on Opus, sessions only. On both models `spec-quick`'s result
+holds a ticked `- [x]` line from the checklist, and `~/notes` was left as it was.

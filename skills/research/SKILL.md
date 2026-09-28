@@ -17,6 +17,17 @@ The work happens in background agents so the user can keep working:
 3. **Verify**: the `research-verifier` agent, which has not seen the research, checks the claims the recommendation rests on against their sources.
 4. **Finish** (here): apply the verifier's fixes, record what was checked in the note, re-verify once if the conclusion changed, set the status, link the idea, rebuild the notes index, commit. At `ideas` depth, also merge the new attention data into the shared evidence note and file the top three ideas as idea notes.
 
+**Progress.** Copy this checklist into your reply at the end of every turn that ends while an agent runs, ticked to date, and once more in the final report. When the agent returns, carry on from the first unticked line.
+
+```
+- [ ] Frame: question, depth and output path settled; researcher launched
+- [ ] Researcher: note written, check-note.py passes or its FAIL lines sent back
+- [ ] Verifier: fixes applied, Verification recorded, round 2 or 3 if the conclusion changed
+- [ ] Status set, idea linked, ideas-finish.md done at ideas depth
+- [ ] Index rebuilt, notes committed
+- [ ] Report
+```
+
 Every commit in `~/notes` names its files after `--` (`git -C ~/notes commit -m '<message>' -- <files>`): another `/research`, `/spec` or `/idea` session may have staged files of its own, and a commit without paths takes the whole index. If git says `index.lock` exists, another session is committing: retry once.
 
 Run `git log`, `git diff` and any other read-only git command except `git -C ~/notes status` through `~/.claude/hooks/git-read.py`, which `allowed-tools` pre-approves and which refuses git's options that write files or run programs.

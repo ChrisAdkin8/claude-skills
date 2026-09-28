@@ -21,6 +21,19 @@ Research answers "what should we do?" A spec answers "what exactly changes in th
 7. **Spike**: sandboxed, cost-capped experiments answer what reading can't (`spike-step.md`).
 8. **Done** (after the build): record what the build did differently and settle the status (`done-step.md`).
 
+**Progress.** Copy this checklist into your reply at the end of every turn that ends while an agent runs, ticked to date, and once more in the final report. When the agent returns, carry on from the first unticked line. Tick a stage the mode skips as skipped, e.g. `- [x] Cold review: skipped (quick)`.
+
+```
+- [ ] Frame: repo, research note, option and spec path
+- [ ] Read and interview
+- [ ] Write: check-spec.py passes; verifier launched
+- [ ] Verifier: round recorded, fixes applied, check passes
+- [ ] Notes linked and committed
+- [ ] Cold review: launched, relayed, saved, picks folded in
+- [ ] Spikes offered or run
+- [ ] Report and next steps
+```
+
 **The spec and its record.** The spec is the plan. Everything that happens to it afterwards goes in its record, `<spec dir>/records/<basename>-record.md`, started from `~/.claude/skills/spec/record-template.md` the first time there's something to put in it: verifier rounds, the cold review and any delta review, the `Not reviewed:` log, spike routing and implementation notes. An older spec keeps that history inline (a `## Cold review` section at its end, `Not reviewed:` lines in Open questions); read it that way, and move it to a record when you next edit the spec.
 
 This skill writes no code in the repo, and doesn't branch or commit there. Implementation happens in a separate session, from the spec.

@@ -29,6 +29,18 @@ came for. Older documents keep their review at their end; write anything new to 
 (the `Implementation spec` row and its extra lines), *Gather pointers* and *Write the prompt*
 (the skeleton). So the two ask the same question. Change those here, not there.
 
+**Progress.** Copy this checklist into your reply at the end of the turn that ends while the
+reviewer runs, ticked to date, and once more in the final report. When it returns, carry on from
+the first unticked line.
+
+```
+- [ ] Frame: review-state.py's state, the repo, who wrote it
+- [ ] Read the document in full; its kind
+- [ ] Gather pointers
+- [ ] Write the prompt; reviewer launched, or the prompt handed over in prompt mode
+- [ ] Relay the table; the review saved if it's a spec's, otherwise offered
+```
+
 ## Modes
 
 - `/cold-review <path>`: the main path. Frame, write the prompt, launch the reviewer, relay it.

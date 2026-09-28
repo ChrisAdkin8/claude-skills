@@ -1,6 +1,7 @@
 ---
 name: research
-description: Research a question, challenge or idea and write the findings to a cited markdown note in ~/notes/research. Use when the user runs /research, or asks to research, investigate or dig into something and document it. Accepts a prompt or the path to an existing idea note; "quick" for a short answer; "ideas" for a ranked shortlist of things to build or write; "finish <note>" to verify and commit an existing note.
+description: Researches a question or idea and writes a cited markdown note to ~/notes/research, which an independent agent then verifies. Runs when the user types /research.
+disable-model-invocation: true
 argument-hint: [quick | ideas] <question or path to an idea note> | finish <path to research note> ["claim to check" ...]
 allowed-tools: Read Edit(~/notes/**) Bash(grep *) Bash(git -C ~/notes status *) Bash(~/.claude/hooks/git-read.py *) Bash(git -C ~/notes add *) Bash(git -C ~/notes commit *) Bash(~/.claude/skills/research/scripts/check-note.py *) Bash(~/.claude/skills/research/scripts/build-index.py *) Bash(~/.claude/hooks/run-agent.sh *) Edit(~/.cache/agent-runs/**)
 ---

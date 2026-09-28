@@ -1,6 +1,7 @@
 ---
 name: cold-review
-description: Give a markdown file one adversarial cold read by an agent that never saw this conversation, then relay what it found. Use when the user runs /cold-review, or asks for a cold, fresh-eyes or adversarial review of a document - a walkthrough, runbook, README, design doc, spec or research note. Accepts the path to a markdown file; "prompt <path>" writes the review prompt for the user to run in a fresh session instead of launching an agent. On a document that already has a saved review, it runs the one delta review of the changes logged since.
+description: Gives a markdown document one adversarial read by an agent that never saw the conversation that wrote it, and relays what it found; on a reviewed document, reviews only the changes logged since. Runs when the user types /cold-review.
+disable-model-invocation: true
 argument-hint: <path to a markdown file> | prompt <path to a markdown file>
 allowed-tools: Read, Grep, Glob, Bash(git rev-parse *), Bash(git status *), Bash(git ls-files *), Bash(~/.claude/hooks/git-read.py *), Bash(~/.claude/skills/cold-review/scripts/review-state.py *), Bash(grep *), Bash(ls *), Bash(~/.claude/hooks/run-agent.sh *), Edit(~/.cache/agent-runs/**), Edit(~/code/**), Edit(~/notes/**)
 ---

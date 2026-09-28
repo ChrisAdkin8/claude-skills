@@ -619,3 +619,12 @@ WRONG row and `Bottom line holds: no`, but the verifier then sent a second, shor
 late search results came back, and the runner grades only the last one. Nothing this change
 touched affects the verifier; the re-run passed. Skill evals: `cold-review-delta` PASS (5 turns,
 $0.28), with the new check; `spec-done` PASS (8 turns, $0.36); total $0.64.
+
+## Skill best practices, part 1 (2026-09-28)
+
+W1 of `docs/specs/2026-09-28-skill-best-practices-1-invocation.md`: `/research`, `/spec` and
+`/cold-review` set `disable-model-invocation: true`, and all four descriptions are third person.
+Skill evals, which start their skill as a typed command: `cold-review-delta` PASS (5 turns,
+$0.28); `spec-done` PASS (11 turns, $0.36); total $0.64. Asked to call the Skill tool, a
+`claude -p` session is refused `research`, `spec` and `cold-review` "due to
+disable-model-invocation", and launches `idea`.

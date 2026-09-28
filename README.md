@@ -184,6 +184,10 @@ ln -s ~/code/github.com/claude-skills/hooks  ~/.claude/hooks
 **Whatever branch is checked out here is what the agents run**, so an edit is live as soon as you
 save it. The files refer to each other by `~/.claude/...` paths, which the links keep valid.
 
+`/research`, `/spec` and `/cold-review` start only when you type them, because each launches paid
+agents; Claude won't start them on its own. `/idea` is cheap, so Claude can also start it when you
+ask it to jot something down.
+
 ## Set up `~/notes`
 
 The skills keep notes in `~/notes`, and this repo doesn't create it. It has to be a git repo,

@@ -53,6 +53,9 @@ section is a date. Within a day, changes are grouped by area.
 - Both eval sets run on Sonnet and on Opus (`EVAL_MODEL`), and an agent a skill eval launches runs
   on the same model (`RUN_AGENT_MODEL`). Three agent cases now accept Sonnet's sound answers, and
   `guard-applies` runs on Opus only, through a new `models.txt`.
+- The agents are told which commands the guard refuses (`awk`, `python3 -c`, shell functions,
+  `>` into a file, `curl -o`) and what to use instead, in `hooks/agent-sandbox.md`. Real agent
+  sessions had hit 50 such refusals, each a wasted turn. No guard rule changed.
 
 ### Added
 
@@ -61,6 +64,9 @@ section is a date. Within a day, changes are grouped by area.
 - Two skill evals run a skill end to end with its agents: `spec-quick` and `research-quick-flow`.
   The runner can place a fixture under `~/code`, fill in `{{NOTE}}`, check `~/notes` is untouched,
   and clean up after itself.
+- `tests/mine-sessions.py` reports, from the session logs Claude Code keeps, how each skill and
+  agent went in real use: runs, agent launches, failed tool calls grouped by cause, and what you
+  typed while it ran. It only reads; read its report before sharing it.
 
 ## 2026-09-27
 

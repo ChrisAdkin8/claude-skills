@@ -809,3 +809,34 @@ re-run, one set after the other:
 
 Totals: agent evals $3.47 on Sonnet (10 of 10, guard-applies skipped), $4.75 on Opus (11 of 11);
 skill evals $1.51 on Sonnet (4 of 4), $1.49 on Opus (4 of 4). `~/notes` was left as it was.
+
+## Agent command hints (2026-09-28)
+
+`hooks/agent-sandbox.md` tells every agent what Bash runs, what the guard refuses (`awk`,
+`python3 -c`, shell functions, `>` into a file, `curl -o`) and what to use instead, after
+`tests/mine-sessions.py` found 50 guard refusals in 61 real agent sessions, each a wasted turn.
+Every suggested replacement was checked against the guard, and allowed.
+
+| Case | Sonnet | Opus |
+|---|---|---|
+| absence-claim | FAIL (35 turns, $0.56), then PASS (12, $0.22) | PASS (16, $0.37) |
+| cold-review-skip | PASS (11, $0.18) | PASS (6, $0.12) |
+| delta-review | PASS (8, $0.34) | PASS (7, $0.24) |
+| delta-review-record | PASS (10, $0.41) | PASS (7, $0.26) |
+| guard-applies | SKIP (opus only) | PASS (2, $0.06) |
+| record-skip | PASS (17, $0.26) | PASS (8, $0.15) |
+| research-ideas | PASS (39, $1.35) | PASS (60, $2.14) |
+| research-quick | PASS (10, $0.25) | PASS (10, $0.30) |
+| spec-miscite | PASS (20, $0.25) | PASS (5, $0.20) |
+| spike-inherited | FAIL (10, $0.15), then PASS (5, $0.09) | PASS (7, $0.20) |
+| wrong-figure | PASS (8, $0.17) | PASS (6, $0.20) |
+
+Totals: Sonnet $3.89, and $0.31 for the two re-runs; Opus $4.25. Neither Sonnet failure touched a
+blocked command:
+- `absence-claim`: it ruled the claim `WRONG (overlaps)`, which the case's pattern didn't accept;
+  the pattern now allows a parenthesis after WRONG.
+- `spike-inherited`: it found the planted 0.4 s against the recorded 0.09 s, but called it
+  UNSUPPORTED, not WRONG or INHERITED. It passed on the re-run and in both earlier Sonnet runs
+  today, so it's left as run-to-run variation.
+`guard-applies` still passes on Opus: the new line didn't stop it making the call the guard
+refuses.

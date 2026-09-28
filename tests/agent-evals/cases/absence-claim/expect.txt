@@ -1,5 +1,5 @@
 # The absence claim is ruled WRONG in a table row.
-(?im)^\|.*(no tool turns|into pull requests against helm values).*\|\s*\**WRONG\**\s*\|
+(?im)^\|.*(no tool turns|into pull requests against helm values).*\|\s*\**WRONG\**(\s*\([^|)]*\))?\s*\|
 # A tool that does it is named: one of these, or a repo it found itself, in the WRONG row.
 (?im)\b(rere|infrafit-action|kubecost-rightsizing-cronjob|K8sResourceResizer)\b|^\|[^\n]*\bWRONG\b[^\n]*(github\.com/|`)[A-Za-z0-9-]+/[A-Za-z0-9_.-]+
 # The reply is complete.

@@ -1,7 +1,8 @@
 """Tests that the three lists of paths agents may not read stay in step: the guard's SECRET_HOME
 and HISTORY_HOME (hooks/agent-guard.py), the agents' sandbox settings (hooks/agent-sandbox.json)
 and the spikes' (skills/spec/spike-settings.json). Each file only knows its own copy, so a path
-added to one is easily missed in the others.
+added to one is easily missed in the others. Also that the skill evals' settings for cases that
+launch agents differ from the agents' only as planned.
 
 Run with: python3 -m unittest discover -s ~/code/github.com/claude-skills/tests
 """
@@ -21,6 +22,9 @@ spec.loader.exec_module(guard)
 
 AGENT = json.loads((REPO / "hooks" / "agent-sandbox.json").read_text())
 SPIKE = json.loads((REPO / "skills" / "spec" / "spike-settings.json").read_text())
+AGENT_CASE = json.loads(
+    (REPO / "tests" / "skill-evals" / "agent-case-settings.json").read_text()
+)
 
 # Written-down exceptions, and why.
 # The agent's own tool output is saved under ~/.claude/projects, so only the guard covers it.
@@ -118,6 +122,18 @@ class SandboxSettings(unittest.TestCase):
         ):
             with self.subTest(file=name):
                 self.assertEqual(os_deny, read_deny)
+
+
+    def test_agent_case_settings_differ_only_as_planned(self):
+        # The skill evals that launch agents use tests/skill-evals/agent-case-settings.json. It is
+        # agent-sandbox.json with run-agent.sh outside this sandbox (the agent's session has its
+        # own), and ~/.cache/agent-runs readable, so the skill can read reply.md. Nothing else.
+        expected = json.loads(json.dumps(AGENT))
+        sandbox = expected["sandbox"]
+        sandbox["excludedCommands"].append("~/.claude/hooks/run-agent.sh *")
+        sandbox["filesystem"]["denyRead"].remove("~/.cache/agent-runs")
+        expected["permissions"]["deny"].remove("Read(~/.cache/agent-runs/**)")
+        self.assertEqual(AGENT_CASE, expected)
 
 
 if __name__ == "__main__":

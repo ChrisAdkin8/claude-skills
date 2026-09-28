@@ -86,11 +86,11 @@ run_case() {
   fi
 }
 
-# What in ~/notes has changed, leaving out the eval notes themselves.
+# What in ~/notes has changed, leaving out eval notes, this set's hidden ones and the skill evals'.
 # Without a git repo there, changes can't be seen, so it says so and the research cases fail.
 notes_status() {
   if git -C "$HOME/notes" rev-parse --git-dir > /dev/null 2>&1; then
-    git -C "$HOME/notes" status --porcelain --untracked-files=all | grep -v '/\.eval-'
+    git -C "$HOME/notes" status --porcelain --untracked-files=all | grep -Ev '/\.?eval-'
   else
     echo "NOT A GIT REPO"
   fi

@@ -100,13 +100,25 @@ class RunAgent(unittest.TestCase):
         (call,) = self.calls_made()
         argv = call["argv"]
         self.assertEqual(argv[argv.index("--agent") + 1], "cold-reviewer")
-        self.assertTrue(argv[argv.index("--settings") + 1].endswith("hooks/agent-sandbox.json"))
+        # The agent is passed by --agents, not loaded from ~/.claude/agents, with its own tools
+        # pre-approved and its guard hooks in the definition.
+        defs = json.loads(Path(argv[argv.index("--agents") + 1]).read_text())
+        self.assertEqual(list(defs), ["cold-reviewer"])
+        self.assertIn("PreToolUse", defs["cold-reviewer"]["hooks"])
+        self.assertEqual(argv[argv.index("--allowedTools") + 1], "Read,Grep,Glob,Bash")
+        self.assertTrue(
+            argv[argv.index("--settings") + 1].endswith("hooks/agent-sandbox.json")
+        )
         # The reviewed repo's own settings and CLAUDE.md are never loaded.
         self.assertEqual(argv[argv.index("--setting-sources") + 1], "user")
         prompt = Path(argv[argv.index("--append-system-prompt-file") + 1]).read_text()
-        self.assertIn("api.github.com", prompt)  # the host list, filled in from the settings
+        self.assertIn(
+            "api.github.com", prompt
+        )  # the host list, filled in from the settings
         self.assertNotIn("{{HOSTS}}", prompt)
-        self.assertIn("--strict-mcp-config", argv)  # only the researcher keeps MCP servers
+        self.assertIn(
+            "--strict-mcp-config", argv
+        )  # only the researcher keeps MCP servers
         self.assertNotIn("--resume", argv)
         self.assertEqual(argv[-1], "Review this.")
         self.assertEqual(Path(call["cwd"]).resolve(), self.work.resolve())

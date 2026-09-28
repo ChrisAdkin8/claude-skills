@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Agent evaluations for the /research, /spec and /cold-review agents. Each case sends one brief to one
-# subagent with `claude -p --agent`, as the skill would, and grades the reply against expect.txt.
+# subagent with `claude -p --agents <file> --agent <name>`, as the skill would, and grades the reply against expect.txt.
 #
 # Usage: run.sh [case ...]        all cases by default; cases run in parallel
 #   AGENT_EVAL_MAX_USD  per-case cost ceiling, passed as --max-budget-usd (default 5)
@@ -26,7 +26,8 @@
 # from 40, and usd.txt sets the case's own cost ceiling in place of AGENT_EVAL_MAX_USD.
 #
 # The agents run with their own frontmatter tools pre-approved and their own PreToolUse hook
-# (checked 2026-09-15: the guard blocks `awk` under --agent), in a throwaway directory with read
+# (checked 2026-09-15: the guard blocks `awk` under --agent; the guard-applies case checks it
+# under --agents), in a throwaway directory with read
 # access to ~/.claude, ~/notes and this repo (~/.claude/skills, agents and hooks are symlinks into
 # it), with no MCP servers and no saved session. Every run costs real tokens: run by hand after changing an
 # agent or skill file, not on every commit. Results land in results/<timestamp>/ (git-ignored).
@@ -36,7 +37,9 @@ set -uo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd -P)
-agents="$HOME/.claude/agents"
+# The agent files live in hooks/agents; each case passes its agent by --agents, as run-agent.sh does.
+agents="$repo/hooks/agents"
+[ -d "$agents" ] || agents="$HOME/.claude/agents"
 stamp=$(date +%Y%m%d-%H%M%S)
 out=${EVAL_OUT:-$here/results/$stamp}
 today=$(date +%Y-%m-%d)
@@ -59,8 +62,9 @@ trap 'rm -rf "$tmp_root"; rm -f "$HOME"/notes/research/.eval-*-"$stamp".md' EXIT
 run_case() {
   local c=$1 dir="$cases_dir/$1" agent tools brief work
   agent=$(cat "$dir/agent.txt")
-  # The agent's frontmatter tools line, e.g. "tools: Read, Bash, WebFetch, WebSearch".
-  tools=$(sed -n 's/^tools:[[:space:]]*//p' "$agents/$agent.md" | head -1 | tr -d ' ')
+  # The agent's definition as --agents takes it, and its own tools pre-approved.
+  "$repo/hooks/agent-def.py" "$agents/$agent.md" > "$out/$c.agents.json" 2> "$out/$c.err" || return
+  tools=$(python3 -c 'import json,sys;(a,)=json.load(open(sys.argv[1])).values();print(",".join(a["tools"]))' "$out/$c.agents.json")
   note="$HOME/notes/research/.eval-$c-$stamp.md"
   brief=$(sed -e "s#{{CASE}}#$dir#g" -e "s#{{HOME}}#$HOME#g" -e "s#{{REPO}}#$repo#g" \
     -e "s#{{DATE}}#$today#g" -e "s#{{NOTE}}#$note#g" "$dir/brief.txt")
@@ -68,7 +72,7 @@ run_case() {
   usd=$(cat "$dir/usd.txt" 2>/dev/null || echo "$max_usd")
   work=$(mktemp -d "$tmp_root/work.XXXXXX")
   "$repo/hooks/sandbox-prompt.py" > "$out/$c.sandbox.md"
-  (cd "$work" && claude -p --agent "$agent" --output-format json --max-turns "$turns" \
+  (cd "$work" && claude -p --agents "$out/$c.agents.json" --agent "$agent" --output-format json --max-turns "$turns" \
     --allowedTools "$tools" --add-dir "$HOME/.claude" "$HOME/notes" "$repo" \
     --append-system-prompt-file "$out/$c.sandbox.md" \
     --strict-mcp-config --no-session-persistence --setting-sources user \
@@ -109,10 +113,9 @@ from pathlib import Path
 out, cases_dir, cases = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3:]
 passed, cost = 0, 0.0
 for case in cases:
-    raw = (out / f"{case}.json").read_text()
     try:
-        run = json.loads(raw)
-    except json.JSONDecodeError:
+        run = json.loads((out / f"{case}.json").read_text())
+    except (OSError, json.JSONDecodeError):
         print(f"ERROR {case}: no JSON result (see {out / (case + '.err')})")
         continue
     cost += run.get("total_cost_usd") or 0

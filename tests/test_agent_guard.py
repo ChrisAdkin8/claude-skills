@@ -717,7 +717,7 @@ class SessionHistory(unittest.TestCase):
         own = f"{self.PROJECT}/{self.SESSION}/tool-results/b1.txt"
         for command in (
             "cat ~/.claude/skills/spec/SKILL.md",
-            "grep -rn Verdict ~/.claude/agents",
+            "grep -rn Verdict ~/.claude/hooks/agents",
             f"sed -n 1,20p {own}",
         ):
             with self.subTest(command=command):
@@ -734,7 +734,7 @@ class SessionHistory(unittest.TestCase):
         self.assertEqual(self.tool("Read", file_path=f"{self.HOME}/.cache/agent-runs/a/b/r.md"), 2)
         own = f"{self.PROJECT}/{self.SESSION}/tool-results/b1.txt"
         self.assertEqual(self.tool("Read", file_path=own), 0)
-        self.assertEqual(self.tool("Read", file_path=f"{self.HOME}/.claude/agents/x.md"), 0)
+        self.assertEqual(self.tool("Read", file_path=f"{self.HOME}/.claude/hooks/agents/x.md"), 0)
         self.assertEqual(self.tool("Grep", pattern="x", path=f"{self.HOME}/.claude/skills"), 0)
 
 

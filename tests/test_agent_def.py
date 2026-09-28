@@ -12,7 +12,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 SCRIPT = REPO / "hooks" / "agent-def.py"
-AGENTS = REPO / "agents"
+AGENTS = REPO / "hooks" / "agents"
 NAMES = ("researcher", "research-verifier", "spec-verifier", "cold-reviewer")
 GUARD = 'python3 "$HOME/.claude/hooks/agent-guard.py"'
 MINIMAL = """---

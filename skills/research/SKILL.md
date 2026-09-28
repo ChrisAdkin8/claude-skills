@@ -21,7 +21,7 @@ Every commit in `~/notes` names its files after `--` (`git -C ~/notes commit -m 
 
 Run `git log`, `git diff` and any other read-only git command except `git -C ~/notes status` through `~/.claude/hooks/git-read.py`, which `allowed-tools` pre-approves and which refuses git's options that write files or run programs.
 
-The research rules live in `~/.claude/agents/researcher.md` and the checking rules in `~/.claude/agents/research-verifier.md`. Don't restate them in briefs; edit those files to change them.
+The research rules live in `~/.claude/hooks/agents/researcher.md` and the checking rules in `~/.claude/hooks/agents/research-verifier.md`. Don't restate them in briefs; edit those files to change them.
 
 ## Running an agent
 

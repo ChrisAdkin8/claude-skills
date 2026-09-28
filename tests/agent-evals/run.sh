@@ -28,7 +28,7 @@
 # The agents run with their own frontmatter tools pre-approved and their own PreToolUse hook
 # (checked 2026-09-15: the guard blocks `awk` under --agent; the guard-applies case checks it
 # under --agents), in a throwaway directory with read
-# access to ~/.claude, ~/notes and this repo (~/.claude/skills, agents and hooks are symlinks into
+# access to ~/.claude, ~/notes and this repo (~/.claude/skills and hooks are symlinks into
 # it), with no MCP servers and no saved session. Every run costs real tokens: run by hand after changing an
 # agent or skill file, not on every commit. Results land in results/<timestamp>/ (git-ignored).
 # Exits 0 only if every case passed, 1 if any failed or ended in an error, 2 on a bad case name or no

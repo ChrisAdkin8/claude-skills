@@ -1,6 +1,6 @@
 # Working in this repo
 
-The files here are what Claude Code runs: `~/.claude/skills`, `agents` and `hooks` are symlinks into
+The files here are what Claude Code runs: `~/.claude/skills` and `hooks` are symlinks into
 this repo, so an edit is live the moment it's saved. Keep every file valid at each step, and expect a
 skill you're editing to be the one you're running.
 
@@ -8,7 +8,7 @@ skill you're editing to be the one you're running.
 
 - `python3 -m unittest discover -s tests` — deterministic tests for the guard, both checkers,
   `build-index.py`, `review-state.py`, `git-read.py`, `prepare-spike.sh`, `run-spike.sh`,
-  `run-agent.sh`, `mdcheck.py` and the research scripts, that the eval runners exit 1 on a failure, and that the
+  `run-agent.sh`, `agent-def.py`, `mdcheck.py` and the research scripts, that the eval runners exit 1 on a failure, and that the
   guard's and both sandbox settings' deny lists agree. CI runs these, with ruff and shellcheck.
 - `python3 tests/replay_guard.py` — the guard against real recorded commands and file reads.
 - After changing an agent or skill file, run `tests/agent-evals/run.sh` by hand. A full run cost
@@ -17,7 +17,7 @@ skill you're editing to be the one you're running.
   and cost, including the cases you didn't expect to change.
 - After changing a skill's steps, run `tests/skill-evals/run.sh` by hand too (about $0.30 a case,
   capped at $3), and record its results in the same `BASELINE.md` section.
-- A change to `skills/spec/` or `agents/spec-*` usually needs `check-spec.py` run over
+- A change to `skills/spec/` or `hooks/agents/spec-*` usually needs `check-spec.py` run over
   `docs/specs/` too: the specs in this repo cite these files by `path:line`.
 
 ## Conventions

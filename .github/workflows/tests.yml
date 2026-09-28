@@ -21,7 +21,7 @@ jobs:
       - name: Link ~/.claude to the checkout, as an install does
         run: |
           mkdir -p ~/.claude
-          for d in skills agents hooks; do ln -s "$PWD/$d" ~/.claude/$d; done
+          for d in skills hooks; do ln -s "$PWD/$d" ~/.claude/$d; done
       - name: Unit tests
         run: python3 -m unittest discover -s tests
       # Errors only: pyflakes and syntax for Python, warnings and above for shell.

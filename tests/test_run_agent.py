@@ -14,7 +14,6 @@ import uuid
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[1] / "hooks" / "run-agent.sh"
-AGENTS = Path(__file__).resolve().parents[1] / "agents"
 STUB = """#!/usr/bin/env python3
 import json, os, sys
 calls = os.environ["STUB_CALLS"]
@@ -36,10 +35,10 @@ class RunAgent(unittest.TestCase):
         (bin_dir / "claude").write_text(STUB)
         (bin_dir / "claude").chmod(0o755)
         self.calls = self.tmp / "calls.jsonl"
-        # A home of its own, with the repo's agents, so runs land in no real ~/.cache.
+        # A home of its own, so runs land in no real ~/.cache. It has no ~/.claude/agents: the
+        # script finds the agents in hooks/agents.
         home = self.tmp.resolve() / "home"
         (home / ".claude").mkdir(parents=True)
-        (home / ".claude" / "agents").symlink_to(AGENTS)
         self.root = home / ".cache" / "agent-runs"
         self.env = {
             **os.environ,

@@ -27,7 +27,7 @@ This skill writes no code in the repo, and doesn't branch or commit there. Imple
 
 Run `git log`, `git diff` and any `git -C <dir>` read through `~/.claude/hooks/git-read.py`, which refuses the options that write files or run programs. `git rev-parse`, `git status` and `git ls-files` from the working directory, and `git -C ~/notes add` and `commit`, run directly; when the spec's repo isn't the working directory, run those reads as `~/.claude/hooks/git-read.py -C <repo> ...` too.
 
-The checking rules live in `~/.claude/agents/spec-verifier.md`; the cold review's instructions are the prompt skeleton in `~/.claude/skills/cold-review/SKILL.md`. Don't restate either in a brief; edit those files to change them.
+The checking rules live in `~/.claude/hooks/agents/spec-verifier.md`; the cold review's instructions are the prompt skeleton in `~/.claude/skills/cold-review/SKILL.md`. Don't restate either in a brief; edit those files to change them.
 
 ## Running an agent
 

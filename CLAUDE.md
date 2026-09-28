@@ -17,6 +17,10 @@ skill you're editing to be the one you're running.
   and cost, including the cases you didn't expect to change.
 - After changing a skill's steps, run `tests/skill-evals/run.sh` by hand too (about $0.30 a case,
   capped at $3), and record its results in the same `BASELINE.md` section.
+- Run both eval sets once per model the skills run on: Sonnet and Opus, with `EVAL_MODEL=sonnet`
+  and `EVAL_MODEL=opus`. Record each model's results in the same dated `BASELINE.md` section, with a
+  column for the model. Run one set after the other, never at the same time: each checks that
+  nothing else in `~/notes` changed while it ran.
 - A change to `skills/spec/` or `hooks/agents/spec-*` usually needs `check-spec.py` run over
   `docs/specs/` too: the specs in this repo cite these files by `path:line`.
 

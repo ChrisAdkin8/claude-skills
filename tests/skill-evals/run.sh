@@ -7,6 +7,8 @@
 # Runs inside hooks/agent-sandbox.json, so Bash writes stay in the fixture and network is limited.
 # Costs real tokens; run by hand after changing a skill's steps. Results: results/<timestamp>/.
 #   SKILL_EVAL_MAX_USD  per-case cost ceiling, passed as --max-budget-usd (default 3)
+#   EVAL_MODEL          model to run the skills on, passed as --model (default: your default model);
+#                       exported as RUN_AGENT_MODEL, so the agents a skill launches run on it too
 #   EVAL_CASES, EVAL_OUT  the cases and results directories (default: cases/ and
 #                         results/<timestamp>/ here); tests/test_eval_runners.py points them elsewhere
 # Exits 0 only if every case passed, 1 if any failed, 2 on a bad case name or no cases.
@@ -28,11 +30,14 @@ done
 tmp_root=$(mktemp -d)
 trap 'rm -rf "$tmp_root"' EXIT
 
+# An agent a skill launches runs on the model under test, not the default (hooks/run-agent.sh).
+export RUN_AGENT_MODEL=${EVAL_MODEL:-}
+
 run_case() {
   local c=$1 dir="$cases_dir/$1" work
   work=$(mktemp -d "$tmp_root/work.XXXXXX")
   "$dir/setup.sh" "$work" > "$out/$c.setup" 2>&1 || { echo "FAIL $c (setup)"; echo FAIL > "$out/$c.result"; return; }
-  (cd "$work" && claude -p --output-format json --max-turns 60 --max-budget-usd "${SKILL_EVAL_MAX_USD:-3}" \
+  (cd "$work" && claude -p --output-format json --max-turns 60 --max-budget-usd "${SKILL_EVAL_MAX_USD:-3}" ${EVAL_MODEL:+--model "$EVAL_MODEL"} \
     --settings "$repo/hooks/agent-sandbox.json" --permission-mode acceptEdits \
     --allowedTools "Read Write Edit Glob Grep Bash Skill" --strict-mcp-config --no-session-persistence \
     "$(cat "$dir/prompt.txt")" < /dev/null) > "$out/$c.json" 2> "$out/$c.err"

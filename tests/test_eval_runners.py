@@ -1,6 +1,6 @@
 """Tests for tests/agent-evals/run.sh and tests/skill-evals/run.sh: they exit 1 when a case fails,
 0 only when every case passes, and 2 on a case that doesn't exist or when there are none. They
-pass their caps and sandbox settings to claude, clean up their fixtures, and the skill runner
+pass their caps, model and sandbox settings to claude, clean up their fixtures, and the skill runner
 counts only this run's results.
 
 A stub `claude` first on PATH prints a canned JSON result, so nothing is sent to a model. The
@@ -23,6 +23,8 @@ STUB = """#!/usr/bin/env python3
 import json, os, sys
 with open(os.environ["STUB_ARGV"], "a") as f:
     f.write(json.dumps(sys.argv[1:]) + "\\n")
+with open(os.environ["STUB_ARGV"] + ".model", "a") as f:
+    f.write(os.environ.get("RUN_AGENT_MODEL", "<unset>") + "\\n")
 print(json.dumps({"subtype": "success", "is_error": False, "num_turns": 1,
                   "total_cost_usd": 0.01, "result": "the reply says yes"}))
 """
@@ -46,6 +48,8 @@ class Runners(unittest.TestCase):
             "EVAL_OUT": str(self.tmp / "out"),
             "STUB_ARGV": str(self.tmp / "argv.jsonl"),
         }
+        for var in ("EVAL_MODEL", "RUN_AGENT_MODEL"):
+            self.env.pop(var, None)
 
     def run_script(self, script, *cases):
         run = subprocess.run(
@@ -196,6 +200,27 @@ class Runners(unittest.TestCase):
             self.flag(first, "--settings").endswith("hooks/agent-sandbox.json")
         )
         self.assertIn("--strict-mcp-config", first)
+
+    def test_skill_evals_pass_the_model_to_the_skill_and_its_agents(self):
+        self.skill_case("good", passes=True)
+        self.env["RUN_AGENT_MODEL"] = "stale"
+        self.run_script(SKILL_RUN)
+        self.env["EVAL_MODEL"] = "sonnet"
+        self.run_script(SKILL_RUN)
+        default, chosen = self.argv()
+        self.assertNotIn("--model", default)
+        self.assertEqual(self.flag(chosen, "--model"), "sonnet")
+        # RUN_AGENT_MODEL as the skill's session, and so run-agent.sh, sees it: a stale one in
+        # the environment is cleared when no model is chosen.
+        models = (self.tmp / "argv.jsonl.model").read_text().splitlines()
+        self.assertEqual(models, ["", "sonnet"])
+
+    def test_agent_evals_pass_the_model(self):
+        self.agent_case("plain", "says yes\n")
+        self.env["EVAL_MODEL"] = "opus"
+        self.run_script(AGENT_RUN)
+        (argv,) = self.argv()
+        self.assertEqual(self.flag(argv, "--model"), "opus")
 
     def test_no_cases_is_an_error_not_a_crash(self):
         for script in (AGENT_RUN, SKILL_RUN):

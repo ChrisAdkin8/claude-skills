@@ -301,6 +301,7 @@ Spikes are contained differently. They don't run under the guard; their own sand
 
 - **Each agent run** is capped at $5, or $10 for the researcher. The `RUN_AGENT_MAX_USD`
   environment variable overrides both.
+  Each runs on your default model, or on the model `RUN_AGENT_MODEL` names (`sonnet`, `opus`).
 - **Each spike** is capped at $2 and 60 turns. Assume a spike that fetches anything from the web
   costs close to the cap.
 - **The agent evaluations** (see [Checks](#checks)) spend real money too. Six full runs of

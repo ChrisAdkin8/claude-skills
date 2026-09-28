@@ -3,7 +3,7 @@ name: cold-review
 description: Gives a markdown document one adversarial read by an agent that never saw the conversation that wrote it, and relays what it found; on a reviewed document, reviews only the changes logged since. Runs when the user types /cold-review.
 disable-model-invocation: true
 argument-hint: <path to a markdown file> | prompt <path to a markdown file>
-allowed-tools: Read, Grep, Glob, Bash(git rev-parse *), Bash(git status *), Bash(git ls-files *), Bash(~/.claude/hooks/git-read.py *), Bash(~/.claude/skills/cold-review/scripts/review-state.py *), Bash(grep *), Bash(ls *), Bash(~/.claude/hooks/run-agent.sh *), Edit(~/.cache/agent-runs/**), Edit(~/code/**), Edit(~/notes/**)
+allowed-tools: Read, Grep, Glob, Bash(git rev-parse *), Bash(git status *), Bash(git ls-files *), Bash(~/.claude/hooks/git-read.py *), Bash(~/.claude/skills/cold-review/scripts/review-state.py *), Bash(grep *), Bash(ls *), Bash(~/.claude/hooks/run-agent.sh *), Edit(~/.cache/agent-runs/**), Edit(~/code/**/records/*-record.md), Edit(~/notes/**/records/*-record.md)
 ---
 
 # Cold-review a document

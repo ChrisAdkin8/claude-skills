@@ -628,3 +628,8 @@ Skill evals, which start their skill as a typed command: `cold-review-delta` PAS
 $0.28); `spec-done` PASS (11 turns, $0.36); total $0.64. Asked to call the Skill tool, a
 `claude -p` session is refused `research`, `spec` and `cold-review` "due to
 disable-model-invocation", and launches `idea`.
+
+W2: `/spec` pre-approves `Edit(~/code/**/*.md)` in place of `Edit(~/code/**)`, and `/cold-review`
+only its records. `spec-done`'s fixture, built under `~/code` and run without `acceptEdits` or
+Edit in `--allowedTools`, still wrote its spec and record with no permission denials and passed
+its grader ($0.35).

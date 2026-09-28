@@ -3,7 +3,7 @@ name: spec
 description: Turns a research note or a described change into an implementation spec in the repo it changes, grounded in file:line citations, then verifies it and gives it a cold review. Runs when the user types /spec.
 disable-model-invocation: true
 argument-hint: [quick] <research note path> [direction] | [quick] <description of the change> | finish <spec path> | spike <spec path> | done <spec path>
-allowed-tools: Read Grep Glob Edit(~/code/**) Edit(~/notes/**) Edit(~/.cache/spec-spikes/**) Bash(grep *) Bash(git rev-parse *) Bash(git status *) Bash(git ls-files *) Bash(git -C ~/notes status *) Bash(~/.claude/hooks/git-read.py *) Bash(git -C ~/notes add *) Bash(git -C ~/notes commit *) Bash(~/.claude/skills/spec/scripts/check-spec.py *) Bash(~/.claude/skills/research/scripts/check-note.py *) Bash(~/.claude/hooks/run-agent.sh *) Edit(~/.cache/agent-runs/**) Bash(~/.claude/skills/spec/scripts/prepare-spike.sh ~/.cache/spec-spikes/*) Bash(~/.claude/skills/spec/scripts/run-spike.sh ~/.cache/spec-spikes/*)
+allowed-tools: Read Grep Glob Edit(~/code/**/*.md) Edit(~/notes/**) Edit(~/.cache/spec-spikes/**) Bash(grep *) Bash(git rev-parse *) Bash(git status *) Bash(git ls-files *) Bash(git -C ~/notes status *) Bash(~/.claude/hooks/git-read.py *) Bash(git -C ~/notes add *) Bash(git -C ~/notes commit *) Bash(~/.claude/skills/spec/scripts/check-spec.py *) Bash(~/.claude/skills/research/scripts/check-note.py *) Bash(~/.claude/hooks/run-agent.sh *) Edit(~/.cache/agent-runs/**) Bash(~/.claude/skills/spec/scripts/prepare-spike.sh ~/.cache/spec-spikes/*) Bash(~/.claude/skills/spec/scripts/run-spike.sh ~/.cache/spec-spikes/*)
 ---
 
 # Write an implementation spec

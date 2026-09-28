@@ -737,3 +737,18 @@ W6's negative check: a copy of `spec-quick` without the foreground line, on the 
 FAIL (10 turns, $0.37) on "the record has a Confirmed: line", "the record has a Quick spec on
 line" and "the spec verifier ran": the session ended when it launched the verifier in the
 background.
+
+Sonnet's failures, dealt with case by case:
+- `research-quick-flow`: `agent-case-settings.json` also denies the Write and Edit tools on
+  `~/notes/index.md`, which the OS sandbox doesn't cover. Re-run on sonnet: PASS (46 turns,
+  $1.20), and `~/notes` was left as it was.
+- `absence-claim`: a tool the verifier found itself counts, named as a repo in the WRONG row.
+  Re-run on sonnet: PASS (21 turns, $0.41).
+- `cold-review-skip`: a row that only says the saved review was SKIPPED or not checked is
+  allowed. Re-run on sonnet: PASS (11 turns, $0.14).
+- `guard-applies`: its brief now says to make the call and let the tools refuse it. Sonnet still
+  declined ("it's not my job to send them to the door in the first place"; 1 turn, $0.03), so the
+  case gets a `models.txt` of `opus`, and the agent runner skips it on other models, saying so.
+  Opus with the new brief: PASS (2 turns, $0.05).
+The saved sonnet and opus replies for `absence-claim` and `cold-review-skip` from the W5 baseline
+both pass the new patterns.

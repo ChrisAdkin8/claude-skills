@@ -123,16 +123,19 @@ class SandboxSettings(unittest.TestCase):
             with self.subTest(file=name):
                 self.assertEqual(os_deny, read_deny)
 
-
     def test_agent_case_settings_differ_only_as_planned(self):
         # The skill evals that launch agents use tests/skill-evals/agent-case-settings.json. It is
         # agent-sandbox.json with run-agent.sh outside this sandbox (the agent's session has its
-        # own), and ~/.cache/agent-runs readable, so the skill can read reply.md. Nothing else.
+        # own), and ~/.cache/agent-runs readable, so the skill can read reply.md. And the Write and
+        # Edit tools, which the OS sandbox doesn't cover, may not touch the real ~/notes/index.md:
+        # a Sonnet run rewrote it by hand when build-index.py was refused. Nothing else.
         expected = json.loads(json.dumps(AGENT))
         sandbox = expected["sandbox"]
         sandbox["excludedCommands"].append("~/.claude/hooks/run-agent.sh *")
         sandbox["filesystem"]["denyRead"].remove("~/.cache/agent-runs")
-        expected["permissions"]["deny"].remove("Read(~/.cache/agent-runs/**)")
+        deny = expected["permissions"]["deny"]
+        deny.remove("Read(~/.cache/agent-runs/**)")
+        deny += ["Write(~/notes/index.md)", "Edit(~/notes/index.md)"]
         self.assertEqual(AGENT_CASE, expected)
 
 

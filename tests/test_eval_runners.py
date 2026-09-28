@@ -227,6 +227,24 @@ class Runners(unittest.TestCase):
         models = (self.tmp / "argv.jsonl.model").read_text().splitlines()
         self.assertEqual(models, ["", "sonnet"])
 
+    def test_agent_evals_skip_a_case_for_another_model(self):
+        self.agent_case("any", "says yes\n")
+        self.agent_case("opus-only", "says yes\n")
+        (self.cases / "opus-only" / "models.txt").write_text("opus\n")
+        self.env["EVAL_MODEL"] = "sonnet"
+        code, out = self.run_script(AGENT_RUN)
+        self.assertEqual(code, 0, out)
+        self.assertIn("SKIP opus-only: runs only on opus, not sonnet", out)
+        self.assertIn("1 of 1 passed", out)
+        self.assertEqual(len(self.argv()), 1)
+        self.env["EVAL_MODEL"] = "opus"
+        code, out = self.run_script(AGENT_RUN)
+        self.assertIn("2 of 2 passed", out)
+        self.env["EVAL_MODEL"] = "sonnet"
+        code, out = self.run_script(AGENT_RUN, "opus-only")
+        self.assertEqual(code, 0, out)
+        self.assertIn("every case was skipped", out)
+
     def test_agent_evals_pass_the_model(self):
         self.agent_case("plain", "says yes\n")
         self.env["EVAL_MODEL"] = "opus"

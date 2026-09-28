@@ -355,9 +355,10 @@ A cap stops a run only after the turn that crosses it, so a run can go over by u
 | `docs/workflow*.png`, `docs/social-preview.png` | the diagram and the repo's social preview, drawn by `docs/diagram/workflow.py` |
 | `docs/diagram/` | the script that draws them, and `render.mjs`, which turns its SVGs into PNGs |
 | `records/` | the review history of this README |
-| `tests/test_*.py` | fast tests for the guard, the two checkers (`check-note.py` and `check-spec.py`), `build-index.py`, `review-state.py`, `git-read.py`, `prepare-spike.sh`, `run-spike.sh`, `run-agent.sh`, `agent-def.py`, `mdcheck.py` and the three research scripts, that the eval runners exit 1 on a failure and 2 with no cases, pass their caps and sandbox to `claude` and clean up after themselves, and that the guard and both sandbox settings deny the same paths |
+| `tests/test_*.py` | fast tests for the guard, the two checkers (`check-note.py` and `check-spec.py`), `build-index.py`, `review-state.py`, `git-read.py`, `prepare-spike.sh`, `run-spike.sh`, `run-agent.sh`, `agent-def.py`, `mdcheck.py`, `mine-sessions.py` and the three research scripts, that the eval runners exit 1 on a failure and 2 with no cases, pass their caps and sandbox to `claude` and clean up after themselves, and that the guard and both sandbox settings deny the same paths |
 | `tests/fixtures/` | sample research notes (one of them `depth: ideas`) and a spec the tests check |
 | `tests/replay_guard.py` | runs real recorded commands and file reads through the guard |
+| `tests/mine-sessions.py` | reports how the skills and agents went in real use, from Claude Code's session logs |
 | `tests/agent-evals/` | runs the verifiers and the cold reviewer against documents with planted mistakes, and the researcher on sample questions |
 | `tests/skill-evals/` | runs whole skills against throwaway repos |
 | `.github/workflows/tests.yml` | runs the unit tests, ruff and shellcheck on each push to `main` and each pull request |
@@ -376,6 +377,12 @@ python3 ~/code/github.com/claude-skills/tests/replay_guard.py           # second
 Run the agent evaluations by hand after changing an agent or skill file, and the skill evaluations
 after changing a skill's steps. Record the results of both in
 [`tests/agent-evals/BASELINE.md`](tests/agent-evals/BASELINE.md).
+
+`tests/mine-sessions.py` isn't a check, but it shows where to look next. It reads the session logs
+Claude Code keeps in `~/.claude/projects` and prints, for each skill and agent, its runs, the
+agents it launched, its failed tool calls grouped by cause, and what you typed while it ran. It
+only reads, and it takes seconds. The logs hold everything your sessions saw, so read its report
+before you share it.
 
 ## Licence
 

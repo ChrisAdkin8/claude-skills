@@ -99,3 +99,4 @@ Needs a run: none
 - Not reviewed: What things cost says an agent run takes its model from `RUN_AGENT_MODEL`, on 2026-09-28.
 - Not reviewed: Cold review of any document says why each document gets one full review, and that the reviewer gets pointers, not opinions, moved from `/cold-review`'s skill file, on 2026-09-28.
 - Not reviewed: What things cost gives the two agent-launching skill evals' cost, and says both eval sets run on Sonnet and Opus, $11 a round on 2026-09-28, on 2026-09-28.
+- Not reviewed: the Layout table adds `tests/mine-sessions.py`, the `tests/test_*.py` row names it, and Checks says what it reports and to read it before sharing, on 2026-09-28.

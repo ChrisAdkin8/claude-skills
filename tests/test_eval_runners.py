@@ -60,7 +60,11 @@ class Runners(unittest.TestCase):
     def argv(self):
         """The arguments of each claude call, in the order they were made."""
         path = self.tmp / "argv.jsonl"
-        return [json.loads(l) for l in path.read_text().splitlines()] if path.exists() else []
+        return (
+            [json.loads(l) for l in path.read_text().splitlines()]
+            if path.exists()
+            else []
+        )
 
     def flag(self, argv, name):
         return argv[argv.index(name) + 1] if name in argv else None
@@ -144,7 +148,9 @@ class Runners(unittest.TestCase):
         self.run_script(AGENT_RUN)
         result = json.loads((self.tmp / "out" / "good.json").read_text())
         self.assertEqual(result["result"], "the reply says yes")
-        self.assertEqual([sorted(p.iterdir()) if p.exists() else [] for p in real], before)
+        self.assertEqual(
+            [sorted(p.iterdir()) if p.exists() else [] for p in real], before
+        )
 
     def test_agent_evals_pass_caps_and_sandbox(self):
         self.agent_case("plain", "says yes\n")
@@ -154,13 +160,21 @@ class Runners(unittest.TestCase):
         code, out = self.run_script(AGENT_RUN)
         self.assertEqual(code, 0, out)
         calls = self.argv()
-        caps = sorted((self.flag(a, "--max-budget-usd"), self.flag(a, "--max-turns")) for a in calls)
+        caps = sorted(
+            (self.flag(a, "--max-budget-usd"), self.flag(a, "--max-turns"))
+            for a in calls
+        )
         self.assertEqual(caps, [("10", "70"), ("5", "40")])
         for argv in calls:
             self.assertEqual(self.flag(argv, "--setting-sources"), "user")
-            self.assertTrue(self.flag(argv, "--settings").endswith("hooks/agent-sandbox.json"))
+            self.assertTrue(
+                self.flag(argv, "--settings").endswith("hooks/agent-sandbox.json")
+            )
             self.assertIn("--strict-mcp-config", argv)
             self.assertEqual(self.flag(argv, "--agent"), "cold-reviewer")
+            defs = json.loads(Path(self.flag(argv, "--agents")).read_text())
+            self.assertEqual(list(defs), ["cold-reviewer"])
+            self.assertEqual(self.flag(argv, "--allowedTools"), "Read,Grep,Glob,Bash")
 
     def test_agent_eval_cap_override(self):
         self.agent_case("plain", "says yes\n")
@@ -178,7 +192,9 @@ class Runners(unittest.TestCase):
         self.assertEqual(self.flag(first, "--max-budget-usd"), "3")
         self.assertEqual(self.flag(second, "--max-budget-usd"), "1")
         self.assertEqual(self.flag(first, "--max-turns"), "60")
-        self.assertTrue(self.flag(first, "--settings").endswith("hooks/agent-sandbox.json"))
+        self.assertTrue(
+            self.flag(first, "--settings").endswith("hooks/agent-sandbox.json")
+        )
         self.assertIn("--strict-mcp-config", first)
 
     def test_no_cases_is_an_error_not_a_crash(self):
@@ -200,7 +216,7 @@ class Runners(unittest.TestCase):
     def test_fixtures_are_cleaned_up(self):
         self.skill_case("good", passes=True)
         (self.cases / "good" / "setup.sh").write_text(
-            f"#!/bin/sh\necho \"$1\" >> {self.tmp}/works\n"
+            f'#!/bin/sh\necho "$1" >> {self.tmp}/works\n'
         )
         self.run_script(SKILL_RUN)
         (work,) = (self.tmp / "works").read_text().split()

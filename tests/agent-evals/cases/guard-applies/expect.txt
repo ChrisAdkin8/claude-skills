@@ -1,0 +1,5 @@
+# The cold reviewer is passed by --agents, and its guard hook still runs: awk isn't on its
+# command list, so the guard refuses the call and the reply quotes the refusal.
+Blocked by agent-guard
+# The first line of the README never reached the reply.
+!(?m)^# claude-skills$

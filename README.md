@@ -171,18 +171,24 @@ The files expect this repo at `~/code/github.com/claude-skills`, so clone it the
 git clone https://github.com/ChrisAdkin8/claude-skills.git ~/code/github.com/claude-skills
 ```
 
-Claude Code looks for skills, agents and hooks in `~/.claude`. Move anything already at
-`~/.claude/skills`, `~/.claude/agents` or `~/.claude/hooks` out of the way, then link each one to
-this repo:
+Claude Code looks for skills and hooks in `~/.claude`. Move anything already at
+`~/.claude/skills` or `~/.claude/hooks` out of the way, then link each one to this repo:
 
 ```
 ln -s ~/code/github.com/claude-skills/skills ~/.claude/skills
-ln -s ~/code/github.com/claude-skills/agents ~/.claude/agents
 ln -s ~/code/github.com/claude-skills/hooks  ~/.claude/hooks
 ```
 
+The agents live in `hooks/agents`, not `~/.claude/agents`, so your own sessions can't start them
+outside their sandbox. If an earlier install linked `~/.claude/agents` to this repo, remove that
+link: `rm ~/.claude/agents`.
+
 **Whatever branch is checked out here is what the agents run**, so an edit is live as soon as you
 save it. The files refer to each other by `~/.claude/...` paths, which the links keep valid.
+
+`/research`, `/spec` and `/cold-review` start only when you type them, because each launches paid
+agents; Claude won't start them on its own. `/idea` is cheap, so Claude can also start it when you
+ask it to jot something down.
 
 ## Set up `~/notes`
 
@@ -255,7 +261,8 @@ rebuild overwrites it.
 The skills launch every agent (the researcher, both verifiers and the cold reviewer) through
 `hooks/run-agent.sh`. Each runs as a separate, *headless* Claude Code session: `claude -p` with no
 one at the keyboard. They don't run inside your session, because Claude Code can't put a sandbox
-around an agent that does. Two layers contain them.
+around an agent that does. So the agent files aren't in `~/.claude/agents`, where every session
+would offer them; `run-agent.sh` passes each one to its own run. Two layers contain them.
 
 - **The sandbox** ([`hooks/agent-sandbox.json`](hooks/agent-sandbox.json)): Claude Code's
   operating-system sandbox. Shell commands can't read credentials or secret environment variables,
@@ -297,7 +304,8 @@ Spikes are contained differently. They don't run under the guard; their own sand
 - **Each spike** is capped at $2 and 60 turns. Assume a spike that fetches anything from the web
   costs close to the cap.
 - **The agent evaluations** (see [Checks](#checks)) spend real money too. Six full runs of
-  their ten cases on 2026-09-27 cost between $3.70 and $4.68. Each case is capped at $5 (the
+  their ten cases on 2026-09-27 cost between $3.70 and $4.68, and a run of the eleven cases there
+  are now cost $4.52 on 2026-09-28. Each case is capped at $5 (the
   `research-ideas` case at $10), and the cases run at the same time, so a run that goes wrong can
   cost far more.
 - **The skill evaluations** cost about $0.30 each, capped at $3 each.
@@ -327,7 +335,8 @@ A cap stops a run only after the turn that crosses it, so a run can go over by u
 | `skills/spec/scripts/run-spike.sh` | launches a spike |
 | `skills/cold-review/` | `/cold-review`; `/spec` builds its cold review from this skill's instructions |
 | `skills/cold-review/scripts/review-state.py` | works out which review a document is due, and what has changed since its last one |
-| `agents/` | `researcher`, `research-verifier`, `spec-verifier`, `cold-reviewer` |
+| `hooks/agents/` | `researcher`, `research-verifier`, `spec-verifier`, `cold-reviewer`; `run-agent.sh` passes each one to `claude` per run |
+| `hooks/agent-def.py` | turns an agent file into the definition `claude --agents` takes |
 | `hooks/run-agent.sh` | launches an agent; exits with code 3 when a reply lacks its expected ending, so an error is never mistaken for a verdict |
 | `hooks/agent-sandbox.json` | the agents' sandbox settings |
 | `hooks/agent-sandbox.md`, `sandbox-prompt.py` | the rules added to every agent's instructions |
@@ -337,7 +346,7 @@ A cap stops a run only after the turn that crosses it, so a run can go over by u
 | `docs/workflow*.png`, `docs/social-preview.png` | the diagram and the repo's social preview, drawn by `docs/diagram/workflow.py` |
 | `docs/diagram/` | the script that draws them, and `render.mjs`, which turns its SVGs into PNGs |
 | `records/` | the review history of this README |
-| `tests/test_*.py` | fast tests for the guard, the two checkers (`check-note.py` and `check-spec.py`), `build-index.py`, `review-state.py`, `git-read.py`, `prepare-spike.sh`, `run-spike.sh`, `run-agent.sh`, `mdcheck.py` and the three research scripts, that the eval runners exit 1 on a failure and 2 with no cases, pass their caps and sandbox to `claude` and clean up after themselves, and that the guard and both sandbox settings deny the same paths |
+| `tests/test_*.py` | fast tests for the guard, the two checkers (`check-note.py` and `check-spec.py`), `build-index.py`, `review-state.py`, `git-read.py`, `prepare-spike.sh`, `run-spike.sh`, `run-agent.sh`, `agent-def.py`, `mdcheck.py` and the three research scripts, that the eval runners exit 1 on a failure and 2 with no cases, pass their caps and sandbox to `claude` and clean up after themselves, and that the guard and both sandbox settings deny the same paths |
 | `tests/fixtures/` | sample research notes (one of them `depth: ideas`) and a spec the tests check |
 | `tests/replay_guard.py` | runs real recorded commands and file reads through the guard |
 | `tests/agent-evals/` | runs the verifiers and the cold reviewer against documents with planted mistakes, and the researcher on sample questions |

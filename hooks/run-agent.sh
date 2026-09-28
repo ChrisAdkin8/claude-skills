@@ -49,7 +49,9 @@ case "$agent" in
 esac
 
 here=$(cd "$(dirname "$0")" && pwd -P)
-file="$HOME/.claude/agents/$agent.md"
+# The agent files live in hooks/agents, not ~/.claude/agents, so no session loads them as
+# subagents it could launch outside this sandbox. Each run passes its one agent by --agents.
+file="$here/agents/$agent.md"
 [ -f "$file" ] || die "no agent file: $file"
 [ -d "$work" ] || die "no such work dir: $work"
 work=$(cd "$work" && pwd -P)
@@ -61,9 +63,11 @@ mkdir -p "$run"
 run=$(cd "$run" && pwd -P)
 case "$run/" in "$(cd "$root" && pwd -P)"/?*/?*/) ;; *) die "$run is outside $root" ;; esac
 
-# The agent file's own tools line, e.g. "tools: Read, Bash, WebFetch, WebSearch".
-tools=$(sed -n 's/^tools:[[:space:]]*//p' "$file" | head -1 | tr -d ' ')
-[ -n "$tools" ] || die "no tools: line in $file"
+# The agent's definition (prompt, tools, hooks) as --agents takes it, and its own tools
+# pre-approved, e.g. "Read,Bash,WebFetch,WebSearch".
+"$here/agent-def.py" "$file" > "$run/agents.json" || die "couldn't read the agent file $file"
+tools=$(python3 -c 'import json,sys;(a,)=json.load(open(sys.argv[1])).values();print(",".join(a["tools"]))' "$run/agents.json")
+[ -n "$tools" ] || die "no tools in $file"
 # The researcher does the open-ended work; the others check something already written.
 max_usd=${RUN_AGENT_MAX_USD:-5}
 [ "$agent" = researcher ] && max_usd=${RUN_AGENT_MAX_USD:-10}
@@ -91,7 +95,7 @@ fi
 
 cd "$work"
 status=0
-claude -p --agent "$agent" --output-format json --max-turns 200 --max-budget-usd "$max_usd" \
+claude -p --agents "$run/agents.json" --agent "$agent" --output-format json --max-turns 200 --max-budget-usd "$max_usd" \
   --allowedTools "$tools" --add-dir "$HOME/.claude" "$HOME/notes" "$work" \
   --append-system-prompt-file "$run/sandbox.md" \
   --setting-sources user --settings "$here/agent-sandbox.json" ${mcp[@]+"${mcp[@]}"} ${resume[@]+"${resume[@]}"} \

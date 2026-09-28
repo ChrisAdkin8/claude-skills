@@ -92,3 +92,6 @@ Needs a run: none
 - Not reviewed: the Layout table's `tests/test_*.py` row adds the three research scripts, on 2026-09-27.
 - Not reviewed: How the agents are contained says the guard lets `gh` and the research scripts share a command only with text filters, and caps web search queries, on 2026-09-27.
 - Not reviewed: Requirements adds `gh`, `jq` and `gcloud` for the research scripts; What things cost says six runs; How the agents are contained splits web search from the documentation servers; the Layout table's rows for the research scripts, `git-read.py` and `tests/test_*.py` are current; the diagram's guard box says it checks shell, file and web calls, redrawn, on 2026-09-27.
+- Not reviewed: Install says `/research`, `/spec` and `/cold-review` start only when typed, and `/idea` can also start on its own, on 2026-09-28.
+- Not reviewed: Install links only `skills` and `hooks`, and says to remove an old `~/.claude/agents` link; How the agents are contained says the agent files aren't in `~/.claude/agents`; the Layout table's `agents/` row becomes `hooks/agents/`, with a row for `hooks/agent-def.py`; the `tests/test_*.py` row adds `agent-def.py`, on 2026-09-28.
+- Not reviewed: What things cost adds the eleven-case agent-eval run, $4.52 on 2026-09-28, on 2026-09-28.

@@ -1,8 +1,9 @@
 ---
 name: spec
-description: Turn a /research note into an implementation spec inside the repo it changes, grounded in the code with file:line citations, then check it and give it a cold review. Use when the user runs /spec, or asks to write a spec, plan or prompt file for changing or enhancing a repo, especially from a research note. Accepts a research note path or a description of the change; "quick" for a small change whose approach is settled (check and verify, no cold review or spikes); "finish <spec>" re-checks and verifies a spec after editing; "spike <spec>" runs its spike questions in sandboxed headless sessions and folds the answers back in; "done <spec>" settles a spec after it has been built.
+description: Turns a research note or a described change into an implementation spec in the repo it changes, grounded in file:line citations, then verifies it and gives it a cold review. Runs when the user types /spec.
+disable-model-invocation: true
 argument-hint: [quick] <research note path> [direction] | [quick] <description of the change> | finish <spec path> | spike <spec path> | done <spec path>
-allowed-tools: Read Grep Glob Edit(~/code/**) Edit(~/notes/**) Edit(~/.cache/spec-spikes/**) Bash(grep *) Bash(git rev-parse *) Bash(git status *) Bash(git ls-files *) Bash(git -C ~/notes status *) Bash(~/.claude/hooks/git-read.py *) Bash(git -C ~/notes add *) Bash(git -C ~/notes commit *) Bash(~/.claude/skills/spec/scripts/check-spec.py *) Bash(~/.claude/skills/research/scripts/check-note.py *) Bash(~/.claude/hooks/run-agent.sh *) Edit(~/.cache/agent-runs/**) Bash(~/.claude/skills/spec/scripts/prepare-spike.sh ~/.cache/spec-spikes/*) Bash(~/.claude/skills/spec/scripts/run-spike.sh ~/.cache/spec-spikes/*)
+allowed-tools: Read Grep Glob Edit(~/code/**/*.md) Edit(~/notes/**) Edit(~/.cache/spec-spikes/**) Bash(grep *) Bash(git rev-parse *) Bash(git status *) Bash(git ls-files *) Bash(git -C ~/notes status *) Bash(~/.claude/hooks/git-read.py *) Bash(git -C ~/notes add *) Bash(git -C ~/notes commit *) Bash(~/.claude/skills/spec/scripts/check-spec.py *) Bash(~/.claude/skills/research/scripts/check-note.py *) Bash(~/.claude/hooks/run-agent.sh *) Edit(~/.cache/agent-runs/**) Bash(~/.claude/skills/spec/scripts/prepare-spike.sh ~/.cache/spec-spikes/*) Bash(~/.claude/skills/spec/scripts/run-spike.sh ~/.cache/spec-spikes/*)
 ---
 
 # Write an implementation spec
@@ -26,7 +27,7 @@ This skill writes no code in the repo, and doesn't branch or commit there. Imple
 
 Run `git log`, `git diff` and any `git -C <dir>` read through `~/.claude/hooks/git-read.py`, which refuses the options that write files or run programs. `git rev-parse`, `git status` and `git ls-files` from the working directory, and `git -C ~/notes add` and `commit`, run directly; when the spec's repo isn't the working directory, run those reads as `~/.claude/hooks/git-read.py -C <repo> ...` too.
 
-The checking rules live in `~/.claude/agents/spec-verifier.md`; the cold review's instructions are the prompt skeleton in `~/.claude/skills/cold-review/SKILL.md`. Don't restate either in a brief; edit those files to change them.
+The checking rules live in `~/.claude/hooks/agents/spec-verifier.md`; the cold review's instructions are the prompt skeleton in `~/.claude/skills/cold-review/SKILL.md`. Don't restate either in a brief; edit those files to change them.
 
 ## Running an agent
 

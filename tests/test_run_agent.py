@@ -14,7 +14,6 @@ import uuid
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[1] / "hooks" / "run-agent.sh"
-AGENTS = Path(__file__).resolve().parents[1] / "agents"
 STUB = """#!/usr/bin/env python3
 import json, os, sys
 calls = os.environ["STUB_CALLS"]
@@ -36,10 +35,10 @@ class RunAgent(unittest.TestCase):
         (bin_dir / "claude").write_text(STUB)
         (bin_dir / "claude").chmod(0o755)
         self.calls = self.tmp / "calls.jsonl"
-        # A home of its own, with the repo's agents, so runs land in no real ~/.cache.
+        # A home of its own, so runs land in no real ~/.cache. It has no ~/.claude/agents: the
+        # script finds the agents in hooks/agents.
         home = self.tmp.resolve() / "home"
         (home / ".claude").mkdir(parents=True)
-        (home / ".claude" / "agents").symlink_to(AGENTS)
         self.root = home / ".cache" / "agent-runs"
         self.env = {
             **os.environ,
@@ -100,13 +99,25 @@ class RunAgent(unittest.TestCase):
         (call,) = self.calls_made()
         argv = call["argv"]
         self.assertEqual(argv[argv.index("--agent") + 1], "cold-reviewer")
-        self.assertTrue(argv[argv.index("--settings") + 1].endswith("hooks/agent-sandbox.json"))
+        # The agent is passed by --agents, not loaded from ~/.claude/agents, with its own tools
+        # pre-approved and its guard hooks in the definition.
+        defs = json.loads(Path(argv[argv.index("--agents") + 1]).read_text())
+        self.assertEqual(list(defs), ["cold-reviewer"])
+        self.assertIn("PreToolUse", defs["cold-reviewer"]["hooks"])
+        self.assertEqual(argv[argv.index("--allowedTools") + 1], "Read,Grep,Glob,Bash")
+        self.assertTrue(
+            argv[argv.index("--settings") + 1].endswith("hooks/agent-sandbox.json")
+        )
         # The reviewed repo's own settings and CLAUDE.md are never loaded.
         self.assertEqual(argv[argv.index("--setting-sources") + 1], "user")
         prompt = Path(argv[argv.index("--append-system-prompt-file") + 1]).read_text()
-        self.assertIn("api.github.com", prompt)  # the host list, filled in from the settings
+        self.assertIn(
+            "api.github.com", prompt
+        )  # the host list, filled in from the settings
         self.assertNotIn("{{HOSTS}}", prompt)
-        self.assertIn("--strict-mcp-config", argv)  # only the researcher keeps MCP servers
+        self.assertIn(
+            "--strict-mcp-config", argv
+        )  # only the researcher keeps MCP servers
         self.assertNotIn("--resume", argv)
         self.assertEqual(argv[-1], "Review this.")
         self.assertEqual(Path(call["cwd"]).resolve(), self.work.resolve())

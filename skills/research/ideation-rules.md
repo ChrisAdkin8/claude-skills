@@ -1,6 +1,6 @@
 # Ideation rules (depth: ideas)
 
-The `researcher` agent reads this file at `ideas` depth only (`~/.claude/agents/researcher.md`, Depth). Its Research rules, Safety rules and Before you reply still hold.
+The `researcher` agent reads this file at `ideas` depth only (`~/.claude/hooks/agents/researcher.md`, Depth). Its Research rules, Safety rules and Before you reply still hold.
 
 The aim is a wide pool narrowed with evidence, not five ideas ranked in one breath. Work in this order.
 

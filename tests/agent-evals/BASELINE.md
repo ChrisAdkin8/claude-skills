@@ -619,3 +619,39 @@ WRONG row and `Bottom line holds: no`, but the verifier then sent a second, shor
 late search results came back, and the runner grades only the last one. Nothing this change
 touched affects the verifier; the re-run passed. Skill evals: `cold-review-delta` PASS (5 turns,
 $0.28), with the new check; `spec-done` PASS (8 turns, $0.36); total $0.64.
+
+## Skill best practices, part 1 (2026-09-28)
+
+W1 of `docs/specs/2026-09-28-skill-best-practices-1-invocation.md`: `/research`, `/spec` and
+`/cold-review` set `disable-model-invocation: true`, and all four descriptions are third person.
+Skill evals, which start their skill as a typed command: `cold-review-delta` PASS (5 turns,
+$0.28); `spec-done` PASS (11 turns, $0.36); total $0.64. Asked to call the Skill tool, a
+`claude -p` session is refused `research`, `spec` and `cold-review` "due to
+disable-model-invocation", and launches `idea`.
+
+W2: `/spec` pre-approves `Edit(~/code/**/*.md)` in place of `Edit(~/code/**)`, and `/cold-review`
+only its records. `spec-done`'s fixture, built under `~/code` and run without `acceptEdits` or
+Edit in `--allowedTools`, still wrote its spec and record with no permission denials and passed
+its grader ($0.35).
+
+W3: the agent files move to `hooks/agents`, and both runners pass each one by
+`--agents <file> --agent <name>`, from `hooks/agent-def.py`. With `~/.claude/agents` removed, a new
+session's `init` event lists none of the four agents. The new `guard-applies` case shows the
+guard hook still runs under `--agents`. All eleven agent cases:
+
+| Case | Result | Turns | Cost |
+|---|---|---:|---:|
+| absence-claim | PASS | 15 | $0.35 |
+| cold-review-skip | PASS | 8 | $0.21 |
+| delta-review | PASS | 6 | $0.18 |
+| delta-review-record | PASS | 8 | $0.21 |
+| guard-applies | PASS | 2 | $0.06 |
+| record-skip | PASS | 6 | $0.18 |
+| research-ideas | PASS | 64 | $2.45 |
+| research-quick | PASS | 11 | $0.35 |
+| spec-miscite | PASS | 5 | $0.17 |
+| spike-inherited | PASS | 6 | $0.15 |
+| wrong-figure | PASS | 6 | $0.21 |
+
+Total $4.52. `guard-applies` also passed alone beforehand ($0.06). Skill evals after W3:
+`cold-review-delta` PASS (3 turns, $0.26); `spec-done` PASS (10 turns, $0.34); total $0.60.

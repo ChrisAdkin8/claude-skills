@@ -39,7 +39,6 @@ here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd -P)
 # The agent files live in hooks/agents; each case passes its agent by --agents, as run-agent.sh does.
 agents="$repo/hooks/agents"
-[ -d "$agents" ] || agents="$HOME/.claude/agents"
 stamp=$(date +%Y%m%d-%H%M%S)
 out=${EVAL_OUT:-$here/results/$stamp}
 today=$(date +%Y-%m-%d)

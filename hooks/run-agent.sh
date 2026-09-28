@@ -52,8 +52,7 @@ here=$(cd "$(dirname "$0")" && pwd -P)
 # The agent files live in hooks/agents, not ~/.claude/agents, so no session loads them as
 # subagents it could launch outside this sandbox. Each run passes its one agent by --agents.
 file="$here/agents/$agent.md"
-[ -f "$file" ] || file="$HOME/.claude/agents/$agent.md"
-[ -f "$file" ] || die "no agent file for $agent in $here/agents"
+[ -f "$file" ] || die "no agent file: $file"
 [ -d "$work" ] || die "no such work dir: $work"
 work=$(cd "$work" && pwd -P)
 

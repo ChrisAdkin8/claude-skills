@@ -1,7 +1,7 @@
 ---
 title: Skill best practices, part 1 - who can start the skills and agents
 created: 2026-09-28
-status: reviewed # draft | reviewed | in-progress | done | superseded
+status: done # draft | reviewed | in-progress | done | superseded
 research: none
 idea: none
 read-at: 5ed0e66

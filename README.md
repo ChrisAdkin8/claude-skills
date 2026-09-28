@@ -338,6 +338,7 @@ A cap stops a run only after the turn that crosses it, so a run can go over by u
 | `hooks/agents/` | `researcher`, `research-verifier`, `spec-verifier`, `cold-reviewer`; `run-agent.sh` passes each one to `claude` per run |
 | `hooks/agent-def.py` | turns an agent file into the definition `claude --agents` takes |
 | `hooks/run-agent.sh` | launches an agent; exits with code 3 when a reply lacks its expected ending, so an error is never mistaken for a verdict |
+| `hooks/run-agent.md` | how `/research`, `/spec` and `/cold-review` run an agent with `run-agent.sh` and read its reply |
 | `hooks/agent-sandbox.json` | the agents' sandbox settings |
 | `hooks/agent-sandbox.md`, `sandbox-prompt.py` | the rules added to every agent's instructions |
 | `hooks/agent-guard.py` | the guard |

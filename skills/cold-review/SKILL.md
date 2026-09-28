@@ -25,8 +25,9 @@ Review history lives in the document's **record**, `records/<basename>-record.md
 (layout: `~/.claude/skills/spec/record-template.md`), so the document stays what its readers
 came for. Older documents keep their review at their end; write anything new to a record.
 
-`/spec` builds its cold review from steps 3 and 4 of this file, so the two ask the same question.
-Change the skeleton here, not there.
+`/spec` builds its cold review from three sections of this file: *Read the document in full*
+(the `Implementation spec` row and its extra lines), *Gather pointers* and *Write the prompt*
+(the skeleton). So the two ask the same question. Change those here, not there.
 
 ## Modes
 
@@ -160,22 +161,13 @@ Then one line each: `Counts: N findings - C correctness, R requirement, K neithe
 In `prompt` mode, give the user the filled-in prompt in a fenced block, say it expects a session
 with no history of this one, ask them to paste the reply back here so it can be saved, and stop.
 
-Otherwise run the `cold-reviewer` agent, as a headless, sandboxed session: with the Write tool,
-write the prompt to `<run dir>/brief.md`. The run dir is `~/.cache/agent-runs/<name>/cold-reviewer`
-(`cold-reviewer-delta` for a delta review), where `<name>` is `<repo dir name>--<document
-basename>`, or for a document outside a repo its directory's name and basename, e.g.
-`claude-skills--README`, since a reused run dir loses its replies. If that run dir already holds a
-`reply.md` from an earlier session, add the next free `-<n>` suffix.
-Then run `~/.claude/hooks/run-agent.sh cold-reviewer <repo root, or the
-document's directory> <that run dir>` with the Bash tool and `run_in_background: true`, paths
-written with `~`. When it finishes, read `<run dir>/reply.md`. Exit 3 means the reply lacks
-the table and closing lines the skeleton asks for (an API error, a budget stop, or a reply out
-of format): write `followup.md` in the run
-dir asking for the reply again, in full, in that format, and run the same command with
-`--resume`; if that exits 3 too, tell the user and relay nothing. Exit 2 means the run never
-started: the command's own output says why, and any `run.err` there is from an earlier run. Any
-other non-zero exit means no reply, and `run.err` there says why. Tell the user in one line that the document is under cold review (or delta review), and end your
-turn.
+Otherwise run the `cold-reviewer` agent: read `~/.claude/hooks/run-agent.md` and follow it, with
+the prompt as the brief. The work dir is the repo root, or the document's directory. The run dir is
+`~/.cache/agent-runs/<name>/cold-reviewer` (`cold-reviewer-delta` for a delta review), where
+`<name>` is `<repo dir name>--<document basename>`, or for a document outside a repo its
+directory's name and basename, e.g. `claude-skills--README`. If the reply can't be used, relay
+nothing. Tell the user in one line that the document is under cold review (or delta review), and
+end your turn.
 
 ## 5. When the reviewer finishes
 

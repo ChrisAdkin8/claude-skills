@@ -23,15 +23,9 @@ Run `git log`, `git diff` and any other read-only git command except `git -C ~/n
 
 The research rules live in `~/.claude/hooks/agents/researcher.md` and the checking rules in `~/.claude/hooks/agents/research-verifier.md`. Don't restate them in briefs; edit those files to change them.
 
-## Running an agent
+## Agent runs
 
-The researcher and the verifier read untrusted pages, so each runs as a headless, sandboxed session through `~/.claude/hooks/run-agent.sh`, not as an in-session subagent (Claude Code can't sandbox those). To run one:
-
-1. With the Write tool, write its brief to `<run dir>/brief.md`, where `<run dir>` is `~/.cache/agent-runs/<note basename>/<agent>`, e.g. `~/.cache/agent-runs/2026-09-25-x/researcher`. A later round of the same agent on the same note gets `<agent>-2`, `<agent>-3`; `finish` mode uses `research-verifier-finish`. If the run dir you'd use already holds a `reply.md` from an earlier session (a second `finish`, say), take the next free `-<n>` suffix instead: a run dir that's reused loses its replies.
-2. Run `~/.claude/hooks/run-agent.sh <agent> ~/notes <run dir>` with the Bash tool and `run_in_background: true`, paths written with `~`.
-3. When it finishes, read `<run dir>/reply.md` with the Read tool: that is the agent's reply. Exit 3 means the reply lacks the closing lines its agent file asks for (an API error, a budget stop, or a reply out of format). Send one follow-up (`--resume`) asking it to reply again, in full, in the format its instructions give; if that exits 3 too, tell the user and don't act on the reply. Exit 2 means the run never started (a bad argument, a missing brief, `--resume` with no session): the command's own output says why, and `run.err` there, if any, is from an earlier run. Any other non-zero exit means no reply: `run.err` and `run.json` there say why.
-
-To send an agent a follow-up in the same session, Write `<run dir>/followup.md` and run the same command with `--resume` added. Its new reply replaces `reply.md`, and the earlier one is kept as `reply-<n>.md`.
+The researcher and the verifier read untrusted pages, so each runs as a headless, sandboxed session: read `~/.claude/hooks/run-agent.md` and follow it. The work dir is `~/notes`, and the run dir is `~/.cache/agent-runs/<note basename>/<agent>`, e.g. `~/.cache/agent-runs/2026-09-25-x/researcher`; `finish` mode uses `research-verifier-finish`.
 
 ## Modes
 
@@ -52,7 +46,7 @@ To send an agent a follow-up in the same session, Write `<run dir>/followup.md` 
 3. **Ranking and lenses** (ideas depth only). Rank by "likely mindshare" unless the request names another criterion. Mindshare means traffic and engagement: stars, shares, Hacker News, Reddit and LinkedIn traction, talks, demos people pass around. Novelty counts for more than usefulness to clients. The lenses are finding, tool, dataset, game, lab and essay; drop only the ones the question plainly rules out.
 4. **Repo context**: if the working directory is inside a git repo under `~/code`, note its path. The researcher reads the relevant files itself; don't read them now.
 5. **Output path**: `~/notes/research/YYYY-MM-DD-short-slug.md` (today's date, 3–6 word lowercase hyphenated slug), or the existing note if updating.
-6. **Launch.** First run `git -C ~/notes status --porcelain` and keep its output, so that section 2 can tell the researcher's changes from ones that were already there. Then run the `researcher` agent (Running an agent) with this brief, filled in. Leave out the `Rank by` and `Lenses` lines except at ideas depth.
+6. **Launch.** First run `git -C ~/notes status --porcelain` and keep its output, so that section 2 can tell the researcher's changes from ones that were already there. Then run the `researcher` agent (Agent runs) with this brief, filled in. Leave out the `Rank by` and `Lenses` lines except at ideas depth.
 
    ```
    Depth: <full | quick | ideas>
@@ -73,8 +67,8 @@ To send an agent a follow-up in the same session, Write `<run dir>/followup.md` 
 ## 2. When the researcher finishes
 
 1. Run `~/.claude/skills/research/scripts/check-note.py --headroom <note>`. `--headroom` applies the researcher's lower budget, which leaves room for the verifier's fixes. If the agent failed, or the note is missing or has no Sources, tell the user what happened and stop; don't commit. Then run `git -C ~/notes status --porcelain`: the researcher may write only its note, so any other changed file under `~/notes/research` that wasn't in the output kept at launch is a red flag. So is any change to `~/notes/projects/mindshare/attention-evidence.md` or `~/notes/ideas/`: only the Finish step edits those, never the researcher. Two cases aren't: a note that is another `/research` run's output (`grep -l 'Output file: <its absolute path>' ~/.cache/agent-runs/*/researcher*/brief.md` finds that run's brief, in a run dir other than this one), which that run commits; and an edit the user made while this ran, which they'll recognise. So for each flagged file: if another run's brief names it, leave it to that run; otherwise show the user the diff and ask. Either way, don't commit it.
-2. If the result is FAIL, send the FAIL lines to the researcher as a follow-up (Running an agent) and ask it to fix them and re-run the check. Allow two rounds; if it still fails, carry on to verification and report the remaining failures at the end.
-3. Run the `research-verifier` agent (Running an agent) with the brief `Note: <absolute path>. Today's date: <YYYY-MM-DD>.`, adding `Depth: ideas: run the prior-art hunt first.` at ideas depth. Tell the user in one line that the note is written and being verified. End your turn.
+2. If the result is FAIL, send the FAIL lines to the researcher as a follow-up (`~/.claude/hooks/run-agent.md`, Follow-ups) and ask it to fix them and re-run the check. Allow two rounds; if it still fails, carry on to verification and report the remaining failures at the end.
+3. Run the `research-verifier` agent (Agent runs) with the brief `Note: <absolute path>. Today's date: <YYYY-MM-DD>.`, adding `Depth: ideas: run the prior-art hunt first.` at ideas depth. Tell the user in one line that the note is written and being verified. End your turn.
 
 In `finish` mode, start here:
 
@@ -83,7 +77,7 @@ In `finish` mode, start here:
    - any claims passed as arguments;
    - claims the check reports as no longer matching;
    - claims changed since the last verification: find the last `research:` commit that touched the note (`~/.claude/hooks/git-read.py -C ~/notes log --format='%h %s' -- <note>`), then `~/.claude/hooks/git-read.py -C ~/notes diff <that commit> -- <note>` shows every edit since, committed or not. If the note has never been committed (a session ended before its first verification), skip this: the verifier checks it as a new note.
-3. Run the verifier (Running an agent, in the run dir `research-verifier-finish`) with the brief above, plus `Also check: "<claim>"; "<claim>"` if there are any.
+3. Run the verifier (Agent runs, in the run dir `research-verifier-finish`) with the brief above, plus `Also check: "<claim>"; "<claim>"` if there are any.
 
 A note verified before the `## Verification` section existed gets one from this run.
 

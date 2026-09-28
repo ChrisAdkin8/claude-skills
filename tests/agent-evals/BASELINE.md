@@ -655,3 +655,15 @@ guard hook still runs under `--agents`. All eleven agent cases:
 
 Total $4.52. `guard-applies` also passed alone beforehand ($0.06). Skill evals after W3:
 `cold-review-delta` PASS (3 turns, $0.26); `spec-done` PASS (10 turns, $0.34); total $0.60.
+
+## Skill best practices, part 2 (2026-09-28)
+
+W4: the three skills' "Running an agent" steps move to `hooks/run-agent.md`, and cross-file
+references name headings, not step numbers. No agent file changed, and the agent evals run the
+agents directly, not through a skill, so W5's two-model baseline is the next agent-eval run.
+
+Skill evals, first run: `spec-done` PASS (11 turns, $0.35); `cold-review-delta` FAIL on "the
+unlogged Rollback edit is named" (total $0.61). The reply did name it ("The diff also changes
+`## Rollback`, and no logged line covers that"), but the grader's pattern had no "no logged line"
+form, so it gained one. Re-run: `spec-done` PASS (5 turns, $0.30); `cold-review-delta` PASS
+(5 turns, $0.27); total $0.57.

@@ -95,3 +95,4 @@ Needs a run: none
 - Not reviewed: Install says `/research`, `/spec` and `/cold-review` start only when typed, and `/idea` can also start on its own, on 2026-09-28.
 - Not reviewed: Install links only `skills` and `hooks`, and says to remove an old `~/.claude/agents` link; How the agents are contained says the agent files aren't in `~/.claude/agents`; the Layout table's `agents/` row becomes `hooks/agents/`, with a row for `hooks/agent-def.py`; the `tests/test_*.py` row adds `agent-def.py`, on 2026-09-28.
 - Not reviewed: What things cost adds the eleven-case agent-eval run, $4.52 on 2026-09-28, on 2026-09-28.
+- Not reviewed: the Layout table adds a row for `hooks/run-agent.md`, on 2026-09-28.

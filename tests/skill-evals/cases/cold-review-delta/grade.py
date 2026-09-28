@@ -12,7 +12,7 @@ from pathlib import Path
 # How past replies said it: "Unlogged changes", "A change nobody logged", "never logged", "isn't
 # logged anywhere", "no `Not reviewed:` line covers it", "has no line".
 UNLOGGED = re.compile(
-    r"(?i)un-?logged|\b(?:not|nobody|never|isn't|wasn't)\s+(?:been\s+)?logged|no\s+`?not reviewed|has no\b[^.\n]*\bline"
+    r"(?i)un-?logged|\b(?:not|nobody|never|isn't|wasn't)\s+(?:been\s+)?logged|no\s+`?not reviewed|has no\b[^.\n]*\bline|\bno\s+logged\s+line"
 )
 # The opposite claim, "there is no unlogged change in it", mustn't count as naming one.
 NEGATED = re.compile(r"(?i)\b(?:no|nothing|none|without)\b[^.\n]{0,30}\bun-?logged")

@@ -304,7 +304,8 @@ Spikes are contained differently. They don't run under the guard; their own sand
 - **Each spike** is capped at $2 and 60 turns. Assume a spike that fetches anything from the web
   costs close to the cap.
 - **The agent evaluations** (see [Checks](#checks)) spend real money too. Six full runs of
-  their ten cases on 2026-09-27 cost between $3.70 and $4.68. Each case is capped at $5 (the
+  their ten cases on 2026-09-27 cost between $3.70 and $4.68, and a run of the eleven cases there
+  are now cost $4.52 on 2026-09-28. Each case is capped at $5 (the
   `research-ideas` case at $10), and the cases run at the same time, so a run that goes wrong can
   cost far more.
 - **The skill evaluations** cost about $0.30 each, capped at $3 each.

@@ -5,6 +5,17 @@ section is a date. Within a day, changes are grouped by area.
 
 ## 2026-09-28
 
+### Security
+
+- The four agents moved from `agents/` to `hooks/agents/`, and `~/.claude/agents` is no longer
+  linked. Before, every session listed them as subagents it could start itself, outside their
+  sandbox. `run-agent.sh` and the agent-eval runner now pass each agent to its own run with
+  `claude -p --agents`, from a new script, `hooks/agent-def.py`, which refuses an agent file it
+  can't fully read rather than drop a guard hook. A new eval case, `guard-applies`, shows the guard
+  still runs this way. An existing install should remove its link: `rm ~/.claude/agents`.
+- `/spec` pre-approves edits only to markdown under `~/code`, not every file, and `/cold-review`
+  only to its record files. Folding a finding into a reviewed document now asks first.
+
 ### Fixed
 
 - `/cold-review` gives the delta reviewer its diff as a `git` command. `review-state.py` prints it
@@ -13,6 +24,10 @@ section is a date. Within a day, changes are grouped by area.
 
 ### Changed
 
+- `/research`, `/spec` and `/cold-review` start only when typed (`disable-model-invocation: true`),
+  since each launches paid agents; `/idea` can still start on its own. All four skill
+  descriptions are in the third person, without their mode syntax, which the argument hints
+  already give.
 - Another project's repo name is gone from a spec, its spike results and `BASELINE.md`. `CLAUDE.md` lists the
   `cold-review:` and `tests:` commit prefixes, and asks for commits from the checkout, not
   GitHub's web editor.

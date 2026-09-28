@@ -633,3 +633,24 @@ W2: `/spec` pre-approves `Edit(~/code/**/*.md)` in place of `Edit(~/code/**)`, a
 only its records. `spec-done`'s fixture, built under `~/code` and run without `acceptEdits` or
 Edit in `--allowedTools`, still wrote its spec and record with no permission denials and passed
 its grader ($0.35).
+
+W3: the agent files move to `hooks/agents`, and both runners pass each one by
+`--agents <file> --agent <name>`, from `hooks/agent-def.py`. With `~/.claude/agents` removed, a new
+session's `init` event lists none of the four agents. The new `guard-applies` case shows the
+guard hook still runs under `--agents`. All eleven agent cases:
+
+| Case | Result | Turns | Cost |
+|---|---|---:|---:|
+| absence-claim | PASS | 15 | $0.35 |
+| cold-review-skip | PASS | 8 | $0.21 |
+| delta-review | PASS | 6 | $0.18 |
+| delta-review-record | PASS | 8 | $0.21 |
+| guard-applies | PASS | 2 | $0.06 |
+| record-skip | PASS | 6 | $0.18 |
+| research-ideas | PASS | 64 | $2.45 |
+| research-quick | PASS | 11 | $0.35 |
+| spec-miscite | PASS | 5 | $0.17 |
+| spike-inherited | PASS | 6 | $0.15 |
+| wrong-figure | PASS | 6 | $0.21 |
+
+Total $4.52. `guard-applies` also passed alone beforehand ($0.06).

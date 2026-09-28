@@ -313,7 +313,10 @@ Spikes are contained differently. They don't run under the guard; their own sand
   are now cost $4.52 on 2026-09-28. Each case is capped at $5 (the
   `research-ideas` case at $10), and the cases run at the same time, so a run that goes wrong can
   cost far more.
-- **The skill evaluations** cost about $0.30 each, capped at $3 each.
+- **The skill evaluations** cost about $0.30 each, capped at $3 each. The two that launch agents,
+  `spec-quick` and `research-quick-flow`, cost about $0.60–1.20 each with them.
+- **Both sets run on Sonnet and on Opus**, so each round costs about twice that: $11 for both
+  sets on both models on 2026-09-28.
 
 A cap stops a run only after the turn that crosses it, so a run can go over by up to one turn. A
 *turn* is one step of a run: Claude replies once, and may use a tool.

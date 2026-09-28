@@ -145,7 +145,11 @@ launches it, and passes on what it finds.
   before saving the review to the document's record, except for a spec's review, full or delta,
   which it saves without asking, as `/spec` does, since the spec's checks read it.
 - **Each document gets one full review.** After that, running `/cold-review` again gives one delta
-  review of the changes logged since, and no more.
+  review of the changes logged since, and no more. A reviewer asked to find gaps finds some
+  whether or not any exist, so chasing round after round makes the writing defensive.
+- **The reviewer gets pointers, not opinions.** The skill tells it where to look (the repo, the
+  entry points, the rules files), never what the author thinks is weak or why it was written that
+  way. A reviewer handed the author's framing checks the framing instead of the document.
 - **`/cold-review prompt <file>`** writes the reviewer's instructions for you to run in a new
   session yourself, instead of launching an agent.
 

@@ -97,3 +97,4 @@ Needs a run: none
 - Not reviewed: What things cost adds the eleven-case agent-eval run, $4.52 on 2026-09-28, on 2026-09-28.
 - Not reviewed: the Layout table adds a row for `hooks/run-agent.md`, on 2026-09-28.
 - Not reviewed: What things cost says an agent run takes its model from `RUN_AGENT_MODEL`, on 2026-09-28.
+- Not reviewed: Cold review of any document says why each document gets one full review, and that the reviewer gets pointers, not opinions, moved from `/cold-review`'s skill file, on 2026-09-28.

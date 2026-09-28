@@ -769,3 +769,43 @@ changed, and the agent evals don't run the skills, so only the skill evals ran:
 
 Totals $1.67 on Sonnet and $1.62 on Opus, sessions only. On both models `spec-quick`'s result
 holds a ticked `- [x]` line from the checklist, and `~/notes` was left as it was.
+
+W8: the three skill files trimmed to 2,099, 2,299 and 1,998 words, no line over 400 characters.
+A first run hit the account's session limit (every call a 429 at $0.00) and is left out. The
+re-run, one set after the other:
+
+| Set | Case | Model | Result | Turns | Cost |
+|---|---|---|---|---:|---:|
+| agent | absence-claim | sonnet | PASS | 12 | $0.30 |
+| agent | absence-claim | opus | PASS | 14 | $0.34 |
+| agent | cold-review-skip | sonnet | PASS | 11 | $0.16 |
+| agent | cold-review-skip | opus | PASS | 9 | $0.23 |
+| agent | delta-review | sonnet | PASS | 15 | $0.48 |
+| agent | delta-review | opus | PASS | 8 | $0.28 |
+| agent | delta-review-record | sonnet | PASS | 15 | $0.50 |
+| agent | delta-review-record | opus | PASS | 7 | $0.25 |
+| agent | guard-applies | sonnet | SKIP |  |  |
+| agent | guard-applies | opus | PASS | 2 | $0.09 |
+| agent | record-skip | sonnet | PASS | 16 | $0.18 |
+| agent | record-skip | opus | PASS | 6 | $0.20 |
+| agent | research-ideas | sonnet | PASS | 32 | $0.94 |
+| agent | research-ideas | opus | PASS | 64 | $2.37 |
+| agent | research-quick | sonnet | PASS | 13 | $0.33 |
+| agent | research-quick | opus | PASS | 13 | $0.34 |
+| agent | spec-miscite | sonnet | PASS | 15 | $0.22 |
+| agent | spec-miscite | opus | PASS | 8 | $0.23 |
+| agent | spike-inherited | sonnet | PASS | 16 | $0.21 |
+| agent | spike-inherited | opus | PASS | 8 | $0.22 |
+| agent | wrong-figure | sonnet | PASS | 6 | $0.13 |
+| agent | wrong-figure | opus | PASS | 6 | $0.20 |
+| skill | cold-review-delta | sonnet | PASS | 12 | $0.27 |
+| skill | cold-review-delta | opus | PASS | 4 | $0.27 |
+| skill | research-quick-flow | sonnet | PASS | 23 | $0.47 |
+| skill | research-quick-flow | opus | PASS | 16 | $0.45 |
+| skill | spec-done | sonnet | PASS | 14 | $0.33 |
+| skill | spec-done | opus | PASS | 9 | $0.33 |
+| skill | spec-quick | sonnet | PASS | 21 | $0.45 |
+| skill | spec-quick | opus | PASS | 14 | $0.44 |
+
+Totals: agent evals $3.47 on Sonnet (10 of 10, guard-applies skipped), $4.75 on Opus (11 of 11);
+skill evals $1.51 on Sonnet (4 of 4), $1.49 on Opus (4 of 4). `~/notes` was left as it was.

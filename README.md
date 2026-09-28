@@ -1,37 +1,31 @@
 # claude-skills
 
-Personal Claude Code skills, agents and hooks that take an idea to a checked implementation plan,
-called a *spec*. They research the idea, then write a spec for changing a repo. The spec cites the
-lines of code it rests on, and fresh agents check both the research and the spec. They write no
-code: that happens afterwards, in a new session, from the spec.
+Claude Code commands that turn an idea into a checked plan for changing your code. Claude
+researches the idea and writes the plan. Then separate agents check both, before anyone writes a
+line of code.
 
-To try them, see [Requirements](#requirements), [Install](#install) and
-[Set up `~/notes`](#set-up-notes).
+Each claim in the research cites a source, and each claim in the plan cites the lines of code it
+rests on. The checkers are fresh Claude sessions that never saw your conversation, so they check
+what was written, not what was meant.
 
-A few terms used throughout:
+**Is it for you?** It's for people who use Claude Code most days and want a plan checked before
+code gets written. It has only been tried on macOS. The research and each check run a paid
+agent, capped at $5 a run ($10 for the research).
 
-- **Skill**: a set of instructions Claude Code loads when you type its command, such as `/research`.
-  Each skill is a folder under `skills/`.
-- **Hook**: a script Claude Code runs automatically at a set moment, such as before each tool call.
-  This repo's hooks are in `hooks/`.
-- **Agent**: a separate Claude run with its own instructions, launched to do one job, such as
-  research a question or check a document.
-- **Spec**: a plan for changing a repo, split into work items. Each item says what to change and
-  how you'll know it's done.
-- **Verifier**: an agent that checks each claim in a document against its source.
-- **Cold review**: one adversarial read of a document by an agent that has seen none of the
-  conversation that produced it.
-- **Delta review**: a single follow-up review covering only the changes made since the cold review.
-- **Spike**: a short, sandboxed experiment that answers a question that reading the code can't
-  settle.
-- **Record**: a file that holds a document's review history. It sits in a `records/` folder beside
-  the document, so the document itself stays clean.
-- **Sandbox** and **guard**: the two layers that limit what an agent can do. See
-  [How the agents are contained](#how-the-agents-are-contained).
+[Try it](#try-it) · [How it works](#from-idea-to-merged-change) ·
+[A worked example](#a-worked-example) · [Safety and cost](#safety-and-cost)
 
-There are four commands. `/idea`, `/research` and `/spec` form one flow. `/cold-review` stands
-apart: it gives any markdown file the same cold review `/spec` gives a spec. Notes live in
-`~/notes`; specs live in the repo they describe.
+## The four commands
+
+| Command | What it does |
+|---|---|
+| `/idea <description>` | Saves an idea as a note. |
+| `/research <question or idea note>` | Researches it and writes a note that cites a source for each claim. An agent checks the claims. |
+| `/spec <research note>` | Writes a plan, called a *spec*, into the repo the change touches. Agents check it. |
+| `/cold-review <markdown file>` | Gives any document the same independent review a spec gets. |
+
+Notes live in `~/notes`, and specs live in the repo they describe. None of the commands writes
+code: that happens afterwards, in a new session, working from the spec.
 
 ## The workflow at a glance
 
@@ -55,60 +49,148 @@ How to read it:
 
 - It follows one change from idea to merged code, top to bottom.
 - Each numbered stage shows the command you run, what it does and where its output goes.
-- Under each command: whether the stage's work runs in your session, or in a *subagent*, a
-  separate headless Claude session that hasn't seen your conversation. "Planned" there means the
-  command isn't built yet.
+- Under each command, it says whether the work runs in your session or in a *subagent*. A
+  subagent is one of the agents: a separate Claude session that hasn't seen your conversation.
+  "Planned" there means the command isn't built yet.
 - Purple boxes are the agents and scripts that check the work.
-- The pink box is a check that runs only if the spec was edited after its cold review.
+- The pink box is a check that runs only if the spec was edited after its review.
 - Dashed lines are shortcuts and loops off the main path.
 - The two bands at the bottom cover `/cold-review` and the limits every agent runs under.
+
+## Try it
+
+### Requirements
+
+- **Claude Code 2.1.219 or later.** The agents rely on a sandbox setting added in that version.
+  Last tested on 2.1.282; don't assume the sandbox works on anything older.
+- **macOS.** Nothing has been tried anywhere else ([Linux notes](docs/containment.md#on-linux)).
+- **`python3`**, for the checking scripts. Some spikes also use `uv`.
+- **Optional: `gh` (logged in) and `jq`**, to check how well maintained an open-source project is,
+  and **`gcloud` (logged in)** for Google Cloud prices. Without them, the research marks those
+  figures *(unverified)*.
+
+### Install
+
+The files expect this repo at `~/code/github.com/claude-skills`, so clone it there:
+
+```
+git clone https://github.com/ChrisAdkin8/claude-skills.git ~/code/github.com/claude-skills
+```
+
+Claude Code looks in `~/.claude` for *skills* (the commands) and *hooks* (scripts it runs
+automatically at set moments). Move anything already at `~/.claude/skills` or `~/.claude/hooks`
+out of the way, then link both to this repo:
+
+```
+ln -s ~/code/github.com/claude-skills/skills ~/.claude/skills
+ln -s ~/code/github.com/claude-skills/hooks  ~/.claude/hooks
+```
+
+If an earlier install also linked `~/.claude/agents` to this repo, remove that link with
+`rm ~/.claude/agents`. The agents now live in `hooks/agents`, so your own sessions can't start
+them outside their sandbox.
+
+`/research`, `/spec` and `/cold-review` start only when you type them, because each launches paid
+agents. `/idea` is cheap, so Claude may also start it when you ask it to jot something down.
+
+### Set up `~/notes`
+
+The commands keep their notes in `~/notes`. It must be a git repo, because they commit to it.
+This repo doesn't create it for you, so make it and add these files:
+
+```
+mkdir -p ~/notes/templates ~/notes/ideas ~/notes/research && git -C ~/notes init
+```
+
+| File | What to put in it |
+|---|---|
+| `CLAUDE.md` | Your rules for notes, such as tags and *frontmatter* (the block of settings between `---` lines at the top of a note). The `researcher` agent reads it first. Include a Topics section with a command that lists the topics in use, like the one below. |
+| `templates/idea.md` | The layout `/idea` starts each note from. |
+| `templates/research.md` | The layout for a research note. Give it a `topic:` line. |
+| `templates/research-ideas.md` | Only for `/research ideas`: the layout for a ranked list of ideas. Give it a `topic:` line too. |
+| `projects/mindshare/attention-evidence.md` | Only for `/research ideas`: a table of past launches (repos, posts, demos) and the attention each got, such as stars or upvotes. `/research ideas` ranks ideas against it and adds new rows. |
+| `decisions/` | Optional: notes you write by hand to record a choice the research left open. `/spec` follows an accepted decision over the research's recommendation. |
+
+The command for the Topics section:
+
+```
+grep -h '^topic:' ~/notes/research/*.md | sed 's/^topic: *//; s/ *#.*//' | sort | uniq -c | sort -rn
+```
+
+The research templates need the headings a research note must have, because `check-note.py`
+fails a note without them. The `REQUIRED` list near the top of
+[`check-note.py`](skills/research/scripts/check-note.py) names them for each kind of note.
+
+Only `/cold-review` works without `~/notes`.
+
+### Your first run
+
+Start `claude` in any folder and try these in order. Each one shows that a bit more of the setup
+works.
+
+1. **`/idea A mind map of my notes`.** Free, apart from your usual Claude use. You should get a
+   new note in `~/notes/ideas/`, committed to the notes repo.
+2. **`/research quick What licence is the pyarrow package released under?`.** This takes a few
+   minutes and runs two paid agents: one researches, the other checks. You should get a short,
+   cited note in `~/notes/research/` with a `## Verification` section at the end, and a rebuilt
+   `~/notes/index.md`.
+3. **`/spec quick <a small change you want>`**, run from inside a git repo under `~/code`, the
+   only place `/spec` may edit files without asking. This runs one paid agent, the verifier. You
+   should get a spec in that repo's `docs/specs/`, or wherever the repo already keeps specs, and a
+   record of its checks beside it.
+
+If a step stops with a message about `~/notes`, look again at [Set up `~/notes`](#set-up-notes).
 
 ## From idea to merged change
 
 The six stages match the diagram.
 
-1. **Capture: `/idea <description>`** files a note in `~/notes/ideas`.
-2. **Research: `/research <question or idea note>`** researches it and writes a note to
-   `~/notes/research`, citing a source for each claim. A `research-verifier` agent then checks the
-   claims the note's conclusions depend on. It reports any it couldn't confirm from their sources.
-   Last, `/research` rebuilds `~/notes/index.md`, a map of every note by topic
-   ([view it as a mind map](#view-the-notes-as-a-mind-map)).
-3. **Plan: `/spec <research note>`** writes a spec into the repo the change touches. The spec
-   points at the code it relies on as `path:line`. The repo must be a git repo under `~/code`,
-   because that's the only place `/spec` may edit files without asking. Three checks follow:
-   - The `check-spec.py` script checks that every `path:line` points at lines that existed when
-     the spec was written. It also checks that each work item says how you'll see it's done, and
-     that no secrets or unfilled template text were left in.
-   - A `spec-verifier` agent, which never saw the conversation, checks every citation, number and
-     borrowed claim, and reports what doesn't hold.
-   - A `cold-reviewer` agent gives the spec a cold review. It uses the same instructions as
-     `/cold-review`, and looks for guesses stated as facts and costs nobody counted.
+1. **Capture: `/idea <description>`** saves a note in `~/notes/ideas`.
+2. **Research: `/research <question or idea note>`** writes a note to `~/notes/research`, citing a
+   source for each claim. A `research-verifier` agent then checks the claims the conclusions
+   depend on, and reports any it couldn't confirm. Last, `/research` rebuilds `~/notes/index.md`,
+   a map of every note by topic ([view it as a mind map](#view-the-notes-as-a-mind-map)).
+3. **Plan: `/spec <research note>`** writes a spec into the repo the change touches. The spec is
+   split into work items. Each says what to change and how you'll know it's done, and points at
+   the code it relies on as `path:line`. Three checks follow:
+   - **A script,** `check-spec.py`, checks that every `path:line` points at lines that existed
+     when the spec was written. It also checks that each work item says how you'll see it's done,
+     and that no secrets or unfilled template text were left in.
+   - **A `spec-verifier` agent** checks every citation, number and borrowed claim, and reports
+     what doesn't hold.
+   - **A `cold-reviewer` agent** gives the spec a *cold review*: one hard, sceptical read by an
+     agent that has seen none of the conversation behind it. It looks for guesses stated as facts
+     and costs nobody counted.
 
-   The spec's record keeps the review word for word. It also keeps what the verifier found and
-   what the spikes answered.
+   Everything the checks found is kept in the spec's *record*, a file in a `records/` folder
+   beside the spec, so the spec itself stays clean.
+4. **Spike: `/spec spike <spec>`**, or offered at the end of `/spec`. A *spike* is a short
+   experiment that answers a question reading the code can't settle. Each runs as a separate
+   Claude session, in a scratch copy of the code, inside a sandbox and under a cost cap. `/spec`
+   then updates the spec with the answer.
+5. **Implement: `/implement <spec>`** is planned but not built yet
+   ([tools spec](docs/specs/2026-09-26-implement-skill-1-tools.md),
+   [skill spec](docs/specs/2026-09-26-implement-skill-2-skill.md)). It will hand the work to an
+   agent on its own branch, then have a sandboxed checker re-run each work item's "Done when"
+   test. Until then, implement in a new session, working from the spec.
+6. **Close out: `/spec done <spec>`** notes in the record where the implementation left the spec,
+   marks the spec done, and points out any research the implementation proved wrong.
 
-   You may change the spec after its review. If you do, the record lists each change as a
-   `Not reviewed:` line. Run `/cold-review <spec>` to give those changes a delta review before you
-   implement it. A spec's `status` says where it is, such as `draft`, `reviewed` (ready to
-   implement), `in-progress` or `done`. While a spec has changes with no delta review,
-   `check-spec.py` fails it if its status is `reviewed` or `in-progress`, so it can't be implemented
-   by mistake.
+### Smaller changes: `/spec quick`
 
-   For a small change whose approach is settled, `/spec quick` stops after the verifier: no cold
-   review, no spikes. `/spec finish <spec>` gives it the cold review later, and
-   `/spec spike <spec>` runs any spikes.
-4. **Spike: `/spec spike <spec>`**, or offered at the end of `/spec`. Each spike runs as a
-   separate Claude session in a scratch copy of the code, inside a sandbox and under a cost cap.
-   It writes its verdict and raw output, and `/spec` then updates the spec with the answer.
-5. **Implement: `/implement <spec>`**, planned in
-   two specs ([tools](docs/specs/2026-09-26-implement-skill-1-tools.md),
-   [skill](docs/specs/2026-09-26-implement-skill-2-skill.md)) and not built yet. It will hand the
-   work to a subagent on its own git worktree and branch, then have a sandboxed verifier re-run
-   each work item's Done when check. Until then, implement in a new session, working from the
-   spec.
-6. **Close out: `/spec done <spec>`**. It notes in the record where the implementation left
-   the spec, marks the spec done, and points out any research the implementation proved
-   wrong.
+For a small change whose approach is settled, `/spec quick` stops after the verifier: no cold
+review, no spikes. Later, `/spec finish <spec>` gives it the cold review, and `/spec spike <spec>`
+runs any spikes.
+
+### Changing a spec after its review
+
+You may edit a spec after its cold review. If you do, the record lists each change as a
+`Not reviewed:` line. Run `/cold-review <spec>` to give those changes a *delta review*: one
+follow-up review of only what changed.
+
+A spec's `status` says where it is: `draft`, `reviewed` (ready to implement), `in-progress` or
+`done`. Until its changes have had their delta review, `check-spec.py` fails a spec marked
+`reviewed` or `in-progress`, so nobody implements unchecked changes by mistake.
 
 ### A worked example
 
@@ -120,118 +202,47 @@ The [mind-map index](#view-the-notes-as-a-mind-map) went through every stage on 
    claim that Markmap draws an outline as a mind map wasn't in the sample; the spike confirmed it.
 3. **Plan.** [The spec](docs/specs/2026-09-27-notes-mindmap-index.md) has seven work items. The
    spec-verifier found that one expected 37 idea notes when there were 40. The cold review found
-   eight problems, such as a check that would pass without testing anything, because it called a
+   eight problems. One was a check that would pass without testing anything, because it called a
    script by a name the shell couldn't find. Both are in
    [its record](docs/specs/records/2026-09-27-notes-mindmap-index-record.md).
 4. **Spike.** A prototype over the real notes showed that two levels of topics stay easy to read:
    5 areas, and at most 7 notes under any heading
    ([results](docs/specs/spikes/2026-09-27-notes-mindmap-index-results.md)).
-5. **Implement.** One commit per work item, W1 first; two of them changed only `~/notes`, so they
+5. **Implement.** One commit per work item, W1 first. Two of them changed only `~/notes`, so they
    were committed there. Running `/research` for real found a counting bug the tests had missed.
 6. **Close out.** `/spec done` wrote seven lines in the record on where the implementation left the
    plan, and marked the spec done.
 
 ## Cold review of any document
 
-**`/cold-review <markdown file>`** hands a document (a walkthrough, runbook, README, design doc,
-spec or research note) to a `cold-reviewer` agent. First, the skill works out what kind of document
-it is and what its reader needs to do with it. Then it writes the instructions for the reviewer,
-launches it, and passes on what it finds.
+**`/cold-review <markdown file>`** hands a document, such as a runbook, README, design doc, spec
+or research note, to a `cold-reviewer` agent. First the skill works out what kind of document it
+is and what its reader needs to do with it. Then it writes the reviewer's instructions, launches
+it, and passes on what it finds.
 
 - **The reviewer only reads.** It checks what it can by reading the files a document points at,
-  such as build scripts and config. Where a claim can only be settled by running a command, it
-  says so rather than guessing the result.
-- **You pick which findings get fixed.** The skill edits the document only for those. It asks
-  before saving the review to the document's record, except for a spec's review, full or delta,
-  which it saves without asking, as `/spec` does, since the spec's checks read it.
+  such as build scripts and config. Where only running a command would settle a claim, it says so
+  rather than guessing the result.
+- **You pick which findings get fixed.** The skill edits the document only for those.
+- **It asks before saving the review,** into the document's record. A spec's review is the
+  exception: it's saved without asking, because the spec's checks read it.
 - **Each document gets one full review.** After that, running `/cold-review` again gives one delta
   review of the changes logged since, and no more. A reviewer asked to find gaps finds some
   whether or not any exist, so chasing round after round makes the writing defensive.
 - **The reviewer gets pointers, not opinions.** The skill tells it where to look (the repo, the
-  entry points, the rules files), never what the author thinks is weak or why it was written that
-  way. A reviewer handed the author's framing checks the framing instead of the document.
-- **`/cold-review prompt <file>`** writes the reviewer's instructions for you to run in a new
-  session yourself, instead of launching an agent.
-
-## Requirements
-
-- **Claude Code 2.1.219 or later.** Agents and spikes rely on a sandbox setting added in that
-  version. Nothing has been tried on an older one, so don't assume the sandbox works there. Last
-  tested on 2.1.282.
-- **macOS.** The sandbox settings are built around how Claude Code's sandbox behaves on macOS.
-  They haven't been tried anywhere else. On Linux, the sandbox needs the `bubblewrap` tool, and
-  the special case for `gh` (see [below](#how-the-agents-are-contained)) may not be needed.
-- **`python3`** for the checkers and tests. Some spikes use `uv`.
-- **`gh`, logged in, and `jq`** for the researcher's project-health checks. GCP prices also need
-  `gcloud`, logged in. Without them the scripts say so, and the note marks those figures
-  *(unverified)*.
-- **A `~/notes` git repo**, set up as [below](#set-up-notes).
-
-## Install
-
-The files expect this repo at `~/code/github.com/claude-skills`, so clone it there:
-
-```
-git clone https://github.com/ChrisAdkin8/claude-skills.git ~/code/github.com/claude-skills
-```
-
-Claude Code looks for skills and hooks in `~/.claude`. Move anything already at
-`~/.claude/skills` or `~/.claude/hooks` out of the way, then link each one to this repo:
-
-```
-ln -s ~/code/github.com/claude-skills/skills ~/.claude/skills
-ln -s ~/code/github.com/claude-skills/hooks  ~/.claude/hooks
-```
-
-The agents live in `hooks/agents`, not `~/.claude/agents`, so your own sessions can't start them
-outside their sandbox. If an earlier install linked `~/.claude/agents` to this repo, remove that
-link: `rm ~/.claude/agents`.
-
-**Whatever branch is checked out here is what the agents run**, so an edit is live as soon as you
-save it. The files refer to each other by `~/.claude/...` paths, which the links keep valid.
-
-`/research`, `/spec` and `/cold-review` start only when you type them, because each launches paid
-agents; Claude won't start them on its own. `/idea` is cheap, so Claude can also start it when you
-ask it to jot something down.
-
-## Set up `~/notes`
-
-The skills keep notes in `~/notes`, and this repo doesn't create it. It has to be a git repo,
-because the skills commit to it. This repo doesn't include its files either, so you write your own:
-
-- **`CLAUDE.md`**: your rules for notes, such as tags and frontmatter (the block of settings
-  between `---` lines at the top of each note). The `researcher` agent reads it first. Give it a
-  Topics section with a command that lists the topics in use, such as the one below, which drops
-  the `topic:` label and any `# comment` before counting. The researcher picks a note's topic from
-  that list, and `check-note.py` points there when a topic is new.
-
-  ```
-  grep -h '^topic:' ~/notes/research/*.md | sed 's/^topic: *//; s/ *#.*//' | sort | uniq -c | sort -rn
-  ```
-- **`templates/idea.md`**: the layout `/idea` starts each note from.
-- **`decisions/`**, optional: notes you write by hand to record a choice the research left open.
-  `/spec` follows an accepted decision over the research's recommendation.
-- **`templates/research.md`** and **`templates/research-ideas.md`**: the layouts the `researcher`
-  agent starts from, for a normal research note and for a ranked list of ideas. `check-note.py`
-  fails a note that lacks the sections it expects, so copy its `REQUIRED` headings from
-  [`check-note.py`](skills/research/scripts/check-note.py) into these. Give both a `topic:` line
-  too: it also fails a note with no topic (see [below](#view-the-notes-as-a-mind-map)).
-- **`projects/mindshare/attention-evidence.md`**, needed only for `/research ideas`. It's a table
-  of past launches (repos, posts, demos) and how much attention each got: stars, shares, upvotes.
-  `/research ideas` ranks ideas by how much attention they're likely to get, reads this table as
-  evidence, and adds new rows to it.
-
-`/idea` and `/research` need `~/notes`. `/spec` does too: it reads the research note there and
-commits the links it adds. Only `/cold-review` works without it.
+  entry points, the rules files). It never says what the author thinks is weak, or why it was
+  written that way. A reviewer handed the author's framing checks the framing, not the document.
+- **`/cold-review prompt <file>`** writes the reviewer's instructions for you to run yourself in a
+  new session, instead of launching an agent.
 
 ## View the notes as a mind map
 
 Every research note has a `topic`, such as `kubernetes` or `claude-code/research-skill`: an area,
 and optionally a sub-area under it. At the end of each run, `/research` rebuilds `~/notes/index.md`
-from these topics. It's a nested outline: topics are headings, research notes are links under them,
-and each idea or decision note sits under the research note it names. A note that has no topic, or
-names no research note (a new `/idea`, say), goes under a heading called Unfiled. A mind map draws
-that outline as a tree of bubbles branching out from the middle.
+from these topics. It's a nested outline: topics are headings, research notes are links under
+them, and each idea or decision note sits under the research note it names. A note with no topic,
+or that names no research note (a new `/idea`, say), goes under a heading called Unfiled. A mind
+map draws that outline as a tree of bubbles branching out from the middle.
 
 There are three ways to view it, easiest first:
 
@@ -251,8 +262,8 @@ There are three ways to view it, easiest first:
    ```
 
    This draws the map into one web page and opens it. `npx` runs the tool without installing it
-   for good. Saving the page to `/tmp` keeps an extra file out of your notes repo. Links to notes
-   may not open from the browser.
+   for good, and saving to `/tmp` keeps an extra file out of your notes repo. Links to notes may
+   not open from the browser.
 3. **Without Markmap.** Open `~/notes/index.md` in any markdown viewer, such as GitHub, Obsidian or
    VS Code's normal preview. It shows the same tree as an indented list.
 
@@ -260,129 +271,35 @@ To rebuild the index by hand, for example after `/idea` adds a note, run
 `~/.claude/skills/research/scripts/build-index.py ~/notes`. Don't edit `index.md` itself: the next
 rebuild overwrites it.
 
-## How the agents are contained
+## Safety and cost
 
-The skills launch every agent (the researcher, both verifiers and the cold reviewer) through
-`hooks/run-agent.sh`. Each runs as a separate, *headless* Claude Code session: `claude -p` with no
-one at the keyboard. They don't run inside your session, because Claude Code can't put a sandbox
-around an agent that does. So the agent files aren't in `~/.claude/agents`, where every session
-would offer them; `run-agent.sh` passes each one to its own run. Two layers contain them.
+Every agent runs as its own session, with no one at the keyboard, and two layers limit what it
+can do:
 
-- **The sandbox** ([`hooks/agent-sandbox.json`](hooks/agent-sandbox.json)): Claude Code's
-  operating-system sandbox. Shell commands can't read credentials or secret environment variables,
-  can't write under `~/code`, `~/notes` or `~/.claude`, and can reach only an allowed list of
-  websites.
-- **The guard** ([`hooks/agent-guard.py`](hooks/agent-guard.py)): a script Claude Code runs before
-  each tool call, which can refuse it. It checks the agents' shell commands, file reads and
-  writes, searches and web fetches. It keeps credentials out of their reach, since a fetched page
-  could trick an agent into sending them out in a web address. It also hides session history (past
-  conversations and earlier agent runs), so a verifier or cold reviewer can't see how the document
-  it checks was written. If the guard itself fails, it refuses the call rather than letting it
-  through.
+- **A sandbox,** built into Claude Code and enforced by the operating system. It stops the
+  agent's shell commands reading credentials, writing to your code, notes or settings, or reaching
+  websites that aren't on an allowed list.
+- **A guard,** a script that checks each action before it runs and can refuse it. It keeps
+  credentials out of reach, and hides past conversations, so a checker can't see how the document
+  it checks was written.
 
-Some things run outside the sandbox, and not all of them are checked by the guard:
+A few things run outside the sandbox, and one, the researcher's AWS and Terraform documentation
+servers, isn't checked by the guard either. [How the agents are contained](docs/containment.md)
+lists them all.
 
-- `gh`, and the three research scripts that need credentials or call `gh` (`repo-health.sh`,
-  `gcp-skus.sh`, `reddit-search.sh`). On macOS, `gh` can't make secure web connections inside the
-  sandbox, so `agent-sandbox.json` lets these run outside it. They're still shell commands, so the
-  guard checks them, and it lets them share a command only with text filters such as `jq` and
-  `grep`, never with `curl` or `git`, which must stay inside the sandbox.
-- Claude Code's own file-reading and web-fetching tools, which the sandbox never covers. The guard
-  checks both, and Claude Code's permission settings also block reads of sensitive files.
-- Web search. The guard caps its queries at 200 characters and refuses one that holds what looks
-  like a token. Web search is given to the researcher and the research-verifier.
-- The researcher's documentation servers (AWS and Terraform). **Nothing checks these.** The only
-  limit is that only the researcher has them. Each agent's
-  file lists its tools by name.
-
-Every agent is also told these rules: [`hooks/agent-sandbox.md`](hooks/agent-sandbox.md) is added
-to its instructions, with the list of allowed websites filled in from the sandbox settings.
-
-Spikes are contained differently. They don't run under the guard; their own sandbox settings,
-[`skills/spec/spike-settings.json`](skills/spec/spike-settings.json), contain them.
-
-## What things cost
+What things cost:
 
 - **Each agent run** is capped at $5, or $10 for the researcher. The `RUN_AGENT_MAX_USD`
-  environment variable overrides both.
-  Each runs on your default model, or on the model `RUN_AGENT_MODEL` names (`sonnet`, `opus`).
-- **Each spike** is capped at $2 and 60 turns. Assume a spike that fetches anything from the web
-  costs close to the cap.
-- **The agent evaluations** (see [Checks](#checks)) spend real money too. Six full runs of
-  their ten cases on 2026-09-27 cost between $3.70 and $4.68, and a run of the eleven cases there
-  are now cost $4.52 on 2026-09-28. Each case is capped at $5 (the
-  `research-ideas` case at $10), and the cases run at the same time, so a run that goes wrong can
-  cost far more.
-- **The skill evaluations** cost about $0.30 each, capped at $3 each. The two that launch agents,
-  `spec-quick` and `research-quick-flow`, cost about $0.60–1.20 each with them.
-- **Both sets run on Sonnet and on Opus**, so each round costs about twice that: $11 for both
-  sets on both models on 2026-09-28.
+  environment variable overrides both. Agents run on your default model, or on the one
+  `RUN_AGENT_MODEL` names (`sonnet` or `opus`).
+- **Each spike** is capped at $2 and 60 turns. A *turn* is one step: Claude replies once, and may
+  use a tool. Assume a spike that fetches anything from the web costs close to its cap.
+- A cap stops a run only after the turn that crosses it, so a run can go over by up to one turn.
 
-A cap stops a run only after the turn that crosses it, so a run can go over by up to one turn. A
-*turn* is one step of a run: Claude replies once, and may use a tool.
+## Working on this repo
 
-## Layout
-
-| Path | What it is |
-|---|---|
-| `skills/idea/` | `/idea` |
-| `skills/research/` | `/research` |
-| `skills/research/ideation-rules.md`, `ideas-finish.md` | the extra steps for `/research ideas` |
-| `skills/research/scripts/check-note.py` | checks a research note |
-| `skills/research/scripts/mdcheck.py` | markdown helpers shared by `check-note.py`, `check-spec.py`, `build-index.py` and `review-state.py` |
-| `skills/research/scripts/build-index.py` | rebuilds `~/notes/index.md`, the notes by topic; `/research` runs it before its commit |
-| `skills/research/scripts/repo-health.sh`, `gcp-skus.sh`, `reddit-search.sh` | gather evidence for the `researcher` and `research-verifier` agents |
-| `skills/spec/` | `/spec` |
-| `skills/spec/scripts/check-spec.py` | checks a spec |
-| `skills/spec/template.md`, `record-template.md` | the layouts of a spec and its record |
-| `skills/spec/done-step.md` | the steps for `/spec done` |
-| `skills/spec/spike-step.md` | the steps for running spikes |
-| `skills/spec/spiker.md` | the rules a spike session follows |
-| `skills/spec/spike-settings.json` | a spike's sandbox and permission settings |
-| `skills/spec/scripts/prepare-spike.sh` | makes the scratch copy of the code for a spike |
-| `skills/spec/scripts/run-spike.sh` | launches a spike |
-| `skills/cold-review/` | `/cold-review`; `/spec` builds its cold review from this skill's instructions |
-| `skills/cold-review/scripts/review-state.py` | works out which review a document is due, and what has changed since its last one |
-| `hooks/agents/` | `researcher`, `research-verifier`, `spec-verifier`, `cold-reviewer`; `run-agent.sh` passes each one to `claude` per run |
-| `hooks/agent-def.py` | turns an agent file into the definition `claude --agents` takes |
-| `hooks/run-agent.sh` | launches an agent; exits with code 3 when a reply lacks its expected ending, so an error is never mistaken for a verdict |
-| `hooks/run-agent.md` | how `/research`, `/spec` and `/cold-review` run an agent with `run-agent.sh` and read its reply |
-| `hooks/agent-sandbox.json` | the agents' sandbox settings |
-| `hooks/agent-sandbox.md`, `sandbox-prompt.py` | the rules added to every agent's instructions |
-| `hooks/agent-guard.py` | the guard |
-| `hooks/git-read.py` | runs read-only git commands for `/research`, `/spec` and `/cold-review` |
-| `docs/specs/` | the specs for changes to this repo; their records are in `docs/specs/records/`, spike results in `docs/specs/spikes/` |
-| `docs/workflow*.png`, `docs/social-preview.png` | the diagram and the repo's social preview, drawn by `docs/diagram/workflow.py` |
-| `docs/diagram/` | the script that draws them, and `render.mjs`, which turns its SVGs into PNGs |
-| `records/` | the review history of this README |
-| `tests/test_*.py` | fast tests for the guard, the two checkers (`check-note.py` and `check-spec.py`), `build-index.py`, `review-state.py`, `git-read.py`, `prepare-spike.sh`, `run-spike.sh`, `run-agent.sh`, `agent-def.py`, `mdcheck.py`, `mine-sessions.py` and the three research scripts, that the eval runners exit 1 on a failure and 2 with no cases, pass their caps and sandbox to `claude` and clean up after themselves, and that the guard and both sandbox settings deny the same paths |
-| `tests/fixtures/` | sample research notes (one of them `depth: ideas`) and a spec the tests check |
-| `tests/replay_guard.py` | runs real recorded commands and file reads through the guard |
-| `tests/mine-sessions.py` | reports how the skills and agents went in real use, from Claude Code's session logs |
-| `tests/agent-evals/` | runs the verifiers and the cold reviewer against documents with planted mistakes, and the researcher on sample questions |
-| `tests/skill-evals/` | runs whole skills against throwaway repos |
-| `.github/workflows/tests.yml` | runs the unit tests, ruff and shellcheck on each push to `main` and each pull request |
-| `CHANGELOG.md` | what changed, by day |
-| `CLAUDE.md` | the rules for working in this repo |
-
-## Checks
-
-```
-python3 -m unittest discover -s ~/code/github.com/claude-skills/tests   # seconds, free
-python3 ~/code/github.com/claude-skills/tests/replay_guard.py           # seconds, free
-~/code/github.com/claude-skills/tests/agent-evals/run.sh                # minutes, costs money
-~/code/github.com/claude-skills/tests/skill-evals/run.sh                # minutes, costs money
-```
-
-Run the agent evaluations by hand after changing an agent or skill file, and the skill evaluations
-after changing a skill's steps. Record the results of both in
-[`tests/agent-evals/BASELINE.md`](tests/agent-evals/BASELINE.md).
-
-`tests/mine-sessions.py` isn't a check, but it shows where to look next. It reads the session logs
-Claude Code keeps in `~/.claude/projects` and prints, for each skill and agent, its runs, the
-agents it launched, its failed tool calls grouped by cause, and what you typed while it ran. It
-only reads, and it takes seconds. The logs hold everything your sessions saw, so read its report
-before you share it.
+[Working on this repo](docs/repo-guide.md) has what's where, how to test a change, and what the
+paid tests cost. [`CLAUDE.md`](CLAUDE.md) has the rules for making a change.
 
 ## Licence
 

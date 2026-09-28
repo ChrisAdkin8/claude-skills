@@ -29,6 +29,10 @@ section is a date. Within a day, changes are grouped by area.
 
 ### Changed
 
+- The README is rewritten for a newcomer, a quarter shorter: what it does and who it's for, then
+  a Try it section ending in a first run with what you should see. The containment detail and the
+  Layout, Checks and eval costs move to two new pages, `docs/containment.md` and
+  `docs/repo-guide.md`.
 - `/research`, `/spec` and `/cold-review` start only when typed (`disable-model-invocation: true`),
   since each launches paid agents; `/idea` can still start on its own. All four skill
   descriptions are in the third person, without their mode syntax, which the argument hints

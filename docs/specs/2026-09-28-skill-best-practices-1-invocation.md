@@ -41,8 +41,8 @@ Read at `5ed0e66` on 2026-09-28.
   - "**User subagents** (`~/.claude/agents/`) are personal subagents available in all your projects".
   - An `--agents` definition takes `prompt` plus frontmatter fields including `description`, `tools`, `model`, `mcpServers` and `hooks`.
 - `claude --help` on CLI 2.1.283, run in the authoring session, lists `--agents <json-or-file>`: "JSON object defining custom agents, or with --print the path to a file that holds one" *(unverified)*.
-- **A typed command still runs a disabled skill under `claude -p`:** checked by hand on 2026-09-28, while checking part 2. A throwaway project skill with `disable-model-invocation: true`, started by the prompt `/probe`, ran and followed its instructions. The run used the skill-eval runner's flags, `--allowedTools "Read Write Edit Glob Grep Bash Skill"` included (`tests/skill-evals/run.sh:37`). It is logged in `docs/specs/records/2026-09-28-skill-best-practices-2-structure-record.md` under Spikes. The run didn't show whether the prompt was expanded as a typed command or the model reached the skill through the Skill tool. Either way it ran, with Skill allowed, as it is in both skill-eval cases.
-- **The start event:** in `claude -p --output-format stream-json --verbose`, a session's first `system`/`init` event has `agents`, `skills` and `slash_commands` lists. Run in the authoring session, its `agents` held `cold-reviewer`, `research-verifier`, `researcher` and `spec-verifier`, and its `skills` held `cold-review`, `idea`, `research` and `spec` *(unverified)*.
+- **A typed command still runs a disabled skill under `claude -p`:** checked by hand on 2026-09-28, while checking part 2. A throwaway project skill with `disable-model-invocation: true`, started by the prompt `/probe`, ran and followed its instructions. The run used the skill-eval runner's flags, `--allowedTools "Read Write Edit Glob Grep Bash Skill"` included (`tests/skill-evals/run.sh:37`). It is logged in `docs/specs/records/2026-09-28-skill-best-practices-2-structure-record.md` under Spikes. Spike S3 settled how: a typed `/name` runs a disabled user skill with or without `Skill` allowed, and makes no Skill tool call, so the prompt is expanded as a typed command (`docs/specs/spikes/2026-09-28-skill-best-practices-1-invocation-results.md`).
+- **The start event:** in `claude -p --output-format stream-json --verbose`, a session's first `system`/`init` event has `agents`, `skills` and `slash_commands` lists. Run in the authoring session, its `agents` held `cold-reviewer`, `research-verifier`, `researcher` and `spec-verifier`, and its `skills` held `cold-review`, `idea`, `research` and `spec`. Spike S3 found that the `skills` list also holds a skill with `disable-model-invocation: true`, so it can't show the field is set. The Skill tool does show it: asked for a disabled skill, it refuses with "cannot be used with Skill tool due to disable-model-invocation" (`docs/specs/spikes/2026-09-28-skill-best-practices-1-invocation-results.md`).
 
 **The skills.**
 - None of the four skills sets `disable-model-invocation`.
@@ -115,7 +115,7 @@ flowchart LR
   - `grep -c '^disable-model-invocation: true' skills/{research,spec,cold-review,idea}/SKILL.md` prints 1, 1, 1 and 0.
   - `grep -nE '^description: (Give|Capture|Research|Turn) ' skills/*/SKILL.md` prints nothing.
   - `tests/skill-evals/run.sh` exits 0. Both of its cases start their skill as `/cold-review …` and `/spec done …` in a `claude -p` prompt with the Skill tool allowed, as the by-hand check in Background did.
-  - In `claude -p --output-format stream-json --verbose 'ok'`, the `system`/`init` event's `skills` list holds `idea` but not `research`, `spec` or `cold-review`, and its `slash_commands` list still holds all four. This depends on spike question 3.
+  - For each of `research`, `spec` and `cold-review`, `claude -p --output-format stream-json --verbose --allowedTools Skill --strict-mcp-config 'Call the Skill tool with skill "<name>". Then reply with the tool'"'"'s result, quoted exactly.'` gets a Skill tool result containing `cannot be used with Skill tool due to disable-model-invocation`. For `idea`, the same call launches the skill. This is the check spike S3 found, in place of the `init` event's `skills` list, which keeps disabled skills.
 
 ### W2: `/spec` and `/cold-review` pre-approve edits only to what they write
 
@@ -125,7 +125,7 @@ flowchart LR
 - **Files:** `skills/cold-review/SKILL.md`, `skills/spec/SKILL.md`.
 - **Done when:**
   - `grep -c 'Edit(~/code/\*\*)' skills/{spec,cold-review}/SKILL.md` prints 0 for both.
-  - Spike question 2's experiment shows each new pattern allows the file it names, and not a `.py` file beside it. The patterns are *(assumption)* until then.
+  - Spike S2 showed each pattern allows the file it names and refuses a `.py` file beside it (`docs/specs/spikes/2026-09-28-skill-best-practices-1-invocation-results.md`). After the change, `/cold-review` and `/spec` still write their records and specs without a permission prompt.
 
 ### W3: the agents live outside `~/.claude/agents`, and the runners pass them by `--agents`
 
@@ -164,12 +164,15 @@ These come from reading the code, not from building it; the order is firmer than
 ## Spike questions
 
 1. Does an agent passed as `claude -p --agents <file> --agent <name>` keep its `tools` allowlist, its PreToolUse `hooks` and its listed MCP tools, as the file-based agent does? Experiment: pass a two-agent JSON, one with `tools: ["Read"]` and a PreToolUse hook on Read that exits 2, and ask each to read a file. Also ask it to run `ls`, to check a tool not on its list is refused. A few cents.
+   Answered: yes. The agent's `init` tools held only Read and its MCP tool, with Glob and Bash missing though the session allowed them, and its PreToolUse hook blocked Read (spike S1, `docs/specs/spikes/2026-09-28-skill-best-practices-1-invocation-results.md`).
 2. Do `Edit(~/code/**/records/*-record.md)` and `Edit(~/code/**/*.md)` in a skill's `allowed-tools` allow a write to a matching file, and refuse `~/code/x/records/a.py`? Experiment: a throwaway skill with each pattern, run by `claude -p` in a scratch repo under `~/code`, asked to write both files. Record which writes happen. A few cents.
+   Answered: yes. Each pattern allowed its file and refused the `.py` beside it (spike S2, `docs/specs/spikes/2026-09-28-skill-best-practices-1-invocation-results.md`).
 3. Does `disable-model-invocation: true` take a skill out of the `system`/`init` event's `skills` list, while leaving it in `slash_commands`? Experiment: a throwaway skill in a scratch `~/.claude` layout with the field set, and one without, then read the init event of `claude -p --output-format stream-json --verbose 'ok'`. In the same runs, start the disabled skill with a typed `/name` prompt, once with `Skill` in `--allowedTools` and once without, and record whether it runs. That shows whether a typed command depends on the Skill tool. A few cents.
    How to read the second part:
    - **It runs both ways:** the typed command runs the skill itself, and W1 stands.
    - **It runs only with `Skill` allowed:** the model reached the skill through the Skill tool. Then `disable-model-invocation: true` doesn't stop the model starting a skill, and W1 can't meet the Goal as written, even though its skill-eval Done when would pass. Stop before W1, and revisit its approach with the user. One candidate: take `Skill` out of the skill-eval runner's `--allowedTools` and check the typed commands still run.
    - **It runs neither way:** a typed command can't start a disabled skill under `claude -p`. The skill evals can't run the three skills after W1, and W1 has to change before it lands.
+   Answered: it runs both ways, so W1 stands. But the `init` event's `skills` list keeps a disabled skill; W1's Done when now asks the Skill tool instead, which refuses a disabled skill (spike S3, `docs/specs/spikes/2026-09-28-skill-best-practices-1-invocation-results.md`).
 
 ## Risks and rollback
 

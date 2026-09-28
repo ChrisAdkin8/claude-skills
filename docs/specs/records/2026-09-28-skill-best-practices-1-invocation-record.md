@@ -71,3 +71,16 @@ These folds came after the one delta review, so they stay unreviewed.
 
 - Not reviewed: spike 3 says how to read its typed-command runs: both ways, W1 stands; only with `Skill` allowed, the field doesn't stop the model, so stop before W1 and revisit it with the user; neither way, W1 has to change before it lands, from the delta review row 1, on 2026-09-28.
 - Not reviewed: W3's reference updates join step 4, in the same commit as the `git mv`, so no file names a moved path, from the delta review row 3, on 2026-09-28.
+
+- Not reviewed: W1's `init`-event Done when is replaced with a Skill tool call that must be refused for `research`, `spec` and `cold-review` with "cannot be used with Skill tool due to disable-model-invocation", and must launch `idea`. The Background says a typed command runs a disabled skill without the Skill tool, from spike S3, on 2026-09-28.
+- Not reviewed: W2's Done when drops the *(assumption)* on its two patterns, which the spike showed allow their files and refuse a `.py`, and checks the two skills still write without a prompt, from spike S2, on 2026-09-28.
+
+## Spikes
+
+All three are routed *spike*, and all three are run by hand in the authoring session: each needs a live `claude -p`, which the `/spec spike` sandbox can't reach (no network). Each runs in a scratch directory, capped at $0.30 a `claude -p` call, and removes what it creates.
+
+- Question 1: Route: spike. Changes: W3's Design and its "spike question 1 shows the `tools` allowlist does" Done when. Expect: an agent passed by `--agents <file> --agent <name>`, with `tools: ["Read"]` and a PreToolUse hook on Read that exits 2, has its Read blocked by the hook, and has no Glob or Bash tool. Its `init` event's `tools` list holds only Read. The cold review's row 4 says an `ls` refusal proves nothing, so this also tests Glob and reads the `tools` list. Box: $0.30 a call, hosts: the API only, run by hand.
+- Question 2: Route: spike. Changes: W2's two patterns, marked *(assumption)*. Expect: under `claude -p` with no Write or Edit in `--allowedTools`, a typed skill granting `Edit(~/code/**/records/*-record.md)` may write `records/x-record.md` but not `records/a.py`. One granting `Edit(~/code/**/*.md)` may write any `.md` but not a `.py`. Box: $0.30 a call, a scratch repo under `~/code`, removed afterwards.
+- Question 3: Route: spike. Changes: W1's `skills`-list Done when, and whether W1 stands (the reading rule under the question). Expect: a user skill with `disable-model-invocation: true` is missing from the `init` event's `skills` list but present in `slash_commands`, and a typed `/name` runs it with `Skill` in `--allowedTools` and without. Box: $0.30 a call, a throwaway user skill in `~/.claude/skills`, removed afterwards.
+
+All three ran on 2026-09-28: S1 EXPECTED, S2 EXPECTED, S3 DIFFERENT in part (typed commands as expected; the `init` `skills` list keeps disabled skills). Results: `docs/specs/spikes/2026-09-28-skill-best-practices-1-invocation-results.md`. About $0.80. The verifier's round 2 already ran, so no round 3.

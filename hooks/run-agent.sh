@@ -20,6 +20,9 @@
 # the costliest recorded researcher run, the research-ideas eval, was $2.59 on 2026-09-27) and 200 turns. --max-budget-usd stops a
 # run only after the turn that crosses it, so a run can go over by up to one turn.
 #
+# Each run is on the user's default model, or on $RUN_AGENT_MODEL if it's set, passed as --model.
+# The skill evals set it to the model under test (tests/skill-evals/run.sh).
+#
 # Each run's agent and session ID are appended to ~/.cache/agent-runs/sessions.log (or
 # $RUN_AGENT_LOG), which tests/replay_guard.py reads.
 #
@@ -74,6 +77,7 @@ max_usd=${RUN_AGENT_MAX_USD:-5}
 # Only the researcher uses MCP tools (AWS and Terraform docs, listed one by one in its file).
 mcp=(--strict-mcp-config)
 [ "$agent" = researcher ] && mcp=()
+model=(${RUN_AGENT_MODEL:+--model "$RUN_AGENT_MODEL"})
 
 if [ "$mode" = --resume ]; then
   [ -s "$run/session_id" ] || die "no session_id in $run to resume"
@@ -98,7 +102,7 @@ status=0
 claude -p --agents "$run/agents.json" --agent "$agent" --output-format json --max-turns 200 --max-budget-usd "$max_usd" \
   --allowedTools "$tools" --add-dir "$HOME/.claude" "$HOME/notes" "$work" \
   --append-system-prompt-file "$run/sandbox.md" \
-  --setting-sources user --settings "$here/agent-sandbox.json" ${mcp[@]+"${mcp[@]}"} ${resume[@]+"${resume[@]}"} \
+  --setting-sources user --settings "$here/agent-sandbox.json" ${mcp[@]+"${mcp[@]}"} ${model[@]+"${model[@]}"} ${resume[@]+"${resume[@]}"} \
   "$prompt" < /dev/null > "$run/run.json" 2> "$run/run.err" || status=$?
 
 python3 - "$run" "$agent" "${RUN_AGENT_LOG:-$root/sessions.log}" <<'PY'

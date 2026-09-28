@@ -1,6 +1,6 @@
 """Tests for tests/agent-evals/run.sh and tests/skill-evals/run.sh: they exit 1 when a case fails,
 0 only when every case passes, and 2 on a case that doesn't exist or when there are none. They
-pass their caps and sandbox settings to claude, clean up their fixtures, and the skill runner
+pass their caps, model and sandbox settings to claude, clean up their fixtures, and the skill runner
 counts only this run's results.
 
 A stub `claude` first on PATH prints a canned JSON result, so nothing is sent to a model. The
@@ -20,9 +20,23 @@ TESTS = Path(__file__).resolve().parent
 AGENT_RUN = TESTS / "agent-evals" / "run.sh"
 SKILL_RUN = TESTS / "skill-evals" / "run.sh"
 STUB = """#!/usr/bin/env python3
-import json, os, sys
+import json, os, re, sys
+from pathlib import Path
 with open(os.environ["STUB_ARGV"], "a") as f:
     f.write(json.dumps(sys.argv[1:]) + "\\n")
+with open(os.environ["STUB_ARGV"] + ".model", "a") as f:
+    f.write(os.environ.get("RUN_AGENT_MODEL", "<unset>") + "\\n")
+# A skill that writes the eval note, leaves an agent run dir named after it, and changes another
+# file in ~/notes, as a skill eval's research case might.
+m = re.search(r"\\S*/eval-[^/\\s]*\\.md", sys.argv[-1])
+if m and os.environ.get("STUB_SIDE_EFFECTS"):
+    note = Path(m.group(0))
+    note.parent.mkdir(parents=True, exist_ok=True)
+    note.write_text("a note")
+    run = Path.home() / ".cache/agent-runs" / note.stem / "researcher"
+    run.mkdir(parents=True)
+    (run / "reply.md").write_text("a reply")
+    (Path.home() / "notes/other.md").write_text("an edit")
 print(json.dumps({"subtype": "success", "is_error": False, "num_turns": 1,
                   "total_cost_usd": 0.01, "result": "the reply says yes"}))
 """
@@ -46,6 +60,8 @@ class Runners(unittest.TestCase):
             "EVAL_OUT": str(self.tmp / "out"),
             "STUB_ARGV": str(self.tmp / "argv.jsonl"),
         }
+        for var in ("EVAL_MODEL", "RUN_AGENT_MODEL"):
+            self.env.pop(var, None)
 
     def run_script(self, script, *cases):
         run = subprocess.run(
@@ -196,6 +212,109 @@ class Runners(unittest.TestCase):
             self.flag(first, "--settings").endswith("hooks/agent-sandbox.json")
         )
         self.assertIn("--strict-mcp-config", first)
+
+    def test_skill_evals_pass_the_model_to_the_skill_and_its_agents(self):
+        self.skill_case("good", passes=True)
+        self.env["RUN_AGENT_MODEL"] = "stale"
+        self.run_script(SKILL_RUN)
+        self.env["EVAL_MODEL"] = "sonnet"
+        self.run_script(SKILL_RUN)
+        default, chosen = self.argv()
+        self.assertNotIn("--model", default)
+        self.assertEqual(self.flag(chosen, "--model"), "sonnet")
+        # RUN_AGENT_MODEL as the skill's session, and so run-agent.sh, sees it: a stale one in
+        # the environment is cleared when no model is chosen.
+        models = (self.tmp / "argv.jsonl.model").read_text().splitlines()
+        self.assertEqual(models, ["", "sonnet"])
+
+    def test_agent_evals_skip_a_case_for_another_model(self):
+        self.agent_case("any", "says yes\n")
+        self.agent_case("opus-only", "says yes\n")
+        (self.cases / "opus-only" / "models.txt").write_text("opus\n")
+        self.env["EVAL_MODEL"] = "sonnet"
+        code, out = self.run_script(AGENT_RUN)
+        self.assertEqual(code, 0, out)
+        self.assertIn("SKIP opus-only: runs only on opus, not sonnet", out)
+        self.assertIn("1 of 1 passed", out)
+        self.assertEqual(len(self.argv()), 1)
+        self.env["EVAL_MODEL"] = "opus"
+        code, out = self.run_script(AGENT_RUN)
+        self.assertIn("2 of 2 passed", out)
+        self.env["EVAL_MODEL"] = "sonnet"
+        code, out = self.run_script(AGENT_RUN, "opus-only")
+        self.assertEqual(code, 0, out)
+        self.assertIn("every case was skipped", out)
+
+    def test_agent_evals_pass_the_model(self):
+        self.agent_case("plain", "says yes\n")
+        self.env["EVAL_MODEL"] = "opus"
+        self.run_script(AGENT_RUN)
+        (argv,) = self.argv()
+        self.assertEqual(self.flag(argv, "--model"), "opus")
+
+    def home(self):
+        """A HOME of its own, with ~/notes a git repo, so no real ~/code or ~/notes is touched."""
+        home = self.tmp.resolve() / "home"
+        (home / "notes/research").mkdir(parents=True)
+        subprocess.run(["git", "init", "-q", str(home / "notes")], check=True)
+        self.env["HOME"] = str(home)
+        return home
+
+    def test_skill_evals_code_location(self):
+        home = self.home()
+        self.skill_case("good", passes=True)
+        (self.cases / "good" / "location.txt").write_text("code\n")
+        (self.cases / "good" / "setup.sh").write_text(
+            f'#!/bin/sh\necho "$1" >> {self.tmp}/works\n'
+        )
+        code, out = self.run_script(SKILL_RUN)
+        self.assertEqual(code, 0, out)
+        (work,) = (self.tmp / "works").read_text().split()
+        self.assertEqual(Path(work).parent, home / "code")
+        self.assertRegex(Path(work).name, r"^eval-good-\d{8}-\d{6}$")
+        self.assertFalse(Path(work).exists())
+
+    def test_skill_evals_settings_file(self):
+        self.skill_case("plain", passes=True)
+        self.skill_case("agents", passes=True)
+        (self.cases / "agents" / "settings.txt").write_text("agent-case-settings.json\n")
+        self.run_script(SKILL_RUN)
+        settings = sorted(self.flag(a, "--settings") for a in self.argv())
+        self.assertTrue(settings[0].endswith("hooks/agent-sandbox.json"), settings)
+        self.assertTrue(
+            settings[1].endswith("tests/skill-evals/agent-case-settings.json"), settings
+        )
+
+    def test_skill_evals_note_snapshot_and_clean_up(self):
+        home = self.home()
+        self.skill_case("good", passes=True)
+        (self.cases / "good" / "prompt.txt").write_text("Write {{NOTE}} ({{STAMP}}).\n")
+        (self.cases / "good" / "grade.py").write_text(
+            "import json, os\nfrom pathlib import Path\n"
+            f"Path({str(self.tmp / 'graded.json')!r}).write_text(json.dumps({{\n"
+            "    k: os.environ.get(k) for k in ('EVAL_NOTE', 'NOTES_BEFORE', 'NOTES_AFTER')}\n"
+            "    | {'note there': Path(os.environ['EVAL_NOTE']).exists()}))\n"
+        )
+        self.env["STUB_SIDE_EFFECTS"] = "1"
+        code, out = self.run_script(SKILL_RUN)
+        self.assertEqual(code, 0, out)
+        (argv,) = self.argv()
+        graded = json.loads((self.tmp / "graded.json").read_text())
+        note = Path(graded["EVAL_NOTE"])
+        self.assertEqual(note.parent, home / "notes/research")
+        self.assertRegex(note.name, r"^eval-good-(\d{8}-\d{6})\.md$")
+        stamp = note.stem.removeprefix("eval-good-")
+        self.assertEqual(argv[-1], f"Write {note} ({stamp}).")
+        self.assertTrue(graded["note there"])
+        # The eval note isn't a change; the other edit is.
+        self.assertEqual(graded["NOTES_BEFORE"], "")
+        self.assertEqual(graded["NOTES_AFTER"], "?? other.md")
+        self.assertFalse(note.exists())
+        self.assertEqual((self.tmp / "out/good.note.md").read_text(), "a note")
+        self.assertEqual(list((home / ".cache/agent-runs").iterdir()), [])
+        self.assertTrue(
+            (self.tmp / "out/good.agent-runs" / note.stem / "researcher/reply.md").exists()
+        )
 
     def test_no_cases_is_an_error_not_a_crash(self):
         for script in (AGENT_RUN, SKILL_RUN):

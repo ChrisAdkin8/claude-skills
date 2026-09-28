@@ -145,7 +145,11 @@ launches it, and passes on what it finds.
   before saving the review to the document's record, except for a spec's review, full or delta,
   which it saves without asking, as `/spec` does, since the spec's checks read it.
 - **Each document gets one full review.** After that, running `/cold-review` again gives one delta
-  review of the changes logged since, and no more.
+  review of the changes logged since, and no more. A reviewer asked to find gaps finds some
+  whether or not any exist, so chasing round after round makes the writing defensive.
+- **The reviewer gets pointers, not opinions.** The skill tells it where to look (the repo, the
+  entry points, the rules files), never what the author thinks is weak or why it was written that
+  way. A reviewer handed the author's framing checks the framing instead of the document.
 - **`/cold-review prompt <file>`** writes the reviewer's instructions for you to run in a new
   session yourself, instead of launching an agent.
 
@@ -301,6 +305,7 @@ Spikes are contained differently. They don't run under the guard; their own sand
 
 - **Each agent run** is capped at $5, or $10 for the researcher. The `RUN_AGENT_MAX_USD`
   environment variable overrides both.
+  Each runs on your default model, or on the model `RUN_AGENT_MODEL` names (`sonnet`, `opus`).
 - **Each spike** is capped at $2 and 60 turns. Assume a spike that fetches anything from the web
   costs close to the cap.
 - **The agent evaluations** (see [Checks](#checks)) spend real money too. Six full runs of
@@ -308,7 +313,10 @@ Spikes are contained differently. They don't run under the guard; their own sand
   are now cost $4.52 on 2026-09-28. Each case is capped at $5 (the
   `research-ideas` case at $10), and the cases run at the same time, so a run that goes wrong can
   cost far more.
-- **The skill evaluations** cost about $0.30 each, capped at $3 each.
+- **The skill evaluations** cost about $0.30 each, capped at $3 each. The two that launch agents,
+  `spec-quick` and `research-quick-flow`, cost about $0.60–1.20 each with them.
+- **Both sets run on Sonnet and on Opus**, so each round costs about twice that: $11 for both
+  sets on both models on 2026-09-28.
 
 A cap stops a run only after the turn that crosses it, so a run can go over by up to one turn. A
 *turn* is one step of a run: Claude replies once, and may use a tool.
@@ -338,6 +346,7 @@ A cap stops a run only after the turn that crosses it, so a run can go over by u
 | `hooks/agents/` | `researcher`, `research-verifier`, `spec-verifier`, `cold-reviewer`; `run-agent.sh` passes each one to `claude` per run |
 | `hooks/agent-def.py` | turns an agent file into the definition `claude --agents` takes |
 | `hooks/run-agent.sh` | launches an agent; exits with code 3 when a reply lacks its expected ending, so an error is never mistaken for a verdict |
+| `hooks/run-agent.md` | how `/research`, `/spec` and `/cold-review` run an agent with `run-agent.sh` and read its reply |
 | `hooks/agent-sandbox.json` | the agents' sandbox settings |
 | `hooks/agent-sandbox.md`, `sandbox-prompt.py` | the rules added to every agent's instructions |
 | `hooks/agent-guard.py` | the guard |

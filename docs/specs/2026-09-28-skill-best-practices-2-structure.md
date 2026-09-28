@@ -1,7 +1,7 @@
 ---
 title: Skill best practices, part 2 - shorter, decoupled skills, tested on each model
 created: 2026-09-28
-status: reviewed # draft | reviewed | in-progress | done | superseded
+status: done # draft | reviewed | in-progress | done | superseded
 research: none
 idea: none
 read-at: 5ed0e66
@@ -194,6 +194,7 @@ Adding a skill session of about $0.30 gives about $0.47 for `spec-quick` and $0.
 ## Spike questions
 
 1. Will a skill run under `claude -p`, told to run its agents without `run_in_background` and with a 10-minute Bash timeout, run `run-agent.sh` in the foreground and carry on to its next step in the same run? And do a spec verifier, and a quick researcher followed by its verifier, each finish within the Bash tool's 10-minute limit? Run by hand, not by `/spec spike`, as step 3 of W6's order, once the runner changes and cases exist. Experiment: `tests/skill-evals/run.sh spec-quick research-quick-flow`, once, on the default model. Record whether `reply.md` was read and the record written, whether any Bash write the skill makes fails under `denyWrite`, and each agent's run time from its `run.json`. About $1–2: two skill sessions, a spec verifier ($0.17 in the last run, `tests/agent-evals/BASELINE.md:613`), and a quick researcher ($0.31, `tests/agent-evals/BASELINE.md:612`) with its verifier.
+   Answered: yes, once `run-agent.sh` runs as a command of its own: joined with `; echo $?`, it ran inside the sandbox and couldn't start, so `hooks/run-agent.md` now says not to. Each agent took under a minute (spike S1, `docs/specs/spikes/2026-09-28-skill-best-practices-2-structure-results.md`).
 
 ## Risks and rollback
 

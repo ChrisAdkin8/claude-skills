@@ -7,13 +7,28 @@
 # Runs inside hooks/agent-sandbox.json, so Bash writes stay in the fixture and network is limited.
 # Costs real tokens; run by hand after changing a skill's steps. Results: results/<timestamp>/.
 #   SKILL_EVAL_MAX_USD  per-case cost ceiling, passed as --max-budget-usd (default 3)
+#   EVAL_MODEL          model to run the skills on, passed as --model (default: your default model);
+#                       exported as RUN_AGENT_MODEL, so the agents a skill launches run on it too
 #   EVAL_CASES, EVAL_OUT  the cases and results directories (default: cases/ and
 #                         results/<timestamp>/ here); tests/test_eval_runners.py points them elsewhere
+#
+# A case may also hold:
+#   location.txt  "code": the fixture is ~/code/eval-<case>-<stamp>, not a temp dir, for /spec,
+#                 which works only in a repo under ~/code. No leading dot: run-agent.sh refuses a
+#                 run dir name that starts with one, and /spec names its run dir after the repo.
+#   settings.txt  the settings file for --settings, in this directory, in place of
+#                 hooks/agent-sandbox.json: agent-case-settings.json for a case that runs agents.
+# prompt.txt may use {{NOTE}}, filled in with ~/notes/research/eval-<case>-<stamp>.md, and {{STAMP}}.
+# grade.py gets that path as EVAL_NOTE, and `git -C ~/notes status --porcelain` from before and
+# after the case, eval notes left out, as NOTES_BEFORE and NOTES_AFTER. Afterwards the note, the
+# ~/code fixture and the agent run dirs named eval-<case>-<stamp>* are copied to the results and
+# removed. Run this and ../agent-evals/run.sh one after the other: each checks ~/notes.
 # Exits 0 only if every case passed, 1 if any failed, 2 on a bad case name or no cases.
 set -uo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd -P)
-out=${EVAL_OUT:-$here/results/$(date +%Y%m%d-%H%M%S)}
+stamp=$(date +%Y%m%d-%H%M%S)
+out=${EVAL_OUT:-$here/results/$stamp}
 mkdir -p "$out"
 cases=("$@")
 cases_dir=${EVAL_CASES:-$here/cases}
@@ -24,23 +39,56 @@ for c in "${cases[@]}"; do
   [ -d "$cases_dir/$c" ] || { echo "no such case: $c" >&2; exit 2; }
 done
 
-# Every fixture lives under one temp dir, so an interrupted run leaves none behind.
+# Every temp fixture lives under one temp dir, and the rest are named by $stamp, so an interrupted
+# run leaves none behind.
 tmp_root=$(mktemp -d)
-trap 'rm -rf "$tmp_root"' EXIT
+trap 'rm -rf "$tmp_root" "$HOME"/code/eval-*-"$stamp" "$HOME"/.cache/agent-runs/eval-*-"$stamp"*; rm -f "$HOME"/notes/research/eval-*-"$stamp".md' EXIT
+
+# An agent a skill launches runs on the model under test, not the default (hooks/run-agent.sh).
+export RUN_AGENT_MODEL=${EVAL_MODEL:-}
+
+# What in ~/notes has changed, leaving out eval notes from either eval set, hidden or not.
+notes_status() {
+  if git -C "$HOME/notes" rev-parse --git-dir > /dev/null 2>&1; then
+    git -C "$HOME/notes" status --porcelain --untracked-files=all | grep -Ev '/\.?eval-'
+  else
+    echo "NOT A GIT REPO"
+  fi
+}
 
 run_case() {
-  local c=$1 dir="$cases_dir/$1" work
-  work=$(mktemp -d "$tmp_root/work.XXXXXX")
-  "$dir/setup.sh" "$work" > "$out/$c.setup" 2>&1 || { echo "FAIL $c (setup)"; echo FAIL > "$out/$c.result"; return; }
-  (cd "$work" && claude -p --output-format json --max-turns 60 --max-budget-usd "${SKILL_EVAL_MAX_USD:-3}" \
-    --settings "$repo/hooks/agent-sandbox.json" --permission-mode acceptEdits \
+  local c=$1 dir="$cases_dir/$1" work note settings prompt before after
+  note="$HOME/notes/research/eval-$c-$stamp.md"
+  if [ "$(cat "$dir/location.txt" 2>/dev/null)" = code ]; then
+    work="$HOME/code/eval-$c-$stamp"
+    mkdir -p "$work"
+  else
+    work=$(mktemp -d "$tmp_root/work.XXXXXX")
+  fi
+  settings="$repo/hooks/agent-sandbox.json"
+  [ -f "$dir/settings.txt" ] && settings="$here/$(cat "$dir/settings.txt")"
+  prompt=$(sed -e "s#{{NOTE}}#$note#g" -e "s#{{STAMP}}#$stamp#g" "$dir/prompt.txt")
+  "$dir/setup.sh" "$work" > "$out/$c.setup" 2>&1 || { echo "FAIL $c (setup)"; echo FAIL > "$out/$c.result"; rm -rf "$work"; return; }
+  before=$(notes_status)
+  (cd "$work" && claude -p --output-format json --max-turns 60 --max-budget-usd "${SKILL_EVAL_MAX_USD:-3}" ${EVAL_MODEL:+--model "$EVAL_MODEL"} \
+    --settings "$settings" --permission-mode acceptEdits \
     --allowedTools "Read Write Edit Glob Grep Bash Skill" --strict-mcp-config --no-session-persistence \
-    "$(cat "$dir/prompt.txt")" < /dev/null) > "$out/$c.json" 2> "$out/$c.err"
-  if python3 "$dir/grade.py" "$work" "$out/$c.json" > "$out/$c.grade" 2>&1; then r=PASS; else r=FAIL; fi
+    "$prompt" < /dev/null) > "$out/$c.json" 2> "$out/$c.err"
+  after=$(notes_status)
+  if EVAL_NOTE="$note" NOTES_BEFORE="$before" NOTES_AFTER="$after" \
+    python3 "$dir/grade.py" "$work" "$out/$c.json" > "$out/$c.grade" 2>&1; then r=PASS; else r=FAIL; fi
   cost=$(python3 -c "import json,sys;d=json.load(open(sys.argv[1]));print(f\"{d.get('num_turns')} turns, \${d.get('total_cost_usd',0):.2f}\")" "$out/$c.json" 2>/dev/null)
   echo "$r $c ($cost)"; sed 's/^/    /' "$out/$c.grade"; echo "$r" > "$out/$c.result"
   (cd "$work" && git status --short && git diff) > "$out/$c.diff" 2>&1
+  [ -f "$note" ] && cp "$note" "$out/$c.note.md"
+  for d in "$HOME"/.cache/agent-runs/eval-"$c"-"$stamp"*; do
+    [ -d "$d" ] || continue
+    mkdir -p "$out/$c.agent-runs" && cp -R "$d" "$out/$c.agent-runs/"
+    rm -rf "$d"
+  done
+  [ -d "$work/docs" ] && cp -R "$work/docs" "$out/$c.docs"
   rm -rf "$work"
+  rm -f "$note"
 }
 for c in "${cases[@]}"; do run_case "$c" & done
 wait

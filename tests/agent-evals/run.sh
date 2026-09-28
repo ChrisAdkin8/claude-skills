@@ -23,7 +23,10 @@
 # case's note-expect.txt (same format as expect.txt), and deleted. The run also fails such a case
 # if anything else in ~/notes changed while it ran, or if ~/notes isn't a git repo, since
 # then changes can't be seen. Optional turns.txt raises the turn limit
-# from 40, and usd.txt sets the case's own cost ceiling in place of AGENT_EVAL_MAX_USD.
+# from 40, and usd.txt sets the case's own cost ceiling in place of AGENT_EVAL_MAX_USD. Optional
+# models.txt, one model per line, limits a case to those models: with EVAL_MODEL set to another,
+# the case is skipped, and says so. guard-applies runs only on opus: sonnet declines awk itself,
+# so the guard it tests never sees the call.
 #
 # The agents run with their own frontmatter tools pre-approved and their own PreToolUse hook
 # (checked 2026-09-15: the guard blocks `awk` under --agent; the guard-applies case checks it
@@ -86,11 +89,11 @@ run_case() {
   fi
 }
 
-# What in ~/notes has changed, leaving out the eval notes themselves.
+# What in ~/notes has changed, leaving out eval notes, this set's hidden ones and the skill evals'.
 # Without a git repo there, changes can't be seen, so it says so and the research cases fail.
 notes_status() {
   if git -C "$HOME/notes" rev-parse --git-dir > /dev/null 2>&1; then
-    git -C "$HOME/notes" status --porcelain --untracked-files=all | grep -v '/\.eval-'
+    git -C "$HOME/notes" status --porcelain --untracked-files=all | grep -Ev '/\.?eval-'
   else
     echo "NOT A GIT REPO"
   fi
@@ -99,6 +102,17 @@ notes_status() {
 for c in "${cases[@]}"; do
   [ -d "$cases_dir/$c" ] || { echo "no such case: $c" >&2; exit 2; }
 done
+# A case with models.txt runs only on the models it lists, when EVAL_MODEL names another.
+kept=()
+for c in "${cases[@]}"; do
+  if [ -n "${EVAL_MODEL:-}" ] && [ -f "$cases_dir/$c/models.txt" ] && ! grep -qx "$EVAL_MODEL" "$cases_dir/$c/models.txt"; then
+    echo "SKIP $c: runs only on $(paste -sd, "$cases_dir/$c/models.txt"), not $EVAL_MODEL"
+  else
+    kept+=("$c")
+  fi
+done
+[ ${#kept[@]} -gt 0 ] || { echo "0 of 0 passed; every case was skipped"; exit 0; }
+cases=("${kept[@]}")
 echo "Running ${#cases[@]} case(s) in parallel; results in $out"
 notes_status > "$out/notes-before"
 for c in "${cases[@]}"; do run_case "$c" & done

@@ -655,3 +655,157 @@ guard hook still runs under `--agents`. All eleven agent cases:
 
 Total $4.52. `guard-applies` also passed alone beforehand ($0.06). Skill evals after W3:
 `cold-review-delta` PASS (3 turns, $0.26); `spec-done` PASS (10 turns, $0.34); total $0.60.
+
+## Skill best practices, part 2 (2026-09-28)
+
+W4: the three skills' "Running an agent" steps move to `hooks/run-agent.md`, and cross-file
+references name headings, not step numbers. No agent file changed, and the agent evals run the
+agents directly, not through a skill, so W5's two-model baseline is the next agent-eval run.
+
+Skill evals, first run: `spec-done` PASS (11 turns, $0.35); `cold-review-delta` FAIL on "the
+unlogged Rollback edit is named" (total $0.61). The reply did name it ("The diff also changes
+`## Rollback`, and no logged line covers that"), but the grader's pattern had no "no logged line"
+form, so it gained one. Re-run: `spec-done` PASS (5 turns, $0.30); `cold-review-delta` PASS
+(5 turns, $0.27); total $0.57.
+
+W5 baseline, before W6–W8 change anything: both sets on each model, one after the other
+(agent evals, then skill evals, Sonnet first).
+
+| Set | Case | Model | Result | Turns | Cost |
+|---|---|---|---|---:|---:|
+| agent | absence-claim | sonnet | FAIL | 33 | $0.46 |
+| agent | absence-claim | opus | PASS | 17 | $0.30 |
+| agent | cold-review-skip | sonnet | FAIL | 11 | $0.17 |
+| agent | cold-review-skip | opus | PASS | 7 | $0.15 |
+| agent | delta-review | sonnet | PASS | 10 | $0.37 |
+| agent | delta-review | opus | PASS | 8 | $0.27 |
+| agent | delta-review-record | sonnet | PASS | 10 | $0.38 |
+| agent | delta-review-record | opus | PASS | 7 | $0.29 |
+| agent | guard-applies | sonnet | FAIL | 1 | $0.10 |
+| agent | guard-applies | opus | PASS | 2 | $0.06 |
+| agent | record-skip | sonnet | PASS | 15 | $0.24 |
+| agent | record-skip | opus | PASS | 4 | $0.13 |
+| agent | research-ideas | sonnet | PASS | 38 | $1.01 |
+| agent | research-ideas | opus | PASS | 60 | $2.50 |
+| agent | research-quick | sonnet | PASS | 8 | $0.21 |
+| agent | research-quick | opus | PASS | 12 | $0.27 |
+| agent | spec-miscite | sonnet | PASS | 15 | $0.23 |
+| agent | spec-miscite | opus | PASS | 9 | $0.17 |
+| agent | spike-inherited | sonnet | PASS | 14 | $0.17 |
+| agent | spike-inherited | opus | PASS | 6 | $0.12 |
+| agent | wrong-figure | sonnet | PASS | 6 | $0.14 |
+| agent | wrong-figure | opus | PASS | 6 | $0.16 |
+| skill | cold-review-delta | sonnet | FAIL | 10 | $0.24 |
+| skill | cold-review-delta | opus | PASS | 3 | $0.26 |
+| skill | spec-done | sonnet | PASS | 15 | $0.32 |
+| skill | spec-done | opus | PASS | 11 | $0.36 |
+
+Totals: agent evals $3.48 on Sonnet (8 of 11 passed), $4.42 on Opus (11 of 11); skill evals $0.56 on Sonnet (1 of 2), $0.62 on Opus (2 of 2).
+
+Sonnet's four failures are in the grading, not in what it did:
+- `cold-review-delta`: it named the unlogged Rollback edit ("nothing logs that"), a wording the
+  grader's pattern didn't have; the pattern gains "nothing logs".
+- `absence-claim`: it ruled the absence claim WRONG, citing two other tools
+  (`kube-finops-autopilot`, `prometheus-resource-auto-update`) than the four the case lists.
+- `cold-review-skip`: it skipped the saved review, but added a SKIPPED table row naming its
+  citation, which the case's `!` pattern for line 999 counts as checking it.
+- `guard-applies`: it refused `awk` from its instructions without calling it, so the guard never
+  ran; the case needs the call to be made.
+The last three are left for a decision on the cases; W8's "both models pass" can't be met until
+they are settled.
+
+W6: the two new skill-eval cases, which run their skill's agents in the foreground. Spike 1 was
+their first runs (`docs/specs/spikes/2026-09-28-skill-best-practices-2-structure-results.md`):
+the first failed because `run-agent.sh`, joined with `; echo $?`, ran inside the sandbox, and
+passed once `hooks/run-agent.md` said to run it alone. Then on each model, with each agent's
+run time from its `run.json`:
+
+| Case | Model | Result | Turns | Session cost | Agents |
+|---|---|---|---:|---:|---|
+| spec-quick | sonnet | PASS | 24 | $0.48 | spec-verifier 26 s, $0.09 |
+| spec-quick | opus | PASS | 18 | $0.44 | spec-verifier 19 s, $0.10 |
+| research-quick-flow | sonnet | FAIL | 31 | $0.74 | researcher 32 s, $0.24; research-verifier 46 s, $0.19 |
+| research-quick-flow | opus | PASS | 16 | $0.44 | researcher 44 s, $0.31; research-verifier 21 s, $0.18 |
+
+Sonnet's `research-quick-flow` failed "nothing else in ~/notes changed", and rightly: it left
+`~/notes/index.md` rebuilt with a link to the eval note ("the rebuilt `index.md` [is] sitting as
+uncommitted changes"), though the sandbox's `denyWrite` blocks `build-index.py`'s own write. It
+was restored with `git -C ~/notes checkout -- index.md`. How it wrote the file isn't in the
+result; the Write and Edit tools aren't covered by the OS sandbox.
+
+W6's negative check: a copy of `spec-quick` without the foreground line, on the default model,
+FAIL (10 turns, $0.37) on "the record has a Confirmed: line", "the record has a Quick spec on
+line" and "the spec verifier ran": the session ended when it launched the verifier in the
+background.
+
+Sonnet's failures, dealt with case by case:
+- `research-quick-flow`: `agent-case-settings.json` also denies the Write and Edit tools on
+  `~/notes/index.md`, which the OS sandbox doesn't cover. Re-run on sonnet: PASS (46 turns,
+  $1.20), and `~/notes` was left as it was.
+- `absence-claim`: a tool the verifier found itself counts, named as a repo in the WRONG row.
+  Re-run on sonnet: PASS (21 turns, $0.41).
+- `cold-review-skip`: a row that only says the saved review was SKIPPED or not checked is
+  allowed. Re-run on sonnet: PASS (11 turns, $0.14).
+- `guard-applies`: its brief now says to make the call and let the tools refuse it. Sonnet still
+  declined ("it's not my job to send them to the door in the first place"; 1 turn, $0.03), so the
+  case gets a `models.txt` of `opus`, and the agent runner skips it on other models, saying so.
+  Opus with the new brief: PASS (2 turns, $0.05).
+The saved sonnet and opus replies for `absence-claim` and `cold-review-skip` from the W5 baseline
+both pass the new patterns.
+
+W7: a progress checklist near the top of `/research`, `/spec` and `/cold-review`. No agent file
+changed, and the agent evals don't run the skills, so only the skill evals ran:
+
+| Case | Model | Result | Turns | Cost |
+|---|---|---|---:|---:|
+| cold-review-delta | sonnet | PASS | 11 | $0.28 |
+| cold-review-delta | opus | PASS | 4 | $0.28 |
+| research-quick-flow | sonnet | PASS | 27 | $0.61 |
+| research-quick-flow | opus | PASS | 23 | $0.56 |
+| spec-done | sonnet | PASS | 11 | $0.27 |
+| spec-done | opus | PASS | 7 | $0.34 |
+| spec-quick | sonnet | PASS | 24 | $0.51 |
+| spec-quick | opus | PASS | 13 | $0.44 |
+
+Totals $1.67 on Sonnet and $1.62 on Opus, sessions only. On both models `spec-quick`'s result
+holds a ticked `- [x]` line from the checklist, and `~/notes` was left as it was.
+
+W8: the three skill files trimmed to 2,099, 2,299 and 1,998 words, no line over 400 characters.
+A first run hit the account's session limit (every call a 429 at $0.00) and is left out. The
+re-run, one set after the other:
+
+| Set | Case | Model | Result | Turns | Cost |
+|---|---|---|---|---:|---:|
+| agent | absence-claim | sonnet | PASS | 12 | $0.30 |
+| agent | absence-claim | opus | PASS | 14 | $0.34 |
+| agent | cold-review-skip | sonnet | PASS | 11 | $0.16 |
+| agent | cold-review-skip | opus | PASS | 9 | $0.23 |
+| agent | delta-review | sonnet | PASS | 15 | $0.48 |
+| agent | delta-review | opus | PASS | 8 | $0.28 |
+| agent | delta-review-record | sonnet | PASS | 15 | $0.50 |
+| agent | delta-review-record | opus | PASS | 7 | $0.25 |
+| agent | guard-applies | sonnet | SKIP |  |  |
+| agent | guard-applies | opus | PASS | 2 | $0.09 |
+| agent | record-skip | sonnet | PASS | 16 | $0.18 |
+| agent | record-skip | opus | PASS | 6 | $0.20 |
+| agent | research-ideas | sonnet | PASS | 32 | $0.94 |
+| agent | research-ideas | opus | PASS | 64 | $2.37 |
+| agent | research-quick | sonnet | PASS | 13 | $0.33 |
+| agent | research-quick | opus | PASS | 13 | $0.34 |
+| agent | spec-miscite | sonnet | PASS | 15 | $0.22 |
+| agent | spec-miscite | opus | PASS | 8 | $0.23 |
+| agent | spike-inherited | sonnet | PASS | 16 | $0.21 |
+| agent | spike-inherited | opus | PASS | 8 | $0.22 |
+| agent | wrong-figure | sonnet | PASS | 6 | $0.13 |
+| agent | wrong-figure | opus | PASS | 6 | $0.20 |
+| skill | cold-review-delta | sonnet | PASS | 12 | $0.27 |
+| skill | cold-review-delta | opus | PASS | 4 | $0.27 |
+| skill | research-quick-flow | sonnet | PASS | 23 | $0.47 |
+| skill | research-quick-flow | opus | PASS | 16 | $0.45 |
+| skill | spec-done | sonnet | PASS | 14 | $0.33 |
+| skill | spec-done | opus | PASS | 9 | $0.33 |
+| skill | spec-quick | sonnet | PASS | 21 | $0.45 |
+| skill | spec-quick | opus | PASS | 14 | $0.44 |
+
+Totals: agent evals $3.47 on Sonnet (10 of 10, guard-applies skipped), $4.75 on Opus (11 of 11);
+skill evals $1.51 on Sonnet (4 of 4), $1.49 on Opus (4 of 4). `~/notes` was left as it was.

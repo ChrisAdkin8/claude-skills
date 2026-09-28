@@ -21,6 +21,11 @@ section is a date. Within a day, changes are grouped by area.
 - `/cold-review` gives the delta reviewer its diff as a `git` command. `review-state.py` prints it
   through `git-read.py`, which the main session may run, but the reviewer's guard refuses that
   script, so the reviewer couldn't read its diff. No eval caught it: both delta cases have no diff.
+- The skill-eval cases that launch agents can't touch the real `~/notes/index.md`: a Sonnet run of
+  `/research` rewrote it by hand after the sandbox refused `build-index.py`. Their settings deny
+  the Write and Edit tools on it, and `/research` says not to write the index by hand.
+- `run-agent.sh` must run as a command of its own, not joined with `; echo $?`: a sandbox that
+  exempts it exempts only the bare command, so a joined one ran inside it and couldn't start.
 
 ### Changed
 
@@ -37,6 +42,21 @@ section is a date. Within a day, changes are grouped by area.
   give their current exit codes; the researcher treats an `API error` row as unverified; the
   diagram's guard box says it checks web calls, search included.
 - `CLAUDE.md` says the README's `Not reviewed:` lines are a log: it has had its one delta review.
+- `/research`, `/spec` and `/cold-review` run their agents from one shared file,
+  `hooks/run-agent.md`, and refer to each other's sections by heading, never by step number.
+- The three skill files are about 30 % shorter (2,099, 2,299 and 1,998 words), keeping every
+  step and rule; two reasons for `/cold-review`'s rules moved to the README.
+- Both eval sets run on Sonnet and on Opus (`EVAL_MODEL`), and an agent a skill eval launches runs
+  on the same model (`RUN_AGENT_MODEL`). Three agent cases now accept Sonnet's sound answers, and
+  `guard-applies` runs on Opus only, through a new `models.txt`.
+
+### Added
+
+- Each of `/research`, `/spec` and `/cold-review` opens with a progress checklist, pasted ticked at
+  each turn that waits on an agent.
+- Two skill evals run a skill end to end with its agents: `spec-quick` and `research-quick-flow`.
+  The runner can place a fixture under `~/code`, fill in `{{NOTE}}`, check `~/notes` is untouched,
+  and clean up after itself.
 
 ## 2026-09-27
 

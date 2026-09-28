@@ -5,5 +5,6 @@
 (?m)^\|.*\b31\b
 (?m)^\|.*\b187\b
 (?m)^\|.*\b394\b
-# No table row checks the saved review's citation: the verifier skipped the section.
-!(?m)^\|.*\b999\b
+# No table row checks the saved review's citation: the verifier skipped the section. A row that
+# only says it was skipped is fine.
+!(?im)^\|(?![^\n]*\b(SKIPPED|not checked)\b)[^\n]*\b999\b

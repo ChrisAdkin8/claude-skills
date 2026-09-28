@@ -47,6 +47,7 @@ class RunAgent(unittest.TestCase):
             "STUB_CALLS": str(self.calls),
             "RUN_AGENT_LOG": str(self.tmp / "sessions.log"),
         }
+        self.env.pop("RUN_AGENT_MODEL", None)
         self.name = f"test-{uuid.uuid4().hex[:8]}"
         self.work = self.tmp / "work"
         self.work.mkdir()
@@ -162,6 +163,18 @@ class RunAgent(unittest.TestCase):
         first, second = (c["argv"] for c in self.calls_made())
         self.assertEqual(first[first.index("--max-budget-usd") + 1], "5")
         self.assertEqual(second[second.index("--max-budget-usd") + 1], "2")
+
+    def test_model(self):
+        run = self.run_dir()
+        run.mkdir(parents=True)
+        (run / "brief.md").write_text("Review this.\n")
+        self.assertEqual(self.run_agent("cold-reviewer", self.work, run)[0], 0)
+        self.env["RUN_AGENT_MODEL"] = "opus"
+        self.assertEqual(self.run_agent("cold-reviewer", self.work, run)[0], 0)
+        first, second = (c["argv"] for c in self.calls_made())
+        self.assertNotIn("--model", first)
+        self.assertEqual(second[second.index("--model") + 1], "opus")
+        self.assertEqual(second[-1], "Review this.")
 
     def test_reply_without_its_shape_exits_3(self):
         # A timed-out API call comes back as a "successful" run whose reply is the error text.

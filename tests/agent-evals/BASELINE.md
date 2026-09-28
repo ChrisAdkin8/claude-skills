@@ -653,4 +653,5 @@ guard hook still runs under `--agents`. All eleven agent cases:
 | spike-inherited | PASS | 6 | $0.15 |
 | wrong-figure | PASS | 6 | $0.21 |
 
-Total $4.52. `guard-applies` also passed alone beforehand ($0.06).
+Total $4.52. `guard-applies` also passed alone beforehand ($0.06). Skill evals after W3:
+`cold-review-delta` PASS (3 turns, $0.26); `spec-done` PASS (10 turns, $0.34); total $0.60.

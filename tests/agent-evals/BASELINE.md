@@ -713,3 +713,27 @@ Sonnet's four failures are in the grading, not in what it did:
   ran; the case needs the call to be made.
 The last three are left for a decision on the cases; W8's "both models pass" can't be met until
 they are settled.
+
+W6: the two new skill-eval cases, which run their skill's agents in the foreground. Spike 1 was
+their first runs (`docs/specs/spikes/2026-09-28-skill-best-practices-2-structure-results.md`):
+the first failed because `run-agent.sh`, joined with `; echo $?`, ran inside the sandbox, and
+passed once `hooks/run-agent.md` said to run it alone. Then on each model, with each agent's
+run time from its `run.json`:
+
+| Case | Model | Result | Turns | Session cost | Agents |
+|---|---|---|---:|---:|---|
+| spec-quick | sonnet | PASS | 24 | $0.48 | spec-verifier 26 s, $0.09 |
+| spec-quick | opus | PASS | 18 | $0.44 | spec-verifier 19 s, $0.10 |
+| research-quick-flow | sonnet | FAIL | 31 | $0.74 | researcher 32 s, $0.24; research-verifier 46 s, $0.19 |
+| research-quick-flow | opus | PASS | 16 | $0.44 | researcher 44 s, $0.31; research-verifier 21 s, $0.18 |
+
+Sonnet's `research-quick-flow` failed "nothing else in ~/notes changed", and rightly: it left
+`~/notes/index.md` rebuilt with a link to the eval note ("the rebuilt `index.md` [is] sitting as
+uncommitted changes"), though the sandbox's `denyWrite` blocks `build-index.py`'s own write. It
+was restored with `git -C ~/notes checkout -- index.md`. How it wrote the file isn't in the
+result; the Write and Edit tools aren't covered by the OS sandbox.
+
+W6's negative check: a copy of `spec-quick` without the foreground line, on the default model,
+FAIL (10 turns, $0.37) on "the record has a Confirmed: line", "the record has a Quick spec on
+line" and "the spec verifier ran": the session ended when it launched the verifier in the
+background.

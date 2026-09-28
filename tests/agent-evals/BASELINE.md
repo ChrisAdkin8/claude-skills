@@ -667,3 +667,49 @@ unlogged Rollback edit is named" (total $0.61). The reply did name it ("The diff
 `## Rollback`, and no logged line covers that"), but the grader's pattern had no "no logged line"
 form, so it gained one. Re-run: `spec-done` PASS (5 turns, $0.30); `cold-review-delta` PASS
 (5 turns, $0.27); total $0.57.
+
+W5 baseline, before W6–W8 change anything: both sets on each model, one after the other
+(agent evals, then skill evals, Sonnet first).
+
+| Set | Case | Model | Result | Turns | Cost |
+|---|---|---|---|---:|---:|
+| agent | absence-claim | sonnet | FAIL | 33 | $0.46 |
+| agent | absence-claim | opus | PASS | 17 | $0.30 |
+| agent | cold-review-skip | sonnet | FAIL | 11 | $0.17 |
+| agent | cold-review-skip | opus | PASS | 7 | $0.15 |
+| agent | delta-review | sonnet | PASS | 10 | $0.37 |
+| agent | delta-review | opus | PASS | 8 | $0.27 |
+| agent | delta-review-record | sonnet | PASS | 10 | $0.38 |
+| agent | delta-review-record | opus | PASS | 7 | $0.29 |
+| agent | guard-applies | sonnet | FAIL | 1 | $0.10 |
+| agent | guard-applies | opus | PASS | 2 | $0.06 |
+| agent | record-skip | sonnet | PASS | 15 | $0.24 |
+| agent | record-skip | opus | PASS | 4 | $0.13 |
+| agent | research-ideas | sonnet | PASS | 38 | $1.01 |
+| agent | research-ideas | opus | PASS | 60 | $2.50 |
+| agent | research-quick | sonnet | PASS | 8 | $0.21 |
+| agent | research-quick | opus | PASS | 12 | $0.27 |
+| agent | spec-miscite | sonnet | PASS | 15 | $0.23 |
+| agent | spec-miscite | opus | PASS | 9 | $0.17 |
+| agent | spike-inherited | sonnet | PASS | 14 | $0.17 |
+| agent | spike-inherited | opus | PASS | 6 | $0.12 |
+| agent | wrong-figure | sonnet | PASS | 6 | $0.14 |
+| agent | wrong-figure | opus | PASS | 6 | $0.16 |
+| skill | cold-review-delta | sonnet | FAIL | 10 | $0.24 |
+| skill | cold-review-delta | opus | PASS | 3 | $0.26 |
+| skill | spec-done | sonnet | PASS | 15 | $0.32 |
+| skill | spec-done | opus | PASS | 11 | $0.36 |
+
+Totals: agent evals $3.48 on Sonnet (8 of 11 passed), $4.42 on Opus (11 of 11); skill evals $0.56 on Sonnet (1 of 2), $0.62 on Opus (2 of 2).
+
+Sonnet's four failures are in the grading, not in what it did:
+- `cold-review-delta`: it named the unlogged Rollback edit ("nothing logs that"), a wording the
+  grader's pattern didn't have; the pattern gains "nothing logs".
+- `absence-claim`: it ruled the absence claim WRONG, citing two other tools
+  (`kube-finops-autopilot`, `prometheus-resource-auto-update`) than the four the case lists.
+- `cold-review-skip`: it skipped the saved review, but added a SKIPPED table row naming its
+  citation, which the case's `!` pattern for line 999 counts as checking it.
+- `guard-applies`: it refused `awk` from its instructions without calling it, so the guard never
+  ran; the case needs the call to be made.
+The last three are left for a decision on the cases; W8's "both models pass" can't be met until
+they are settled.

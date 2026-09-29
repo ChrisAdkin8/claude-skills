@@ -960,3 +960,9 @@ One run per cell, so this shows the wording reaching the agents, not by how much
 `gh` or `repo-health.sh`, so a pass shows no regression and does not exercise the new rule; the
 measurements above and `test_agent_guard.py` do that. Spend on these runs: $6.83 first, $0.81 for
 the `main` runs, $6.26 final.
+
+Three commits followed the runs, and the evals did not cover them: the record above, and two guard
+fixes from a review of the rule (`bash -c` followed four deep, as the rest of the guard is, and a
+sed address pattern that could take minutes on a run of backslashes). The unit suite (322 tests),
+the replay of recorded agent commands (8 changed verdicts, as before) and the agreement check over
+the 18 informative `gh` and script commands ran on them; the evals did not.

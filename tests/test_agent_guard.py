@@ -592,6 +592,9 @@ class Secrets(unittest.TestCase):
             "head -5 $HOME/.ssh/id_ed25519",
             "jq . ${HOME}/.config/gh/hosts.yml",
             "sed -n 1p ~/.claude.json",
+            "cat ~/.claude/backups/.claude.json.backup.1790690763117",  # a copy of .claude.json
+            "jq . ~/.claude/remote-settings.json",  # managed settings, telemetry headers included
+            "head -5 $HOME/.claude/remote-settings-consent.json",
             "grep -h token ~/.netrc",
             "cat ~/.kube/config | head",
         ):
@@ -644,6 +647,9 @@ class Secrets(unittest.TestCase):
         home = str(Path.home())
         self.assertEqual(self.tool("Read", file_path=f"{home}/.aws/config"), 2)
         self.assertEqual(self.tool("Read", file_path="~/.ssh/id_rsa"), 2)
+        self.assertEqual(self.tool("Read", file_path=f"{home}/.claude/backups/.claude.json.backup.1"), 2)
+        self.assertEqual(self.tool("Read", file_path="~/.claude/remote-settings.json"), 2)
+        self.assertEqual(self.tool("Grep", pattern="x", path=f"{home}/.claude/backups"), 2)
         self.assertEqual(self.tool("Read", file_path=f"{self.cwd}/.env"), 2)
         self.assertEqual(self.tool("Grep", pattern="token", path=home), 2)
         self.assertEqual(self.tool("Glob", pattern="*", path=f"{home}/.ssh"), 2)

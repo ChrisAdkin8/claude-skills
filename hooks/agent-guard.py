@@ -247,11 +247,14 @@ PUNCT = set("();<>|&")
 # and the Read denies of ~/.claude/hooks/agent-sandbox.json and
 # ~/.claude/skills/spec/spike-settings.json; tests/test_sandbox_settings.py checks it. The spike
 # settings deny only parts of ~/.config, because git and uv read their own config there.
+# ~/.claude/backups holds copies of ~/.claude.json; remote-settings.json holds managed settings,
+# telemetry auth headers among them, and its consent file an account id.
 SECRET_HOME = tuple(
     HOME / p
     for p in (
         ".ssh", ".aws", ".kube", ".gnupg", ".docker", ".azure", ".config", ".netrc",
         ".git-credentials", ".npmrc", ".pypirc", ".claude.json", ".claude/.credentials.json",
+        ".claude/backups", ".claude/remote-settings.json", ".claude/remote-settings-consent.json",
         ".zsh_history", ".bash_history", "Library/Keychains", "Library/Cookies",
         "Library/Application Support/Google/Chrome",
     )

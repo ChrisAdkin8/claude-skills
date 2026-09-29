@@ -386,6 +386,20 @@ class Hardening(GuardTestCase):
         # Also ran inside the sandbox; an earlier check names its own, more specific reason.
         self.assertBlocked("gh api repos/$(echo o/r) --jq .name", "expands something")
 
+    def test_the_refusal_says_how_to_write_several_gh_queries(self):
+        # A Sonnet agent given only the refusal fell back to loops and pipes and never got its
+        # answer (tests/agent-evals/BASELINE.md, "Sandbox exemption check"): the message has to
+        # name the forms that stay outside the sandbox, not only the ones that don't.
+        for command in (
+            "gh api repos/o/r --jq .name | head -1",
+            "for r in a b; do gh api repos/o/$r --jq .name; done",
+            "cd ~/notes && gh api repos/o/r --jq .name",
+        ):
+            with self.subTest(command=command):
+                self.assertBlocked(command, "one after another, joined by `;`")
+                self.assertBlocked(command, "`--jq`, not `head` or `grep`")
+                self.assertBlocked(command, "any other command in a call of its own")
+
 
 def search_verdict(query):
     run = subprocess.run(

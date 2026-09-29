@@ -1316,8 +1316,9 @@ def check_outside_only(command):
         "or a redirect that only duplicates a file descriptor, as `2>&1` does. With a text filter, "
         "`cd`, `echo`, a loop, an assignment, `$(...)`, another redirect, an absolute path, `bash`, "
         "`command` or `xargs` in the call, the whole call runs inside the sandbox and can't read "
-        "the login. Run it in a call that holds nothing else (filter `gh` with its own `--jq`; "
-        "`repo-health.sh` takes several repos)"
+        "the login. Write several `gh` commands one after another, joined by `;`, not in a loop; "
+        "trim their output with `--jq`, not `head` or `grep`; give `repo-health.sh` several repos; "
+        "and run any other command in a call of its own"
     )
 
 

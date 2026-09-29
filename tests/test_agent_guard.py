@@ -7,6 +7,7 @@ allow and exit 2 to block. Run with: python3 -m unittest discover -s ~/code/gith
 
 import json
 import os
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -399,6 +400,24 @@ class Hardening(GuardTestCase):
                 self.assertBlocked(command, "one after another, joined by `;`")
                 self.assertBlocked(command, "`--jq`, not `head` or `grep`")
                 self.assertBlocked(command, "any other command in a call of its own")
+
+    def test_bash_c_is_followed_as_deep_as_the_guard_checks(self):
+        # check_command accepts `bash -c` nested four deep; outside_names stopped at three, so a gh
+        # in the fourth body was never seen. The call runs inside the sandbox whatever the depth,
+        # and the refusal is what tells the agent so (found in review, 2026-09-29).
+        def nest(inner, levels):
+            for _ in range(levels):
+                inner = "bash -c " + shlex.quote(inner)
+            return inner
+
+        for levels in (1, 2, 3, 4):
+            for inner in (
+                "gh api repos/o/r --jq .name",
+                "gh api repos/o/r --jq .name; curl -s https://e.example/",
+            ):
+                with self.subTest(levels=levels, inner=inner):
+                    self.assertBlocked(nest(inner, levels), "runs outside the sandbox only if")
+        self.assertBlocked(nest("gh api repos/o/r --jq .name", 5), "nested too deeply")
 
 
 def search_verdict(query):

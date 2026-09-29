@@ -43,8 +43,8 @@ Request URLs are limited in size, since a GET request's URL is where data would 
 apply to what curl or gh actually sends, so a curl or gh argument may not expand anything whose
 size the guard can't see: no $(...), backticks, or variable whose value came from a command's
 output or from input (see `tainted_names`); a variable set to fixed words, such as a `for` loop
-over a literal list, is fine for curl (gh must be a call of its own, see OUTSIDE_SPELLINGS). Nor may curl read a header or URL from a file (`-H @file`). Then: a
-host
+over a literal list, is fine for curl (a call with gh in it may hold no loop or assignment: see
+OUTSIDE_SPELLINGS). Nor may curl read a header or URL from a file (`-H @file`). Then: a host
 name of at most MAX_HOST characters, at most MAX_AFTER_HOST after it, no user name or password
 in the URL, and no curl or gh argument over MAX_ARG characters. Real requests stay well inside
 these (the longest in the agents' transcripts to 2026-09-24 had a 43-character host and 206
@@ -73,6 +73,10 @@ from urllib.parse import urlsplit
 from typing import NoReturn
 
 HOME = Path.home()
+# How deep $(...) and `bash -c '...'` may nest. Every recursion stops here and check_command
+# refuses deeper, so outside_names has to reach as far as check_command does, or a gh in the
+# deepest body is never seen.
+MAX_DEPTH = 4
 # Resolved, like the command paths they're compared with, because ~/.claude/skills is a symlink
 # into the claude-skills repo: an unresolved entry would never match.
 SCRIPTS = {
@@ -379,7 +383,7 @@ def assigned_names(command, depth=0):
     """Variables a command sets itself: by assignment, `for`, `select`, `read` or `printf -v`,
     here or in any $(...) inside it. Generous on purpose: it only decides which variables the
     command may expand, and setting a dangerous one is refused elsewhere."""
-    if depth > 4:
+    if depth > MAX_DEPTH:
         return set()
     names = set()
     for sub in substitutions(command)[0]:
@@ -472,7 +476,7 @@ def pure(sub, tainted, depth=0):
     """True if a $(...) can only transform fixed text: every command in it is in PURE with no
     file operand or file option, it redirects nothing in, it expands no tainted variable, and
     any $(...) inside it is pure too."""
-    if depth > 4 or "<" in sub or "`" in sub or set(VAR_REF.findall(sub)) & tainted:
+    if depth > MAX_DEPTH or "<" in sub or "`" in sub or set(VAR_REF.findall(sub)) & tainted:
         return False
     if not all(pure(inner, tainted, depth + 1) for inner in substitutions(sub)[0]):
         return False
@@ -512,7 +516,7 @@ def tainted_names(command, depth=0):
     a $(...) that reads a file, input or the network (see `pure`), backticks or another tainted
     variable; looped over a list that does; or filled by `read` or `printf -v`. A request may not carry them (check_request_words), since their
     size and content can't be seen here."""
-    if depth > 4:
+    if depth > MAX_DEPTH:
         return set()
     tainted = set()
     for sub in substitutions(command)[0]:
@@ -1170,7 +1174,7 @@ def check_read(tool_name, tool_input):
 
 
 def check_command(command, depth=0, local=None, clean=None):
-    if depth > 4:
+    if depth > MAX_DEPTH:
         block("commands nested too deeply to check")
     if local is None:
         local = assigned_names(command)
@@ -1251,7 +1255,7 @@ def check_command(command, depth=0, local=None, clean=None):
 
 def command_names(command, depth=0):
     """The command name of every simple command, in $(...) too, keywords and wrappers stripped."""
-    if depth > 4:
+    if depth > MAX_DEPTH:
         return []
     names = [n for sub in substitutions(command)[0] for n in command_names(sub, depth + 1)]
     for raw in simple_commands(tokens(command)):
@@ -1275,7 +1279,7 @@ def outside_names(command, depth=0):
         argv = unwrap(raw)
         if len(argv) < 2 or os.path.basename(argv[0]) not in ("bash", "sh", "zsh"):
             continue
-        if argv[1] == "-c" and len(argv) > 2 and depth < 3:
+        if argv[1] == "-c" and len(argv) > 2 and depth < MAX_DEPTH:
             found += outside_names(argv[2], depth + 1)
         elif not argv[1].startswith("-") and Path(argv[1]).expanduser().resolve() in NET_SCRIPTS:
             found.append(argv[1])  # `bash repo-health.sh` runs the script, but not exempt

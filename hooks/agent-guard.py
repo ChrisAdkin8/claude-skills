@@ -1293,7 +1293,15 @@ QUOTED_GH = re.compile(r"""(?:^|[\s;&|(])(?:'gh'|"gh"|\\gh)(?=[\s;&|)]|$)""")
 
 
 def check_outside_only(command):
-    """A call that holds gh or a network script may hold nothing else (see OUTSIDE_SPELLINGS)."""
+    """A call that holds gh or a network script may hold nothing else (see OUTSIDE_SPELLINGS).
+
+    It is wrong in both directions, and each costs an agent a turn, not a leak. A spelling of gh
+    it can't see (`g\\h`, a `bash` inside a double-quoted `$(...)`, an empty `$()`) lets the call
+    through to run inside the sandbox, where gh fails. And it refuses a literal `'gh'` or `"gh"`
+    argument, and a `2>&1` in front of the command or straight after `gh`, which would run
+    outside. The checks that run before it hold every command in the call to its own limits
+    either way.
+    """
     holds = outside_names(command)
     if not holds:
         return

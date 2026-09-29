@@ -301,6 +301,9 @@ What things cost:
 [Working on this repo](docs/repo-guide.md) has what's where, how to test a change, and what the
 paid tests cost. [`CLAUDE.md`](CLAUDE.md) has the rules for making a change.
 
+[Could a cheaper model check claims first?](docs/checker-models.md) tests six models on the
+verifier's past work. Haiku did best, but we haven't built it in yet.
+
 ## Licence
 
 MIT, so copy what's useful into your own `~/.claude`. See [`LICENSE`](LICENSE).

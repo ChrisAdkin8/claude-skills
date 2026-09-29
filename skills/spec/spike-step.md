@@ -72,7 +72,7 @@ Run `${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/check-spec.py <spec> --repo <repo
 
 ## 7e. Report
 
-In four lines or fewer:
+One short line for each:
 - the spike questions by route, naming any *research* claims (for `/research finish <note> "<claim>"`) and *decision* questions left for the user;
 - each spike that ran, with its verdict;
 - total cost and turns across the runs;

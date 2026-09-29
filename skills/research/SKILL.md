@@ -132,7 +132,7 @@ If it's still missing, say in the report that novelty wasn't independently check
 7. **Ideas depth only**: read `${CLAUDE_PLUGIN_ROOT}/skills/research/ideas-finish.md` and follow it.
 8. **Rebuild the notes index**: run `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/build-index.py ~/notes`. If it fails, say so in the report and commit without the index; don't write `index.md` yourself.
 9. **Commit** only the files you created or changed in `~/notes` (the note, an edited idea note, `index.md` and, at ideas depth, the evidence note and new idea notes): `git -C ~/notes add <files>`, then `git -C ~/notes commit -m 'research: <title>' -- <files>`, following this session's commit attribution rules. Don't push.
-10. **Report** in five lines or fewer (six at ideas depth):
+10. **Report**, one short line for each of these:
    - the note path;
    - the bottom line in two sentences;
    - verification, e.g. `9 of 10 claims confirmed (a sample of 31 cited), 1 corrected, 1 left unverified`, and whether the conclusion changed;

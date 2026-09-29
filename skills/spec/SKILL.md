@@ -133,7 +133,7 @@ If a cold review is saved, stop after step 5's item 5 and report as its item 7 d
 
 ## 6. When the reviewer finishes
 
-1. **Report** in six lines or fewer: the spec path; the plan in two sentences (how many work items, what W1 is); verification (`21 of 23 claims confirmed, 2 corrected`); research the code contradicted; the number of spike questions; the notes commit hash.
+1. **Report** one short line for each: the spec path; the plan in two sentences (how many work items, what W1 is); verification (`21 of 23 claims confirmed, 2 corrected`); research the code contradicted; the number of spike questions; the notes commit hash.
 2. **Relay and save the review** as the first two items of `/cold-review`'s *When the reviewer finishes* say.
    - Its `Needs a run` rows are candidate spike questions, with "What would settle it" as the experiment: list them, and add only those the user picks in item 4.
    - Save it in the record without asking, as that section's *Offer* item says under *Saving*.

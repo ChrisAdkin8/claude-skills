@@ -945,7 +945,7 @@ def sed_script_writes(script):
     """True if a sed script uses w/W/e commands, or s///w or s///e flags."""
     for cmd in re.split(r"[;\n]", script):
         cmd = re.sub(
-            r"^\s*(?:\d+|\$|/(?:\\.|[^/])*/)?(?:\s*,\s*(?:\d+|\$|/(?:\\.|[^/])*/))?\s*!?\s*",
+            r"^\s*(?:\d+|\$|/(?:\\.|[^/\\])*/)?(?:\s*,\s*(?:\d+|\$|/(?:\\.|[^/\\])*/))?\s*!?\s*",
             "",
             cmd,
         )

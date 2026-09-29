@@ -12,8 +12,8 @@ gh, git or one of the skill scripts, and those have per-command limits (GET only
 writes). It's a guard against injected instructions, not a sandbox: data can still leave in a
 GET request's URL. `eval` is refused, since it re-reads its words without their quoting. A
 wrapper such as `env`, `timeout` or `xargs` may take only the options WRAPPERS and WRAPPER_FLAGS
-list. `gh` and the network scripts run outside the sandbox, so a command that holds them may
-join them only with the text filters, loops and `cd` in JOINABLE.
+list. `gh` and the network scripts run outside the sandbox only if everything in the command is
+one of them, so a command that holds one may hold nothing else (see OUTSIDE_SPELLINGS).
 
 So credentials are kept out of reach instead (see SECRET_HOME): no command word may name them,
 nor may grep -r or rg search a directory that holds them, and the `read` mode refuses them to
@@ -43,7 +43,7 @@ Request URLs are limited in size, since a GET request's URL is where data would 
 apply to what curl or gh actually sends, so a curl or gh argument may not expand anything whose
 size the guard can't see: no $(...), backticks, or variable whose value came from a command's
 output or from input (see `tainted_names`); a variable set to fixed words, such as a `for` loop
-over a literal list, is fine. Nor may curl read a header or URL from a file (`-H @file`). Then: a
+over a literal list, is fine for curl (gh must be a call of its own, see OUTSIDE_SPELLINGS). Nor may curl read a header or URL from a file (`-H @file`). Then: a
 host
 name of at most MAX_HOST characters, at most MAX_AFTER_HOST after it, no user name or password
 in the URL, and no curl or gh argument over MAX_ARG characters. Real requests stay well inside
@@ -87,9 +87,9 @@ SCRIPTS = {
 }
 # The scripts that send their arguments over the network, outside the sandbox and with the
 # user's gh, gcloud or Reddit credentials: their arguments get curl's and gh's size limits.
+NET_SCRIPT_NAMES = ("repo-health.sh", "gcp-skus.sh", "reddit-search.sh")
 NET_SCRIPTS = {
-    (HOME / ".claude/skills/research/scripts" / name).resolve()
-    for name in ("repo-health.sh", "gcp-skus.sh", "reddit-search.sh")
+    (HOME / ".claude/skills/research/scripts" / name).resolve() for name in NET_SCRIPT_NAMES
 }
 # Reading and text tools that can't run other programs or write files (the flags that would
 # are checked below).
@@ -197,14 +197,21 @@ WRAPPER_FLAGS = {
     "nohup": set(),
     "xargs": {"-0", "-t", "-r", "-x", "-o", "--null", "--verbose", "--no-run-if-empty", "--exit"},
 }
-# gh and the network scripts run outside the OS sandbox (agent-sandbox.json's excludedCommands),
-# and Claude Code doesn't document how it matches a command that joins them with others; the
-# headless runs show joined ones working, so they may run unsandboxed too. Such a command may join
-# them only with these: text filters, loops and cd, nothing that reaches the network or a repo.
-JOINABLE = {"echo", "printf", "tr", "sed", "jq", "grep", "egrep", "cut", "head", "tail", "sort",
-            "uniq", "wc", "base64", "paste", "fold", "column", "nl", "rev", "cat", "cd", "ls",
-            "date", "true", "sleep", "test", "[", "basename", "dirname", "for", "select", "while",
-            "until", "gh"}  # fmt: skip
+# gh and the network scripts run outside the OS sandbox (agent-sandbox.json's excludedCommands)
+# because they need the user's login. Claude Code's settings reference says an entry takes a Bash
+# call out of the sandbox "only when they cover every command in it", and lists shapes that stay
+# sandboxed anyway: a command starting with sudo, eval or xargs; a cd, pushd or popd anywhere; a
+# command substitution, subshell or control-flow block; a redirection other than one that only
+# duplicates a file descriptor; a command name from a variable. That has held since Claude Code
+# 2.1.277; before, one matching part exempted the whole call. Measured on 2.1.284 with this file's
+# settings on 2026-09-29 (tests/agent-evals/BASELINE.md, "Sandbox exemption check"): gh and the
+# scripts ran outside alone; joined to each other by ; && || | or a newline; behind env, nice,
+# nohup or time; after LC_ALL=C; and with 2>&1 or >&2. A text filter, cd, echo, a loop, an
+# assignment, $(...), ( ... ), 2>/dev/null, an absolute path, bash, bash -c, command or a quoted
+# "gh" made the whole call run inside the sandbox, where they failed for want of their login. So a
+# call that holds one may hold nothing else, which also keeps curl and git from sharing a call
+# with something that runs outside the sandbox.
+OUTSIDE_SPELLINGS = {"gh"} | {f"~/.claude/skills/research/scripts/{n}" for n in NET_SCRIPT_NAMES}
 # A web search query goes to the search provider unchecked by the sandbox, so it's capped like a
 # request: real queries run to 139 characters, and none holds a 40-character token.
 MAX_QUERY = 200
@@ -1174,8 +1181,6 @@ def check_command(command, depth=0, local=None, clean=None):
     subs, expands = substitutions(command)
     for sub in subs:
         check_command(sub, depth + 1, local, clean)
-    if depth == 0:
-        check_joined_outside_sandbox(command)
     for raw in simple_commands(tokens(command)):
         argv = unwrap(raw)
         check_secrets(raw, argv)
@@ -1240,6 +1245,8 @@ def check_command(command, depth=0, local=None, clean=None):
                 f"`{name}` isn't on this agent's command list: reading and text tools, curl, "
                 "gh and git (read-only), and the skill scripts"
             )
+    if depth == 0:  # last, so a command wrong in some other way is refused for that reason
+        check_outside_only(command)
 
 
 def command_names(command, depth=0):
@@ -1254,20 +1261,73 @@ def command_names(command, depth=0):
     return names
 
 
-def check_joined_outside_sandbox(command):
-    names = command_names(command)
-    outside = [
-        n for n in names
-        if os.path.basename(n) == "gh" or ("/" in n and Path(n).expanduser().resolve() in NET_SCRIPTS)
-    ]  # fmt: skip
-    if not outside or len(names) < 2:
+def is_outside(name):
+    """Whether a command word is gh or one of the network scripts, however it is spelled."""
+    return os.path.basename(name) == "gh" or (
+        "/" in name and Path(name).expanduser().resolve() in NET_SCRIPTS
+    )
+
+
+def outside_names(command, depth=0):
+    """gh and the network scripts named in `command`, in $(...) and `bash -c '...'` too."""
+    found = [n for n in command_names(command) if is_outside(n)]
+    for raw in simple_commands(tokens(command)):
+        argv = unwrap(raw)
+        if len(argv) < 2 or os.path.basename(argv[0]) not in ("bash", "sh", "zsh"):
+            continue
+        if argv[1] == "-c" and len(argv) > 2 and depth < 3:
+            found += outside_names(argv[2], depth + 1)
+        elif not argv[1].startswith("-") and Path(argv[1]).expanduser().resolve() in NET_SCRIPTS:
+            found.append(argv[1])  # `bash repo-health.sh` runs the script, but not exempt
+    return found
+
+
+# Words `unwrap` strips that keep a call sandboxed (the settings reference lists xargs; command
+# was measured), and a command name in quotes, which the exclusion entry doesn't match either.
+KEEPS_SANDBOXED = {"command", "builtin", "xargs"}
+QUOTED_GH = re.compile(r"""(?:^|[\s;&|(])(?:'gh'|"gh"|\\gh)(?=[\s;&|)]|$)""")
+
+
+def check_outside_only(command):
+    """A call that holds gh or a network script may hold nothing else (see OUTSIDE_SPELLINGS)."""
+    holds = outside_names(command)
+    if not holds:
         return
-    others = sorted({os.path.basename(n) for n in names if n not in outside} - JOINABLE)
-    if others:
-        block(
-            f"`{os.path.basename(outside[0])}` runs outside the sandbox, so it may be joined only "
-            f"with text filters, not `{others[0]}`: run `{others[0]}` in a Bash call of its own"
+    toks = tokens(command)
+    raws = simple_commands(toks)
+    argvs = [unwrap(raw) for raw in raws]
+    only_them = (
+        all(argv and argv[0] in OUTSIDE_SPELLINGS for argv in argvs)
+        and not any(
+            os.path.basename(word) in KEEPS_SANDBOXED
+            for raw, argv in zip(raws, argvs)
+            for word in raw[: len(raw) - len(argv)]
         )
+        and len(command_names(command)) == len(argvs)  # a $(...) adds its own commands
+        and all(ok_between(toks, i) for i, tok in enumerate(toks) if tok and set(tok) <= PUNCT)
+        and not QUOTED_GH.search(command)
+    )
+    if only_them:
+        return
+    block(
+        f"`{os.path.basename(holds[0])}` runs outside the sandbox only if every command in the call "
+        "is `gh`, `repo-health.sh`, `gcp-skus.sh` or `reddit-search.sh` (written "
+        "`~/.claude/skills/research/scripts/<script> ...`), joined at most by `;`, `&&`, `||`, `|` "
+        "or a redirect that only duplicates a file descriptor, as `2>&1` does. With a text filter, "
+        "`cd`, `echo`, a loop, an assignment, `$(...)`, another redirect, an absolute path, `bash`, "
+        "`command` or `xargs` in the call, the whole call runs inside the sandbox and can't read "
+        "the login. Run it in a call that holds nothing else (filter `gh` with its own `--jq`; "
+        "`repo-health.sh` takes several repos)"
+    )
+
+
+def ok_between(toks, i):
+    """Whether the punctuation token at toks[i] may sit between commands that run outside the
+    sandbox: a separator, or the `>&` of a redirect that only duplicates a file descriptor."""
+    tok = toks[i]
+    if tok in (";", "&&", "||", "|"):
+        return True
+    return tok == ">&" and re.fullmatch(r"\d|-", "".join(toks[i + 1 : i + 2])) is not None
 
 
 def check_search(query):

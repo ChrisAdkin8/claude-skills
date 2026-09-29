@@ -8,7 +8,8 @@
 # human ones, because a repo that only bots touch looks busy but is not maintained. A failure on one
 # repo prints an error row and moves on to the next: "not found or no access" only when GitHub says
 # so, "API error" for anything else (a rate limit, the network). Exits 1 if gh or jq is missing,
-# gh isn't logged in, or no repo could be read, so a failure never reads as a fact about the repos.
+# gh isn't logged in (or the sandbox hid its login: see the message), or no repo could be read,
+# so a failure never reads as a fact about the repos.
 # Exits 2 on an argument that isn't owner/repo.
 set -uo pipefail
 
@@ -170,7 +171,7 @@ for repo in "$@"; do
 done
 
 gh auth status > /dev/null 2>&1 ||
-  { echo "repo-health: gh isn't logged in, so repo health can't be checked; mark it (unverified)" >&2; exit 1; }
+  { echo "repo-health: gh isn't logged in, so repo health can't be checked. If this call held any other command, the sandbox hid gh's login: run this script on its own. Otherwise mark it (unverified)" >&2; exit 1; }
 
 echo '| Repo | Stars | Commits 90d (human) | Human authors 90d | Last human commit | Contributors | Last release | Open issues / PRs | Licence | Flags |'
 echo '|---|---:|---:|---:|---|---:|---|---:|---|---|'

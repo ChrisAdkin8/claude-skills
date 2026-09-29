@@ -840,3 +840,52 @@ blocked command:
   today, so it's left as run-to-run variation.
 `guard-applies` still passes on Opus: the new line didn't stop it making the call the guard
 refuses.
+
+## Sandbox exemption check (2026-09-29)
+
+`gh` and the three network scripts are in `agent-sandbox.json`'s `excludedCommands`, so they run
+outside the OS sandbox, with the user's login. Which Bash calls count as excluded is Claude Code's
+rule, not ours. Its settings reference (`sandbox.excludedCommands`) says an entry takes a call out
+of the sandbox "only when they cover every command in it", and lists shapes that stay sandboxed
+anyway: a command starting with `sudo`, `eval` or `xargs`; a `cd`, `pushd` or `popd` anywhere; a
+command substitution, subshell or control-flow block; a redirection other than one that only
+duplicates a file descriptor; a command name from a variable. Its changelog dates "every part must
+now match" to 2.1.277 (before, one matching part exempted the whole call).
+
+The guard's earlier rule was the other way round. `ea17e11` (2026-09-25) told the agents `gh` must
+be a command on its own; `35a0aed` (2026-09-27) let it share a call with text filters, on the
+strength of "45 joined gh commands succeeded in headless runs". The transcripts behind that count
+aren't kept, and a pipe into `head` or `tail` exits 0 whatever `gh` did, so a count by exit code
+would have called today's failed `gh ... | tail -6` runs successes.
+
+Six headless sessions on Claude Code 2.1.284, a Sonnet driving the Bash tool, started from `~/notes`
+with `--allowedTools Bash --settings hooks/agent-sandbox.json` (the guard's hooks not active), $0.46
+in all. Each ran the commands below as written, one Bash call each. "Outside": `gh` printed its
+answer (`.rate.limit` was `5000`) or `repo-health.sh` printed its table. "Inside": `gh` said "failed
+to load config ... operation not permitted", or `repo-health.sh` said "gh isn't logged in".
+
+| Command | Ran |
+|---|---|
+| `gh ...`, `repo-health.sh ...` | outside |
+| `gh ...; gh ...`, `gh ... && gh ...`, `gh ... \|\| gh ...`, two `gh` lines, `gh ... \| gh ...` | outside |
+| `gh ...; repo-health.sh ...` | outside |
+| `env gh ...`, `nice gh ...`, `nohup gh ...`, `time gh ...`, `LC_ALL=C gh ...` | outside |
+| `gh ... 2>&1`, `repo-health.sh ... 2>&1`, `gh ... >&2` | outside |
+| `gh ... \| head -1`, `repo-health.sh ... \| head -3`, `repo-health.sh ... 2>&1 \| head -3` | inside |
+| `cd DIR && gh ...`, `gh ...; echo done`, `repo-health.sh ... && echo ok` | inside |
+| `gh ... 2>/dev/null`, `repo-health.sh ... 2>/dev/null` | inside |
+| `q=x; gh ... $q ...`, `gh api repos/$(echo x) ...`, `(gh ...)` | inside |
+| `bash ~/.claude/.../repo-health.sh ...`, `bash -c 'gh ...'`, `command gh ...`, `"gh" ...` | inside |
+| the absolute path of `repo-health.sh` | inside |
+| `timeout 30 gh ...` | not run: macOS has no `timeout` |
+
+In the researcher and verifier runs of the same day, 9 joined calls (8 distinct commands: four piped
+into `head` or `tail`, four `for` loops) failed the same way; one `gh ...; gh ...` pair worked; 7
+bare `gh` and `repo-health.sh` calls worked; the bare `reddit-search.sh` call stopped for want of
+credentials, which it would do inside or outside, so it says nothing. `gcp-skus.sh` and
+`reddit-search.sh` were not run under the sandbox: their rule is the same `excludedCommands` rule,
+not a separate measurement.
+
+`tests/test_agent_guard.py` (`test_gh_and_scripts_share_a_call_only_with_each_other`) holds the same
+lists, so the guard's verdict is tested against them. To check a new Claude Code release, run these
+commands in one `claude -p` session with the flags above and compare.

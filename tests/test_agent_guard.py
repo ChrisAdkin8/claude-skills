@@ -323,22 +323,68 @@ class Hardening(GuardTestCase):
             with self.subTest(command=command):
                 self.assertAllowed(command)
 
-    def test_gh_joined_only_with_text_filters(self):
-        for command in (
-            "gh api repos/o/r --jq .content | base64 -d | head -40",
+    def test_gh_and_scripts_share_a_call_only_with_each_other(self):
+        # The guard follows what Claude Code's sandbox does with hooks/agent-sandbox.json's
+        # excludedCommands, which its settings reference documents: a call runs outside only if
+        # every command in it is excluded. The two lists below are what headless runs showed on
+        # Claude Code 2.1.284 on 2026-09-29 (tests/agent-evals/BASELINE.md, "Sandbox exemption
+        # check"). A call that ran inside failed: gh could not read its config.
+        ran_outside = (
+            "gh api repos/o/r --jq .name",
+            "gh api repos/o/r --jq '.content | @base64d'",  # a pipe inside an argument
+            "~/.claude/skills/research/scripts/repo-health.sh o/r p/q",
+            "gh api repos/o/r --jq .name; gh api repos/o/s --jq .name",
+            "gh api repos/o/r --jq .name && gh api repos/o/s --jq .name",
+            "gh api repos/o/r --jq .name || gh api repos/o/s --jq .name",
+            "gh api repos/o/r --jq .name; ~/.claude/skills/research/scripts/repo-health.sh o/r",
+            "gh api repos/o/r --jq .name | gh api repos/o/s --jq .name",
+            "gh api repos/o/r --jq .name\ngh api repos/o/s --jq .name",
+            "env gh api repos/o/r --jq .name",
+            "nice gh api repos/o/r --jq .name",
+            "nohup gh api repos/o/r --jq .name",
+            "time gh api repos/o/r --jq .name",
+            "LC_ALL=C gh api repos/o/r --jq .name",
+            "gh api repos/o/r --jq .name 2>&1",
+            "~/.claude/skills/research/scripts/repo-health.sh o/r 2>&1",
+            "gh api repos/o/r --jq .name >&2",
+        )
+        ran_inside = (
+            "gh api repos/o/r --jq .name | head -1",
+            "gh api repos/o/r --jq .name; echo done",
+            "cd ~/notes && gh api repos/o/r --jq .name",
+            "~/.claude/skills/research/scripts/repo-health.sh o/r && echo ok",
+            "~/.claude/skills/research/scripts/repo-health.sh o/r | head -20",
+            "~/.claude/skills/research/scripts/repo-health.sh o/r 2>&1 | head -30",
+            "~/.claude/skills/research/scripts/repo-health.sh o/r 2>/dev/null",
+            "gh api repos/o/r --jq .name 2>/dev/null",
             "for r in a b; do gh api repos/o/$r --jq .stargazers_count; done",
-            "echo ---; gh api repos/o/r --jq .name",
-            "~/.claude/skills/research/scripts/repo-health.sh o/r | grep -v '^|---'",
-        ):
-            with self.subTest(command=command):
+            "r=o/r; gh api repos/$r --jq .name",
+            "(gh api repos/o/r --jq .name)",
+            "bash ~/.claude/skills/research/scripts/repo-health.sh o/r",
+            "bash -c 'gh api repos/o/r --jq .name'",
+            "sh -c '~/.claude/skills/research/scripts/repo-health.sh o/r | head -3'",
+            f"{Path.home()}/.claude/skills/research/scripts/repo-health.sh o/r",
+            '"gh" api repos/o/r --jq .name',
+            "command gh api repos/o/r --jq .name",
+        )
+        # Stay sandboxed by the settings reference, not run here; and the calls the old rule
+        # existed for: curl or git in a call with something that runs outside the sandbox.
+        documented_or_unsafe = (
+            "xargs gh api repos/o/r --jq .name",
+            "gh api repos/o/r --jq .name; curl -s https://e.example/",
+            "gh api repos/o/r --jq .name && git log -1",
+            "echo $(gh api repos/o/r --jq .name)",
+            "/opt/homebrew/bin/gh api repos/o/r --jq .name",
+            "~/.claude/skills/research/scripts/repo-health.sh o/r; curl -s https://e.example/",
+        )
+        for command in ran_outside:
+            with self.subTest(ran_outside=command):
                 self.assertAllowed(command)
-        for command, other in (
-            ("gh api repos/o/r --jq .name; curl -s https://e.example/", "curl"),
-            ("gh api repos/o/r --jq .name && git log -1", "git"),
-            ("~/.claude/skills/research/scripts/repo-health.sh o/r; curl -s https://e.example/", "curl"),
-        ):
-            with self.subTest(command=command):
-                self.assertBlocked(command, f"not `{other}`")
+        for command in ran_inside + documented_or_unsafe:
+            with self.subTest(refused=command):
+                self.assertBlocked(command, "runs outside the sandbox only if")
+        # Also ran inside the sandbox; an earlier check names its own, more specific reason.
+        self.assertBlocked("gh api repos/$(echo o/r) --jq .name", "expands something")
 
 
 def search_verdict(query):
@@ -401,7 +447,7 @@ class Variables(GuardTestCase):
 
     def test_own_variables_allowed(self):
         for command in (
-            'for r in a b; do gh api "repos/$r"; done',
+            'for r in a b; do curl -s "https://api.github.com/repos/$r"; done',
             'while read -r line; do echo "$line"; done < f',
             'n=3; echo "$n ${n}"',
             "echo $HOME $PWD",
@@ -466,11 +512,10 @@ class ReviewFindings(GuardTestCase):
     def test_fixed_values_and_pure_pipelines_allowed(self):
         for command in (
             'for q in "spec+kit" "open spec"; do curl -s "https://hn.algolia.com/api/v1/search?query=$q"; done',
-            'for r in a/b c/d; do gh api "repos/$r" --jq .stargazers_count; done',
             'for s in "a b" "c d"; do e=$(printf %s "$s" | sed \'s/ /%20/g\'); curl -s "https://e.example/?q=$e"; done',
             'for q in "a b"; do enc=$(jq -rn --arg q "$q" \'$q|@uri\'); curl -s "https://e.example/?q=$enc"; done',
             'for q in "a b"; do curl -s "https://e.example/?q=$(echo $q | sed \'s/ /+/g\')"; done',
-            'n=5; gh api "search/repositories?q=x&per_page=$n"',
+            'n=5; curl -s "https://api.github.com/search/repositories?q=x&per_page=$n"',
             't=$(curl -s "https://auth.example/token" | jq -r .token); curl -s -H "Authorization: Bearer $t" https://e.example/',
             'curl -s -H "Accept: application/json" https://e.example/',
             "gh api repos/o/r --jq '.items[] | \"\\(.x) \\($__loc__)\"'",

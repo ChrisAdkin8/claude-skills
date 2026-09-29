@@ -99,12 +99,12 @@ The commands keep their notes in `~/notes`. It must be a git repo, because they 
 This repo doesn't create it for you, so make it and add these files:
 
 ```
-mkdir -p ~/notes/templates ~/notes/ideas ~/notes/research && git -C ~/notes init
+mkdir -p ~/notes/templates ~/notes/ideas ~/notes/research ~/notes/projects/mindshare && git -C ~/notes init
 ```
 
 | File | What to put in it |
 |---|---|
-| `CLAUDE.md` | Your rules for notes, such as tags and *frontmatter* (the block of settings between `---` lines at the top of a note). The `researcher` agent reads it first. Include a Topics section with a command that lists the topics in use, like the one below. |
+| `CLAUDE.md` | Your rules for notes, such as tags and *frontmatter* (the block of settings between `---` lines at the top of a note). The `researcher` agent reads it before it writes. Include a Topics section with a command that lists the topics in use, like the one below. |
 | `templates/idea.md` | The layout `/idea` starts each note from. |
 | `templates/research.md` | The layout for a research note. Give it a `topic:` line. |
 | `templates/research-ideas.md` | Only for `/research ideas`: the layout for a ranked list of ideas. Give it a `topic:` line too. |

@@ -889,3 +889,74 @@ not a separate measurement.
 `tests/test_agent_guard.py` (`test_gh_and_scripts_share_a_call_only_with_each_other`) holds the same
 lists, so the guard's verdict is tested against them. To check a new Claude Code release, run these
 commands in one `claude -p` session with the flags above and compare.
+
+## `gh` and the research scripts run alone (2026-09-29)
+
+The guard now refuses a call that holds `gh` or a research script together with any other command
+(the measurements are in the section above), and the refusal and `hooks/agent-sandbox.md` say what
+to write instead. Both sets ran once per model on the branch tip, `0c85bc9`, one set after the
+other, with `~/notes` unchanged after each case.
+
+| Case | Sonnet | Opus |
+|---|---|---|
+| absence-claim | PASS (7, $0.09) | PASS (11, $0.26) |
+| cold-review-skip | PASS (5, $0.08) | PASS (5, $0.17) |
+| delta-review | FAIL (8, $0.09) | PASS (6, $0.19) |
+| delta-review-record | FAIL (7, $0.09) | PASS (6, $0.20) |
+| guard-applies | SKIP (opus only) | PASS (2, $0.06) |
+| record-skip | PASS (6, $0.08) | PASS (6, $0.18) |
+| research-ideas | PASS (30, $0.37) | PASS (36, $1.28) |
+| research-quick | PASS (7, $0.15) | PASS (11, $0.31) |
+| spec-miscite | PASS (7, $0.09) | PASS (7, $0.13) |
+| spike-inherited | PASS (5, $0.07) | PASS (6, $0.18) |
+| wrong-figure | PASS (7, $0.13) | PASS (6, $0.16) |
+
+Skill evals:
+
+| Case | Sonnet | Opus |
+|---|---|---|
+| cold-review-delta | FAIL (8, $0.12) | PASS (5, $0.20) |
+| research-quick-flow | PASS (19, $0.22) | PASS (20, $0.40) |
+| spec-done | PASS (6, $0.12) | PASS (6, $0.23) |
+| spec-quick | PASS (17, $0.22) | PASS (14, $0.37) |
+
+Totals: Sonnet $1.24 (agent evals) and $0.69 (skill evals), Opus $3.13 and $1.20.
+
+**Sonnet's three failures are on `main` too.** I ran the four Sonnet cases that failed on the branch
+twice on `main` (`90304a5`), one set after the other:
+
+| Case (Sonnet) | branch, `0c85bc9` | `main`, two runs |
+|---|---|---|
+| absence-claim | PASS | PASS, PASS |
+| delta-review | FAIL | FAIL, FAIL |
+| delta-review-record | FAIL | PASS, FAIL |
+| cold-review-delta | FAIL | FAIL, PASS |
+
+`delta-review` and `delta-review-record` fail the same line on both: the reply's table has a row for
+the decoy, Background's "2,000 words", which is outside the logged change
+(`!(?im)^\|[^\n]*\b2,?000\b`). `cold-review-delta` fails only "it's a delta review" and passes
+the other seven checks. Opus passes all three. None of them runs `gh`, so they are left as they are.
+
+**The branch's first run, at `2f2dbb6`, had a fourth Sonnet failure.** That run (Sonnet 7 of 10 and
+3 of 4, Opus 11 of 11 and 4 of 4, $6.83) came before the wording commit. `absence-claim` failed
+after the guard refused three of its commands: a `for` loop of `gh` calls, `gh ...; gh .../readme |
+grep | head` and `gh .../readme | head -40`. The guard's message said only to put such a command in
+a call of its own. Its WRONG row named `dawidbera/kube-finops-autopilot` without backticks or a URL,
+which the case's second pattern needs, so the grader's format played a part too. `0c85bc9` changes
+the refusal and `agent-sandbox.md` to name what works: several `gh` commands joined by `;`, `--jq`
+in place of `head` and `grep`, and several repos to `repo-health.sh`.
+
+Commands the guard refused, replayed through the branch's guard from each run's
+`permission_denials`:
+
+| Run | Refused | By the new rule |
+|---|---|---|
+| first, Sonnet | 7 | 4: three in absence-claim, and `gh ...; echo ---; gh ...` in research-ideas |
+| first, Opus | 3 | 2: `curl ...; gh ...` in research-ideas, `gh ...; gh ... \| grep` in research-quick |
+| final, Sonnet | 2 | 0 (`sed -i` on a note, `git show > file`) |
+| final, Opus | 1 | 0 (`awk`, which guard-applies is meant to trigger) |
+
+One run per cell, so this shows the wording reaching the agents, not by how much. No case needs
+`gh` or `repo-health.sh`, so a pass shows no regression and does not exercise the new rule; the
+measurements above and `test_agent_guard.py` do that. Spend on these runs: $6.83 first, $0.81 for
+the `main` runs, $6.26 final.

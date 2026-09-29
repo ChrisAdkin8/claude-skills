@@ -11,6 +11,7 @@ This spec is part 2 of 2, split on 2026-09-29 from [2026-09-29-plugin-marketplac
   - Not applied, and why: `CLAUDE.md:32-33` (the rule's bullet starts at line 33, so `:33` is right) and `skills/spec/SKILL.md:6-10` (the `allowed-tools` value ends at line 9; line 10 is the closing `---`).
   - Not checked by the verifier, and checked here: "draft PR #27, open" (`gh pr view 27` on 2026-09-29: open, draft).
 - Changed after the verifier on 2026-09-30: W3's Done when for `check-spec.py` over `docs/specs/` now says every spec that passed before still passes, since two older specs fail for missing notes in `~/notes`, from part 1's delta review row 4.
+- Marked reviewed on 2026-09-30 by the user's decision, with no cold review of its own: its text was covered by the full and delta reviews of the unsplit spec, and it has one verifier round (20 of 27 claims confirmed, plan holds).
 
 ## Spikes
 

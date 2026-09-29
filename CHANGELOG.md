@@ -3,6 +3,15 @@
 What changed, by day, drawn from the commit history. The repo has no releases or tags, so each
 section is a date. Within a day, changes are grouped by area.
 
+## 2026-09-29
+
+### Added
+
+- `docs/checker-models.md` tests six models as a cheaper first check on research claims, over 698
+  past verifier verdicts: Laya (two versions), MiniCheck, a DeBERTa NLI model and Qwen3 8B on a
+  Mac, and Haiku 4.5 and Sonnet 5. The free models kept back about 70% of wrong claims, Sonnet 80%
+  and Haiku 95%. None is built in yet. The README links it.
+
 ## 2026-09-28
 
 ### Security

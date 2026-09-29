@@ -48,6 +48,7 @@ such as commit prefixes and what to record, are in [`CLAUDE.md`](../CLAUDE.md).
 
 | Path | What it is |
 |---|---|
+| `docs/checker-models.md` | a test of six models as a cheaper first check on research claims, and why none is built in |
 | `docs/specs/` | the specs for changes to this repo; their records are in `docs/specs/records/`, spike results in `docs/specs/spikes/` |
 | `docs/workflow*.png`, `docs/social-preview.png` | the diagram and the repo's social preview, drawn by `docs/diagram/workflow.py` |
 | `docs/diagram/` | the script that draws them, and `render.mjs`, which turns its SVGs into PNGs |

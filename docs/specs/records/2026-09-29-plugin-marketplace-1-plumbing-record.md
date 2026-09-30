@@ -67,6 +67,7 @@ Needs a run: 4
 - Not reviewed: W2's Done when for `check-spec.py` over `docs/specs/` now compares before and after, with the two known FAILs (missing notes in `~/notes`) as the baseline, from delta review row 4, on 2026-09-30.
 - Not folded in, by the user's pick: delta review rows 2, 3, 5 and 6.
 - Not reviewed: read-at moved from `c05ef6a` to `65906e2`, PR #27's head, merged into this branch at `68bd281`; every citation into `hooks/agent-guard.py` and `tests/test_agent_guard.py` re-mapped by line (+1 to +38) with its text compared, and `check_outside_only` now cited as `hooks/agent-guard.py:1295-1312` because the PR added a docstring to it; counts re-run and unchanged; Background and Risks reworded, from the user's request to bring in PR #27, on 2026-09-30.
+- Not reviewed: Background says under "Read at" that it describes the code at `65906e2`, before W2, and that its citations were not re-mapped after W2; nothing else in the spec changed, from the user's request after W2 was built, on 2026-09-30.
 
 ## Spikes
 

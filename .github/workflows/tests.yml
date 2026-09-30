@@ -30,3 +30,10 @@ jobs:
           pipx run ruff==0.16.7 check --isolated --select E9,F .
           command -v shellcheck >/dev/null || brew install shellcheck
           git ls-files -z '*.sh' | xargs -0 shellcheck -S warning
+      # The plugin and marketplace manifests, checked by the claude release the spikes ran on. If
+      # validate turns out to need a login, remove these two steps and leave it a local check:
+      # docs/specs/2026-09-29-plugin-marketplace-1-plumbing.md, W1.
+      - name: Install the claude CLI, pinned
+        run: npm install -g @anthropic-ai/claude-code@2.1.285
+      - name: Validate the plugin and marketplace manifests
+        run: claude plugin validate . --strict

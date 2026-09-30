@@ -1,0 +1,10 @@
+{
+  "name": "claude-skills",
+  "description": "Claude Code commands that turn an idea into a checked plan for changing your code: /idea, /research, /spec and /cold-review, with separate agents checking the research and the plan.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Chris Adkin"
+  },
+  "repository": "https://github.com/ChrisAdkin8/claude-skills",
+  "license": "MIT"
+}

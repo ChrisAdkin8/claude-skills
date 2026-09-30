@@ -960,3 +960,69 @@ One run per cell, so this shows the wording reaching the agents, not by how much
 `gh` or `repo-health.sh`, so a pass shows no regression and does not exercise the new rule; the
 measurements above and `test_agent_guard.py` do that. Spend on these runs: $6.83 first, $0.81 for
 the `main` runs, $6.26 final.
+
+## Quoted argument hints in `/spec` and `/research` (2026-09-30)
+
+`skills/spec/SKILL.md`'s frontmatter did not parse: its `argument-hint` began with `[quick]`, which
+YAML reads as a flow sequence followed by stray text. `claude plugin validate` reported that the
+skill then loads with empty metadata, and the session's skill list showed `/spec` by its heading and
+without `disable-model-invocation` hiding it. `/research`'s hint has the same shape, and Ruby's
+strict YAML parser rejected it too, though Claude Code's parser and the plugin validator did not.
+Both hints are now quoted, with the text unchanged. Fixing `/spec` turns on its `allowed-tools`
+list, which may not have been enforced since the quick mode added the `[quick]` on 2026-09-25, so
+the point of these runs is whether a command it needs is missing from that list.
+
+Both sets ran once per model on the branch tip, `4d1d5f3`, one set after the other, with `~/notes`
+unchanged after each case.
+
+| Case | Sonnet | Opus |
+|---|---|---|
+| absence-claim | PASS (9, $0.13) | PASS (18, $0.43) |
+| cold-review-skip | PASS (8, $0.08) | PASS (5, $0.20) |
+| delta-review | FAIL (6, $0.08) | PASS (7, $0.25) |
+| delta-review-record | FAIL (6, $0.09) | PASS (7, $0.18) |
+| guard-applies | SKIP (opus only) | PASS (2, $0.09) |
+| record-skip | PASS (7, $0.09) | PASS (7, $0.15) |
+| research-ideas | PASS (27, $0.42) | PASS (35, $1.37) |
+| research-quick | PASS (9, $0.18) | PASS (11, $0.33) |
+| spec-miscite | PASS (5, $0.07) | PASS (5, $0.14) |
+| spike-inherited | PASS (5, $0.07) | PASS (6, $0.13) |
+| wrong-figure | PASS (6, $0.11) | PASS (5, $0.19) |
+
+Skill evals:
+
+| Case | Sonnet | Opus |
+|---|---|---|
+| cold-review-delta | FAIL (4, $0.10) | PASS (4, $0.21) |
+| research-quick-flow | PASS (28, $0.33) | PASS (17, $0.36) |
+| spec-done | PASS (6, $0.13) | PASS (8, $0.26) |
+| spec-quick | PASS (20, $0.25) | PASS (12, $0.35) |
+
+Totals: Sonnet $1.32 (agent evals, 8 of 10) and $0.81 (skill evals, 3 of 4), Opus $3.46 (11 of 11)
+and $1.17 (4 of 4).
+
+**`/spec` passes both skill cases that run it, on both models.** `spec-done` and `spec-quick` run
+`/spec` headless, where a command missing from `allowed-tools` would be denied. Neither was, so the
+list is complete for what those cases exercise. They do not exercise `spike` mode's
+`prepare-spike.sh` and `run-spike.sh` patterns, which stay untested here.
+
+**Sonnet's failures match `main`.** `delta-review` and `delta-review-record` fail the same line as
+in the section above, the decoy row `!(?im)^\|[^\n]*\b2,?000\b`, and Opus passes both. Neither
+involves the two skills this change touches.
+
+**`cold-review-delta` on Sonnet is flaky on both sides.** It runs `/cold-review`, which this change
+does not touch, and its failing check varies: "it's a delta review" or "the unlogged Rollback edit
+is named", sometimes both. I ran it again, one run at a time, on the branch and on `main`
+(`c05ef6a`):
+
+| Sonnet runs of `cold-review-delta` | Result |
+|---|---|
+| branch `4d1d5f3`, five runs | FAIL (Rollback), FAIL (delta review), FAIL (Rollback), PASS, FAIL (delta review): 1 of 5 |
+| `main` `c05ef6a`, two runs | PASS, FAIL (both checks): 1 of 2 |
+| `main` `90304a5`, two runs, from the section above | FAIL, PASS: 1 of 2 |
+
+That is 1 of 5 against 2 of 4, too few runs to tell the branch from `main`. It is not shown to be
+caused by the change, and it is not shown to be free of it either.
+
+Spend: $6.76 on the four runs, and $0.66 on the six single-case runs, so $7.42.
+

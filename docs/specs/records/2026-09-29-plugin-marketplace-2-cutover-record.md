@@ -12,6 +12,7 @@ This spec is part 2 of 2, split on 2026-09-29 from [2026-09-29-plugin-marketplac
   - Not checked by the verifier, and checked here: "draft PR #27, open" (`gh pr view 27` on 2026-09-29: open, draft).
 - Changed after the verifier on 2026-09-30: W3's Done when for `check-spec.py` over `docs/specs/` now says every spec that passed before still passes, since two older specs fail for missing notes in `~/notes`, from part 1's delta review row 4.
 - Marked reviewed on 2026-09-30 by the user's decision, with no cold review of its own: its text was covered by the full and delta reviews of the unsplit spec, and it has one verifier round (20 of 27 claims confirmed, plan holds).
+- Changed after the verifier on 2026-09-30: read-at moved from `c05ef6a` to `65906e2` (PR #27's head, merged into this branch at `68bd281`), and the Background and Risks wording updated. Part 2 cites no line of the two files the PR changed, and its counts were re-run and are unchanged.
 
 ## Spikes
 

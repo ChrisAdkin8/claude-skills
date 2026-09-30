@@ -4,7 +4,7 @@ created: 2026-09-29
 status: reviewed # draft | reviewed | in-progress | done | superseded
 research: none
 idea: none
-read-at: c05ef6a
+read-at: 65906e2
 cite-repo: none # this repo cites itself
 ---
 
@@ -26,7 +26,7 @@ Part 1's Decision applies: the repo root is the plugin and its own marketplace, 
 
 ## Background
 
-Read at `c05ef6a` on 2026-09-29: the local `main`, fast-forwarded to the head of the branch `sandbox-denylist-and-skill-fixes` (draft PR #27, open, not yet on `origin/main`, whose tip is `90304a5`). Those six commits change the guard, the sandbox settings, their tests and other files this spec edits, so every fact below holds only once PR #27 merges. An earlier draft was read at `90304a5`, where the counts were 129 live references, 61 dated and 178 `~/notes`; the facts were re-read at `0c85bc9`, and `c05ef6a` differs from that only by 71 added lines in `tests/agent-evals/BASELINE.md`, which no citation touches.
+Read at `65906e2` on 2026-09-30: the head of the branch `sandbox-denylist-and-skill-fixes` (draft PR #27, open, not yet on `origin/main`, whose tip is `90304a5`). Its ten commits change the guard, the sandbox settings, their tests and other files this spec edits, so every fact below holds only once PR #27 merges; this branch has that head merged in (`68bd281`). Earlier drafts were read at `90304a5` (129 live references, 61 dated and 178 `~/notes`), then at `0c85bc9` and `c05ef6a`. `65906e2` differs from `c05ef6a` only in `hooks/agent-guard.py`, `tests/test_agent_guard.py` and `tests/agent-evals/BASELINE.md`; every citation into the first two was re-mapped by line and its text compared, and every count below was re-run at `65906e2` and is unchanged.
 
 **How the repo finds itself today.** `CLAUDE.md:3` and `:33` say `~/.claude/skills` and `hooks` are symlinks into the repo and that files refer to each other by `~/.claude/...` paths. The README's install links them by hand (`README.md:85-86`), and CI does the same (`.github/workflows/tests.yml:21-24`). A grep for `~/.claude/{skills,hooks,agents}`, `$HOME/.claude/...` and `.claude/skills|hooks`, excluding `docs/specs/`, any `records/` directory, `CHANGELOG.md`, `BASELINE.md`, `.git` and `skills/synced/`, finds 141 lines in 40 files (`git grep -InE` for that pattern over tracked files, with those exclusions; a plain `grep -r` also reads the untracked `tests/*/results/` and finds 483); the same references inside those excluded, dated files number 62 (`git grep -InE` with the same pattern over tracked `docs/specs/`, `records/`, `CHANGELOG.md` and `tests/agent-evals/BASELINE.md`).
 
@@ -103,7 +103,7 @@ The numbers continue from the unsplit spec, [2026-09-29-plugin-marketplace](2026
 - **The cutover breaks the author's live session.** The skill files change in W3 alone, after the author has switched to `--plugin-dir`.
 - **`~/notes` limits who can use the plugin.** A stranger's first `/claude-skills:research` stops at the README's setup section. Accepted for v1.
 - **Users of the old install** keep working only until they pull. The README's new Install section says to remove the two symlinks, since both installs at once would load every skill twice.
-- **The spec is read at a draft PR's head.** Local `main` is at PR #27's head (`c05ef6a`), not `origin/main`. If the PR's history is rewritten again, as it was once during this spec's writing, local `main` diverges from it: reset `main` to `origin/main`, then re-read and re-cite the guard, sandbox and test files. If the PR merges normally on GitHub, `main` fast-forwards to the merge commit.
+- **The spec is read at a draft PR's head.** `65906e2` is PR #27's head, not on `origin/main`, and this branch has it merged in (`68bd281`); local `main` is still at the older `c05ef6a`. If the PR's history is rewritten again, as it was once during this spec's writing, this branch carries commits the PR no longer has: rebase it onto the rewritten head, then re-read and re-cite the guard, sandbox and test files. If the PR merges normally on GitHub, this branch merges cleanly over it.
 
 ## Open questions
 

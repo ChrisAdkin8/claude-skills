@@ -13,7 +13,6 @@ than reach claude as a literal.
 
 import json
 import os
-import re
 import sys
 
 PLACEHOLDER = "${CLAUDE_PLUGIN_ROOT}"

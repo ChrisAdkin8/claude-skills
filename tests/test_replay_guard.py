@@ -4,7 +4,6 @@ directory one call ran in leaking into the next, and a run whose guard lived in 
 being judged as if it lived in a checkout."""
 
 import json
-import os
 import sys
 import tempfile
 import unittest

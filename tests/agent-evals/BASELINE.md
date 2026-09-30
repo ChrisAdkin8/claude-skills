@@ -1255,3 +1255,81 @@ Both Sonnet failures are the decoy-row check (`!(?im)^\|[^\n]*\b2,?000\b`) that 
 part 2 section above. Neither case reaches a file this part changed: `hooks/agents/cold-reviewer.md`
 and `hooks/agent-sandbox.md` are unchanged. They weren't re-run on `spec-implement-refresh` without
 this part.
+
+## /implement part 2: the skill, its implementer, the /spec hand-off and the docs (2026-09-30)
+
+Both eval sets ran in full once per model after W7 (`31af9e5`), skill evals first, Sonnet then Opus,
+one set after the other. `EVAL_MODEL=sonnet` ran on `claude-sonnet-5-5`. The implement cases also
+run the implementer (`run-implementer.sh`, capped at $5 under the runner) and a verifier
+(`run-verify.sh`, $5): their costs, from each `run-<n>.json` and `V<n>/run.json`, are given apart
+from the skill session's, which is all the runner prints. The same goes for the research and spec
+agents the other skill cases launch. No existing agent file changed; W4 adds
+`hooks/agents/implementer.md`, which no agent eval runs.
+
+Agent evals:
+
+| Case | Sonnet | Opus |
+|---|---|---|
+| absence-claim | FAIL (12, $0.14) | PASS (12, $0.24) |
+| cold-review-skip | PASS (5, $0.07) | PASS (6, $0.16) |
+| delta-review | PASS (11, $0.10) | PASS (6, $0.19) |
+| delta-review-record | FAIL (8, $0.08) | PASS (9, $0.20) |
+| guard-applies | SKIP (opus only) | PASS (2, $0.06) |
+| record-skip | PASS (6, $0.07) | PASS (6, $0.17) |
+| research-ideas | FAIL (31, $0.55) | FAIL (55, $2.07); rerun PASS (45, $1.68) |
+| research-quick | PASS (10, $0.16) | FAIL (11, $0.28); rerun PASS (12, $0.25) |
+| spec-miscite | PASS (7, $0.08) | PASS (6, $0.15) |
+| spike-inherited | PASS (6, $0.07) | PASS (6, $0.16) |
+| wrong-figure | PASS (7, $0.08) | PASS (7, $0.12) |
+
+Skill evals (skill session; then the agents it launched):
+
+| Case | Sonnet | Opus |
+|---|---|---|
+| cold-review-delta | PASS (5, $0.13) | PASS (6, $0.20) |
+| implement-basic | PASS (33, $0.26); implementer $0.17, verifier $0.10 | PASS (35, $0.46); implementer $0.38, verifier $0.21 |
+| implement-trap | PASS (20, $0.17); implementer $0.08 | PASS (21, $0.29); implementer $0.16 |
+| research-quick-flow | PASS (21, $0.29); researcher $0.27, verifier $0.16 | PASS (20, $0.39); researcher $0.38, verifier $0.22 |
+| spec-done | PASS (9, $0.16) | PASS (10, $0.24) |
+| spec-done-branch | PASS (6, $0.14) | PASS (6, $0.19) |
+| spec-done-implement | PASS (7, $0.15) | PASS (11, $0.27) |
+| spec-quick | PASS (15, $0.28); spec-verifier $0.06 | PASS (12, $0.33); spec-verifier $0.12 |
+
+The work items' Done when runs, before the full sets, in order:
+
+| Run | Sonnet | Opus |
+|---|---|---|
+| W4 `implement-basic`, first try | FAIL (16, $0.14): launched in the background, the headless session ended its turn and the implementer was killed with no result | not run |
+| W4 `implement-basic`, second try | FAIL (34, $0.28); implementer $0.18, verifier $0.10: the grader wanted the verifier's table unindented | not run |
+| W4 `implement-basic` | PASS (33, $0.28); implementer $0.16, verifier $0.07 | PASS (35, $0.46); implementer $0.36, verifier $0.20 |
+| W5 `spec-done-implement` before the change | PASS (6, $0.15), which the first Done when expected to fail | PASS (11, $0.33), likewise |
+| W5 `spec-done-branch` before the change | FAIL (10, $0.15), on both checks | FAIL (11, $0.37), on both checks once re-graded |
+| W5 the three `spec-done` cases after | FAIL `spec-done-branch` on the grader (6, $0.11), PASS the other two ($0.26); rerun all PASS ($0.36) | all PASS ($0.72) |
+| W5 `/spec finish` by hand on `implement-basic`'s fixture | read-at moved to HEAD, no `DRIFT:` ($0.19; spec-verifier $0.12) | not run |
+| W6 `implement-trap` | PASS (19, $0.17); implementer $0.08 | PASS (19, $0.28); implementer $0.15 |
+| W6 the trap's control | FAIL on "no commit ends (W1)", as wanted (44, $0.41); implementer $0.21 + $0.23, verifiers $0.10 + $0.07 | FAIL on "no commit ends (W1)", as wanted (35, $0.46); implementer $0.39, verifier $0.20 |
+
+Totals: agent evals Sonnet $1.40 (7 of 10), Opus $3.81 (9 of 11) and $1.93 for the two reruns;
+skill evals Sonnet $2.42 (8 of 8) and Opus $3.84 (8 of 8), agents included; the Done when runs
+$7.78, agents included. $21.18 in all.
+
+- **Sonnet's three agent-eval failures are ones seen before, in files this part didn't change.**
+  `delta-review-record` fails the decoy-row check (`!(?im)^\|[^\n]*\b2,?000\b`) again, as in part
+  1's section; `delta-review` passed this time. `research-ideas` tagged its candidate pool with idea
+  types (`[dataset]`, `[game]`, `[lab]`), as in the plugin marketplace part 2 section.
+  `absence-claim` found other prior art (an AWS blog's GitOps right-sizing job, `kube-finops-autopilot`)
+  rather than the names the case reads for, as in the plugin marketplace part 1 section.
+- **Opus's two failures came from outside the run.** Another session committed to `~/notes` at
+  22:38:03, a minute after the run started, so `research/2026-09-29-agentic-ai-linkedin-repo-ideas.md`
+  left `git status` and both cases' "nothing else in ~/notes changed" check failed. Both passed on a
+  rerun, with `~/notes` unchanged throughout.
+- **Two graders were fixed during the Done when runs, each to read a reply the skill got right.**
+  `implement-basic` now finds the verifier's table indented under its `- Verifier V1` bullet.
+  `spec-done-branch` no longer counts the worktree's directory name, which is the spec's basename
+  and so in every `/spec done` path. That had made Opus's "before" reply pass. It now reads a
+  paragraph, not a sentence, since Sonnet's right answer gave the path and then "run it from that
+  folder". The saved "before" replies still fail with the fixed grader, and the "after" ones pass.
+- **The control's verifier said `Implementation holds: no` in V1**, on Sonnet: the branch diff
+  changed `tests/test_calc.py` (a test `/code-review --fix` added in clean-up), the spec's status
+  and the record, none in W1's Files. After the implementer's fix round, V2 said `yes`. The verifier reads
+  the whole branch, clean-up and record commits included, against one work item's Files.

@@ -132,6 +132,177 @@ class SymlinkedInstall(unittest.TestCase):
         self.assertEqual(code, 0, err)
 
 
+REPO = Path(__file__).resolve().parents[1]
+NET_NAMES = ("repo-health.sh", "gcp-skus.sh", "reddit-search.sh")
+
+
+class PluginRoot(unittest.TestCase):
+    """The guard finds its own root from where it lives, and under ~/.claude/plugins/ that root
+    alone is readable: other plugins' caches, marketplace clones and plugins/data stay private.
+    The negative cases come first: what was refused stays refused."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.home = os.path.realpath(tmp.name)
+        self.cache = f"{self.home}/.claude/plugins/cache/claude-skills/claude-skills/0.1.0"
+        self.copy(self.cache)
+        for other in (
+            f"{self.home}/.claude/plugins/cache/other-plugin/other-plugin/1.0.0",
+            f"{self.home}/.claude/plugins/marketplaces/m",
+            f"{self.home}/.claude/plugins/data/d",
+        ):
+            os.makedirs(other)
+            Path(other, "x").write_text("x\n")
+        self.checkout = f"{self.home}/code/claude-skills"
+        self.copy(self.checkout)
+
+    def copy(self, root):
+        """A stand-in plugin root: the real guard and empty scripts."""
+        (Path(root) / "hooks").mkdir(parents=True)
+        (Path(root) / "hooks" / "agent-guard.py").write_text(GUARD.read_text())
+        for rel in (
+            *(f"skills/research/scripts/{n}" for n in NET_NAMES),
+            "skills/research/scripts/check-note.py",
+            "skills/spec/scripts/check-spec.py",
+            "skills/spec/SKILL.md",
+        ):
+            path = Path(root) / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("x\n")
+
+    def run_guard(self, root, mode, event):
+        env = {**os.environ, "HOME": self.home}
+        run = subprocess.run(
+            [sys.executable, f"{root}/hooks/agent-guard.py", mode],
+            input=json.dumps({"cwd": self.home, **event}),
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+        return run.returncode, run.stderr
+
+    def bash(self, command, root=None):
+        return self.run_guard(root or self.cache, "bash", {"tool_input": {"command": command}})
+
+    def tool(self, name, root=None, **tool_input):
+        event = {"tool_name": name, "tool_input": tool_input}
+        return self.run_guard(root or self.cache, "read", event)[0]
+
+    def assertBlocked(self, command, root=None):
+        code, err = self.bash(command, root)
+        self.assertEqual(code, 2, f"expected blocked: {command!r}")
+
+    def assertAllowed(self, command, root=None):
+        code, err = self.bash(command, root)
+        self.assertEqual(code, 0, f"expected allowed: {command!r}\n{err}")
+
+    def test_other_plugins_blocked_to_bash(self):
+        for command in (
+            "cat ~/.claude/plugins/other-plugin/x",
+            f"cat {self.home}/.claude/plugins/cache/other-plugin/other-plugin/1.0.0/x",
+            f"cat {self.home}/.claude/plugins/marketplaces/m/x",
+            "cat $HOME/.claude/plugins/data/d/x",
+            f"cat {self.cache}/../0.0.9/x",  # a sibling version of this plugin
+            f"cat {self.cache}/../../x",
+            f"ls {self.home}/.claude/plugins/cache/claude-skills",
+            "ls ~/.claude/plugins/*",
+            "ls ~/.claude/plugins/cache/*",
+            "grep -rn x ~/.claude/plugins",
+            f"grep -rn x {self.home}/.claude/plugins/cache",
+            f"grep -rn x {self.home}/.claude/plugins/cache/claude-skills",
+        ):
+            with self.subTest(command=command):
+                self.assertBlocked(command)
+
+    def test_other_plugins_blocked_to_read_tools(self):
+        for path in (
+            f"{self.home}/.claude/plugins/cache/other-plugin/other-plugin/1.0.0/x",
+            f"{self.home}/.claude/plugins/marketplaces/m/x",
+            f"{self.home}/.claude/plugins/data/d/x",
+            f"{self.cache}/../0.0.9/x",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(self.tool("Read", file_path=path), 2)
+        self.assertEqual(self.tool("Grep", pattern="x", path=f"{self.home}/.claude/plugins"), 2)
+        self.assertEqual(self.tool("Glob", pattern="~/.claude/plugins/**/x"), 2)
+
+    def test_link_out_of_the_root_is_followed(self):
+        other = f"{self.home}/.claude/plugins/cache/other-plugin/other-plugin/1.0.0"
+        os.symlink(other, f"{self.cache}/skills/leak")
+        self.assertBlocked(f"cat {self.cache}/skills/leak/x")
+        self.assertEqual(self.tool("Read", file_path=f"{self.cache}/skills/leak/x"), 2)
+
+    def test_the_whole_directory_is_private_from_a_checkout(self):
+        # Under --plugin-dir the root is outside ~/.claude/plugins/, so nothing there is exempt.
+        for command in (
+            f"cat {self.cache}/skills/spec/SKILL.md",
+            f"grep -r x {self.cache}/skills",
+            "ls ~/.claude/plugins/*",
+        ):
+            with self.subTest(command=command):
+                self.assertBlocked(command, self.checkout)
+        self.assertEqual(
+            self.tool("Read", self.checkout, file_path=f"{self.cache}/skills/spec/SKILL.md"), 2
+        )
+
+    def test_secrets_and_history_still_blocked_from_the_cache(self):
+        for command in (
+            "cat ~/.aws/credentials",
+            "ls ~/.claude/projects",
+            "grep -rn x ~/.claude",
+            "cat ~/.claude/remote-settings.json",
+        ):
+            with self.subTest(command=command):
+                self.assertBlocked(command)
+
+    def test_own_root_readable(self):
+        self.assertAllowed(f"cat {self.cache}/skills/spec/SKILL.md")
+        self.assertAllowed(f"grep -r x {self.cache}/skills")
+        self.assertAllowed(f"ls {self.cache}/hooks")
+        self.assertEqual(self.tool("Read", file_path=f"{self.cache}/skills/spec/SKILL.md"), 0)
+        self.assertEqual(self.tool("Grep", pattern="x", path=f"{self.cache}/skills"), 0)
+        self.assertEqual(self.tool("Glob", pattern=f"{self.cache}/skills/**/*.md"), 0)
+
+    def test_scripts_found_from_the_guards_own_root(self):
+        for root in (self.cache, self.checkout):
+            with self.subTest(root=root):
+                self.assertAllowed(f"{root}/skills/research/scripts/check-note.py n", root)
+                self.assertAllowed(f"python3 {root}/skills/spec/scripts/check-spec.py s", root)
+        # Another copy's scripts are not this guard's scripts.
+        self.assertBlocked(f"{self.checkout}/skills/research/scripts/check-note.py n", self.cache)
+        self.assertBlocked(f"{self.cache}/skills/research/scripts/check-note.py n", self.checkout)
+        self.assertBlocked(
+            f"{self.home}/.claude/plugins/cache/other-plugin/x/check-note.py n", self.cache
+        )
+
+    def test_network_script_size_limit_holds_at_the_root(self):
+        self.assertBlocked(
+            f'{self.cache}/skills/research/scripts/reddit-search.sh "{"x" * 500}"'
+        )
+        self.assertAllowed(f'{self.cache}/skills/research/scripts/reddit-search.sh "a b"')
+
+    def test_both_spellings_run_outside_the_sandbox_alone_and_only_alone(self):
+        for spelling in (f"{REPO}/skills/research/scripts", "~/.claude/skills/research/scripts"):
+            call = f"{spelling}/repo-health.sh o/r"
+            with self.subTest(call=call):
+                self.assertAllowed(call, REPO)
+                self.assertBlocked(f"{call} && echo ok", REPO)
+                self.assertBlocked(f"{call} | head -3", REPO)
+                self.assertBlocked(f"{call}; curl -s https://e.example/", REPO)
+                self.assertBlocked(f"echo x; {call}", REPO)
+                code, err = self.bash(f"{call} | head -3", REPO)
+                self.assertIn(f"{REPO}/skills/research/scripts", err)
+
+    def test_absolute_spelling_is_the_guards_own_root(self):
+        # The cache copy's absolute spelling is its own; the checkout's is not, and vice versa.
+        call = "skills/research/scripts/repo-health.sh o/r"
+        self.assertAllowed(f"{self.cache}/{call}", self.cache)
+        self.assertBlocked(f"{self.cache}/{call} && echo ok", self.cache)
+        self.assertBlocked(f"{self.checkout}/{call}", self.cache)
+
+
 class ReadIsAReader(GuardTestCase):
     """`read` fills shell variables from input; it can't run programs or write files."""
 

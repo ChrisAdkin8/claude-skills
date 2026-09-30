@@ -28,7 +28,8 @@ AGENT_CASE = json.loads(
 
 # Written-down exceptions, and why.
 # The agent's own tool output is saved under ~/.claude/projects, so only the guard covers it.
-AGENT_NOT_DENIED = {".claude/projects"}
+# Likewise ~/.claude/plugins: the guard exempts its own root there, which a deny can't say.
+AGENT_NOT_DENIED = {".claude/projects", ".claude/plugins"}
 # git and uv read their own config under ~/.config, so a spike is denied only parts of it.
 SPIKE_PARTLY_DENIED = {
     ".config": {".config/gh", ".config/gcloud", ".config/op", ".config/doctl"}

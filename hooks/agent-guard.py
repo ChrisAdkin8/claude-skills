@@ -77,23 +77,26 @@ HOME = Path.home()
 # refuses deeper, so outside_names has to reach as far as check_command does, or a gh in the
 # deepest body is never seen.
 MAX_DEPTH = 4
-# Resolved, like the command paths they're compared with, because ~/.claude/skills is a symlink
-# into the claude-skills repo: an unresolved entry would never match.
-SCRIPTS = {
-    (HOME / path).resolve()
-    for path in (
-        ".claude/skills/research/scripts/repo-health.sh",
-        ".claude/skills/research/scripts/check-note.py",
-        ".claude/skills/research/scripts/gcp-skus.sh",
-        ".claude/skills/research/scripts/reddit-search.sh",
-        ".claude/skills/spec/scripts/check-spec.py",
-    )
-}
+# The repo (or plugin cache copy) this guard lives in, found from its own location so it works
+# from ~/.claude/plugins/cache/..., a --plugin-dir checkout or the ~/.claude/hooks symlink alike.
+# Resolved, like the command paths they're compared with: an unresolved entry would never match.
+ROOT = Path(__file__).resolve().parents[1]
+RESEARCH_NAMES = ("repo-health.sh", "check-note.py", "gcp-skus.sh", "reddit-search.sh")
 # The scripts that send their arguments over the network, outside the sandbox and with the
 # user's gh, gcloud or Reddit credentials: their arguments get curl's and gh's size limits.
 NET_SCRIPT_NAMES = ("repo-health.sh", "gcp-skus.sh", "reddit-search.sh")
+# Until the skills stop writing ~/.claude/skills/... paths (part 2 of the plugin marketplace
+# spec), a script may be named through that symlink as well as by the root's own spelling.
+LEGACY_SKILLS = HOME / ".claude/skills"
+SCRIPTS = {
+    (base / path).resolve()
+    for base in (ROOT / "skills", LEGACY_SKILLS)
+    for path in (*(f"research/scripts/{n}" for n in RESEARCH_NAMES), "spec/scripts/check-spec.py")
+}
 NET_SCRIPTS = {
-    (HOME / ".claude/skills/research/scripts" / name).resolve() for name in NET_SCRIPT_NAMES
+    (base / "research/scripts" / name).resolve()
+    for base in (ROOT / "skills", LEGACY_SKILLS)
+    for name in NET_SCRIPT_NAMES
 }
 # Reading and text tools that can't run other programs or write files (the flags that would
 # are checked below).
@@ -215,7 +218,13 @@ WRAPPER_FLAGS = {
 # "gh" made the whole call run inside the sandbox, where they failed for want of their login. So a
 # call that holds one may hold nothing else, which also keeps curl and git from sharing a call
 # with something that runs outside the sandbox.
-OUTSIDE_SPELLINGS = {"gh"} | {f"~/.claude/skills/research/scripts/{n}" for n in NET_SCRIPT_NAMES}
+# The absolute spelling is the one the skills and agents write (the settings list it too: spike Q6
+# found an absolute entry excludes an absolute call); the `~` one stays until the skills move.
+OUTSIDE_SPELLINGS = (
+    {"gh"}
+    | {f"{ROOT}/skills/research/scripts/{n}" for n in NET_SCRIPT_NAMES}
+    | {f"~/.claude/skills/research/scripts/{n}" for n in NET_SCRIPT_NAMES}
+)
 # A web search query goes to the search provider unchecked by the sandbox, so it's capped like a
 # request: real queries run to 139 characters, and none holds a 40-character token.
 MAX_QUERY = 200
@@ -273,16 +282,27 @@ SECRET_HOME = tuple(
 # Session history: transcripts, prompt history, file snapshots and the agents' own briefs and
 # replies. No agent needs it, and a cold reviewer that could read the session that wrote a
 # document wouldn't be cold. Also denied in agent-sandbox.json, except ~/.claude/projects: the
-# agent's own tool output is saved there (SESSION_RESULTS), so only this guard covers it.
+# agent's own tool output is saved there (SESSION_RESULTS), so only this guard covers it. The
+# same goes for ~/.claude/plugins: other plugins' caches, marketplace clones and plugins/data are
+# private, but this guard's own root, when it lives there, is not (OWN_ROOT), and a sandbox deny
+# can't say that.
 HISTORY_HOME = tuple(
     HOME / p
     for p in (
-        ".claude/projects", ".claude/history.jsonl", ".claude/file-history", ".claude/sessions",
+        ".claude/plugins", ".claude/projects", ".claude/history.jsonl", ".claude/file-history", ".claude/sessions",
         ".claude/session-env", ".claude/shell-snapshots", ".claude/paste-cache",
         ".cache/agent-runs",
     )
 )  # fmt: skip
 PRIVATE_HOME = SECRET_HOME + HISTORY_HOME
+PLUGINS_HOME = HOME / ".claude/plugins"
+# The one directory under ~/.claude/plugins an agent may read: the plugin this guard is part of.
+# Under --plugin-dir or the hooks symlink the root is a checkout outside it, so nothing is exempt.
+OWN_ROOT = (
+    str(ROOT)
+    if any(parent in (PLUGINS_HOME, PLUGINS_HOME.resolve()) for parent in ROOT.parents)
+    else None
+)
 # The one part of the history an agent may read: its own session's saved tool output, which
 # Claude Code writes under ~/.claude/projects and points the agent at when a result is too long
 # to show. Set from the hook input's transcript path and session ID in main().
@@ -1052,6 +1072,8 @@ def secret_path(path):
     if SESSION_RESULTS and under(path, SESSION_RESULTS):
         return None
     for history in HISTORY_HOME:
+        if history == PLUGINS_HOME and OWN_ROOT and under(os.path.realpath(path), OWN_ROOT):
+            continue
         if under(path, str(history)):
             return f"{history} holds session history, which would show how a document was written"
     if hidden := next((p for p in Path(path).parts if p in SECRET_NAMES), None):
@@ -1324,9 +1346,9 @@ def check_outside_only(command):
     block(
         f"`{os.path.basename(holds[0])}` runs outside the sandbox only if every command in the call "
         "is `gh`, `repo-health.sh`, `gcp-skus.sh` or `reddit-search.sh` (written "
-        "`~/.claude/skills/research/scripts/<script> ...`), joined at most by `;`, `&&`, `||`, `|` "
+        f"`{ROOT}/skills/research/scripts/<script> ...`), joined at most by `;`, `&&`, `||`, `|` "
         "or a redirect that only duplicates a file descriptor, as `2>&1` does. With a text filter, "
-        "`cd`, `echo`, a loop, an assignment, `$(...)`, another redirect, an absolute path, `bash`, "
+        "`cd`, `echo`, a loop, an assignment, `$(...)`, another redirect, a different absolute path, `bash`, "
         "`command` or `xargs` in the call, the whole call runs inside the sandbox and can't read "
         "the login. Write several `gh` commands one after another, joined by `;`, not in a loop; "
         "trim their output with `--jq`, not `head` or `grep`; give `repo-health.sh` several repos; "

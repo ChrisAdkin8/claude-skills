@@ -11,14 +11,20 @@ would offer them; `run-agent.sh` passes each one to its own run. Two layers cont
 - **The sandbox** ([`hooks/agent-sandbox.json`](../hooks/agent-sandbox.json)): Claude Code's
   operating-system sandbox. Shell commands can't read credentials or secret environment variables,
   can't write under `~/code`, `~/notes` or `~/.claude`, and can reach only an allowed list of
-  websites.
+  websites. The committed file names the research scripts with `${CLAUDE_PLUGIN_ROOT}`, which
+  Claude Code doesn't expand in `--settings`, so [`hooks/agent-settings.py`](../hooks/agent-settings.py)
+  renders it with the repo's absolute path for each run, and `run-agent.sh` passes the result. An
+  `excludedCommands` entry matches a call only as written, so the rendered file lists the absolute
+  spelling and, until the skills move off `~/.claude/skills`, the `~` one too.
 - **The guard** ([`hooks/agent-guard.py`](../hooks/agent-guard.py)): a script Claude Code runs
   before each tool call, which can refuse it. It checks the agents' shell commands, file reads and
   writes, searches and web fetches. It keeps credentials out of their reach, since a fetched page
   could trick an agent into sending them out in a web address. It also hides session history (past
   conversations and earlier agent runs), so a verifier or cold reviewer can't see how the document
   it checks was written. If the guard itself fails, it refuses the call rather than letting it
-  through.
+  through. It finds the repo from its own location, and keeps `~/.claude/plugins/` private to
+  agents, other plugins' caches and marketplace clones included, except its own root when the repo
+  is installed there. Only the guard enforces that exception: a sandbox deny can't name it.
 
 ## What runs outside the sandbox
 

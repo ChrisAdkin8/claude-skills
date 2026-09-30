@@ -264,8 +264,8 @@ PUNCT = set("();<>|&")
 # Credentials no agent needs to read. A fetched page can still make an agent send data out in a
 # GET request's URL, so the data it can reach is what has to be limited. Shell history, cookies,
 # browser logins and keychains count: they hold tokens too. Every entry must also be in `denyRead`
-# and the Read denies of ~/.claude/hooks/agent-sandbox.json and
-# ~/.claude/skills/spec/spike-settings.json; tests/test_sandbox_settings.py checks it. The spike
+# and the Read denies of hooks/agent-sandbox.json and
+# skills/spec/spike-settings.json; tests/test_sandbox_settings.py checks it. The spike
 # settings deny only parts of ~/.config, because git and uv read their own config there.
 # ~/.claude/backups holds copies of ~/.claude.json; remote-settings.json holds managed settings,
 # telemetry auth headers among them, and its consent file an account id.

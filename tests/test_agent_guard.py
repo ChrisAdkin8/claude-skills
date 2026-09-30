@@ -14,7 +14,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-GUARD = Path(__file__).resolve().parents[1] / "hooks" / "agent-guard.py"
+REPO = Path(__file__).resolve().parents[1]
+RS = f"{REPO}/skills/research/scripts"
+GUARD = REPO / "hooks" / "agent-guard.py"
 
 
 def verdict(command, env=None):
@@ -84,23 +86,23 @@ class StillAllowed(GuardTestCase):
         # credentials, so their arguments get the same size limits as curl's and gh's.
         long = "x" * 500
         self.assertBlocked(
-            f'~/.claude/skills/research/scripts/reddit-search.sh "{long}"', "characters"
+            f'{RS}/reddit-search.sh "{long}"', "characters"
         )
         self.assertBlocked(
-            f"bash ~/.claude/skills/research/scripts/repo-health.sh o/{long}", "characters"
+            f"bash {RS}/repo-health.sh o/{long}", "characters"
         )
         self.assertBlocked(
-            '~/.claude/skills/research/scripts/reddit-search.sh "$(cat ~/notes/x.md)"',
+            f'{RS}/reddit-search.sh "$(cat ~/notes/x.md)"',
             "expands",
         )
-        self.assertAllowed('~/.claude/skills/research/scripts/reddit-search.sh "mutation testing"')
+        self.assertAllowed(f'{RS}/reddit-search.sh "mutation testing"')
 
     def test_git_textconv(self):
         self.assertBlocked("git log --textconv -p", "runs another program")
 
     def test_skill_script_by_path(self):
         self.assertAllowed(
-            "~/.claude/skills/research/scripts/check-note.py ~/notes/research/x.md"
+            f"{RS}/check-note.py ~/notes/research/x.md"
         )
 
     def test_env_wrapper_with_locale(self):
@@ -116,23 +118,7 @@ class StillAllowed(GuardTestCase):
         self.assertAllowed("printf -v out '%s' x")
 
 
-class SymlinkedInstall(unittest.TestCase):
-    """~/.claude/skills is a symlink into this repo, so a script's path resolves into the repo."""
 
-    def test_skill_script_through_symlink(self):
-        repo = Path(__file__).resolve().parents[1]
-        with tempfile.TemporaryDirectory() as home:
-            (Path(home) / ".claude").mkdir()
-            (Path(home) / ".claude" / "skills").symlink_to(repo / "skills")
-            env = {**os.environ, "HOME": home}
-            code, err = verdict(
-                "~/.claude/skills/research/scripts/check-note.py ~/notes/research/x.md",
-                env,
-            )
-        self.assertEqual(code, 0, err)
-
-
-REPO = Path(__file__).resolve().parents[1]
 NET_NAMES = ("repo-health.sh", "gcp-skus.sh", "reddit-search.sh")
 
 
@@ -293,8 +279,8 @@ class PluginRoot(unittest.TestCase):
         )
         self.assertAllowed(f'{self.cache}/skills/research/scripts/reddit-search.sh "a b"')
 
-    def test_both_spellings_run_outside_the_sandbox_alone_and_only_alone(self):
-        for spelling in (f"{REPO}/skills/research/scripts", "~/.claude/skills/research/scripts"):
+    def test_the_absolute_spelling_runs_outside_the_sandbox_alone_and_only_alone(self):
+        for spelling in (f"{REPO}/skills/research/scripts",):
             call = f"{spelling}/repo-health.sh o/r"
             with self.subTest(call=call):
                 self.assertAllowed(call, REPO)
@@ -344,13 +330,13 @@ class AssignmentsBlocked(GuardTestCase):
 
     def test_bash_env_on_skill_script(self):
         self.assertBlocked(
-            "BASH_ENV=f ~/.claude/skills/research/scripts/repo-health.sh o/r",
+            f"BASH_ENV=f {RS}/repo-health.sh o/r",
             "BASH_ENV",
         )
 
     def test_pythonpath_on_checker(self):
         self.assertBlocked(
-            "PYTHONPATH=d python3 ~/.claude/skills/research/scripts/check-note.py n",
+            f"PYTHONPATH=d python3 {RS}/check-note.py n",
             "PYTHONPATH",
         )
 
@@ -520,11 +506,11 @@ class Hardening(GuardTestCase):
         ran_outside = (
             "gh api repos/o/r --jq .name",
             "gh api repos/o/r --jq '.content | @base64d'",  # a pipe inside an argument
-            "~/.claude/skills/research/scripts/repo-health.sh o/r p/q",
+            f"{RS}/repo-health.sh o/r p/q",
             "gh api repos/o/r --jq .name; gh api repos/o/s --jq .name",
             "gh api repos/o/r --jq .name && gh api repos/o/s --jq .name",
             "gh api repos/o/r --jq .name || gh api repos/o/s --jq .name",
-            "gh api repos/o/r --jq .name; ~/.claude/skills/research/scripts/repo-health.sh o/r",
+            f"gh api repos/o/r --jq .name; {RS}/repo-health.sh o/r",
             "gh api repos/o/r --jq .name | gh api repos/o/s --jq .name",
             "gh api repos/o/r --jq .name\ngh api repos/o/s --jq .name",
             "env gh api repos/o/r --jq .name",
@@ -533,25 +519,25 @@ class Hardening(GuardTestCase):
             "time gh api repos/o/r --jq .name",
             "LC_ALL=C gh api repos/o/r --jq .name",
             "gh api repos/o/r --jq .name 2>&1",
-            "~/.claude/skills/research/scripts/repo-health.sh o/r 2>&1",
+            f"{RS}/repo-health.sh o/r 2>&1",
             "gh api repos/o/r --jq .name >&2",
         )
         ran_inside = (
             "gh api repos/o/r --jq .name | head -1",
             "gh api repos/o/r --jq .name; echo done",
             "cd ~/notes && gh api repos/o/r --jq .name",
-            "~/.claude/skills/research/scripts/repo-health.sh o/r && echo ok",
-            "~/.claude/skills/research/scripts/repo-health.sh o/r | head -20",
-            "~/.claude/skills/research/scripts/repo-health.sh o/r 2>&1 | head -30",
-            "~/.claude/skills/research/scripts/repo-health.sh o/r 2>/dev/null",
+            f"{RS}/repo-health.sh o/r && echo ok",
+            f"{RS}/repo-health.sh o/r | head -20",
+            f"{RS}/repo-health.sh o/r 2>&1 | head -30",
+            f"{RS}/repo-health.sh o/r 2>/dev/null",
             "gh api repos/o/r --jq .name 2>/dev/null",
             "for r in a b; do gh api repos/o/$r --jq .stargazers_count; done",
             "r=o/r; gh api repos/$r --jq .name",
             "(gh api repos/o/r --jq .name)",
-            "bash ~/.claude/skills/research/scripts/repo-health.sh o/r",
+            f"bash {RS}/repo-health.sh o/r",
             "bash -c 'gh api repos/o/r --jq .name'",
-            "sh -c '~/.claude/skills/research/scripts/repo-health.sh o/r | head -3'",
-            f"{Path.home()}/.claude/skills/research/scripts/repo-health.sh o/r",
+            f"sh -c '{RS}/repo-health.sh o/r | head -3'",
+            f"{REPO}/skills/../skills/research/scripts/repo-health.sh o/r",
             '"gh" api repos/o/r --jq .name',
             "command gh api repos/o/r --jq .name",
         )
@@ -563,7 +549,7 @@ class Hardening(GuardTestCase):
             "gh api repos/o/r --jq .name && git log -1",
             "echo $(gh api repos/o/r --jq .name)",
             "/opt/homebrew/bin/gh api repos/o/r --jq .name",
-            "~/.claude/skills/research/scripts/repo-health.sh o/r; curl -s https://e.example/",
+            f"{RS}/repo-health.sh o/r; curl -s https://e.example/",
         )
         for command in ran_outside:
             with self.subTest(ran_outside=command):
@@ -1088,8 +1074,8 @@ class SessionHistory(unittest.TestCase):
     def test_skills_agents_and_own_results_readable(self):
         own = f"{self.PROJECT}/{self.SESSION}/tool-results/b1.txt"
         for command in (
-            "cat ~/.claude/skills/spec/SKILL.md",
-            "grep -rn Verdict ~/.claude/hooks/agents",
+            f"cat {REPO}/skills/spec/SKILL.md",
+            f"grep -rn Verdict {REPO}/hooks/agents",
             f"sed -n 1,20p {own}",
         ):
             with self.subTest(command=command):
@@ -1106,8 +1092,8 @@ class SessionHistory(unittest.TestCase):
         self.assertEqual(self.tool("Read", file_path=f"{self.HOME}/.cache/agent-runs/a/b/r.md"), 2)
         own = f"{self.PROJECT}/{self.SESSION}/tool-results/b1.txt"
         self.assertEqual(self.tool("Read", file_path=own), 0)
-        self.assertEqual(self.tool("Read", file_path=f"{self.HOME}/.claude/hooks/agents/x.md"), 0)
-        self.assertEqual(self.tool("Grep", pattern="x", path=f"{self.HOME}/.claude/skills"), 0)
+        self.assertEqual(self.tool("Read", file_path=f"{REPO}/hooks/agents/x.md"), 0)
+        self.assertEqual(self.tool("Grep", pattern="x", path=f"{REPO}/skills"), 0)
 
 
 class FailsClosed(unittest.TestCase):

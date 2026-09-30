@@ -119,7 +119,7 @@ class RunAgent(unittest.TestCase):
         text = settings.read_text()
         self.assertNotIn("${", text)
         self.assertIn(f"{root}/skills/research/scripts/repo-health.sh *", text)
-        self.assertIn("~/.claude/skills/research/scripts/repo-health.sh *", text)
+        self.assertNotIn("~/.claude/skills", text)
         # The agent's guard hook is the root's own, not a path under ~/.claude.
         (guard,) = {
             h["command"]
@@ -223,8 +223,8 @@ class RunAgent(unittest.TestCase):
 
 
 class RunAgentFromACache(RunAgent):
-    """The same tests against a copy of hooks/ in a plugin cache path, with no ~/.claude/skills
-    or hooks link: the script finds its agents, guard and settings from where it lives."""
+    """The same tests against a copy of hooks/ in a plugin cache path, with no link under
+    ~/.claude: the script finds its agents, guard and settings from where it lives."""
 
     def setUp(self):
         super().setUp()

@@ -2,7 +2,7 @@
   "sandbox": {
     "enabled": true,
     "allowUnsandboxedCommands": false,
-    "excludedCommands": ["gh", "gh *", "~/.claude/skills/research/scripts/gcp-skus.sh *", "~/.claude/skills/research/scripts/reddit-search.sh *", "~/.claude/skills/research/scripts/repo-health.sh *", "${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/gcp-skus.sh *", "${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/reddit-search.sh *", "${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/repo-health.sh *"],
+    "excludedCommands": ["gh", "gh *", "${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/gcp-skus.sh *", "${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/reddit-search.sh *", "${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/repo-health.sh *"],
     "network": {
       "strictAllowlist": true,
       "allowedDomains": ["api.github.com", "github.com", "raw.githubusercontent.com", "codeload.github.com", "hn.algolia.com", "export.arxiv.org", "arxiv.org", "b0.p.awsstatic.com", "pricing.us-east-1.amazonaws.com", "cloudbilling.googleapis.com", "www.reddit.com", "oauth.reddit.com"]

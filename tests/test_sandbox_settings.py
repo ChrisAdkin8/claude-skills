@@ -132,11 +132,7 @@ class SandboxSettings(unittest.TestCase):
         # a Sonnet run rewrote it by hand when build-index.py was refused. Nothing else.
         expected = json.loads(json.dumps(AGENT))
         sandbox = expected["sandbox"]
-        # Both spellings of run-agent.sh, since the skills still call the `~` one until part 2's W3.
-        sandbox["excludedCommands"] += [
-            "${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.sh *",
-            "~/.claude/hooks/run-agent.sh *",
-        ]
+        sandbox["excludedCommands"].append("${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.sh *")
         sandbox["filesystem"]["denyRead"].remove("~/.cache/agent-runs")
         deny = expected["permissions"]["deny"]
         deny.remove("Read(~/.cache/agent-runs/**)")
@@ -145,8 +141,7 @@ class SandboxSettings(unittest.TestCase):
 
     def test_no_settings_file_locates_the_repo_through_home(self):
         # The `~/.claude` entries in the spike settings are denies (all of ~/.claude, plugins
-        # included), so they stay. The others may name the repo only with the placeholder or, for
-        # the legacy spelling, in the two agent files' excludedCommands until part 2's W3.
+        # included), so they stay. The others may name the repo only with the placeholder.
         for name, settings in (("spike-settings.json", SPIKE),):
             allowed = list(settings["sandbox"].get("excludedCommands", []))
             allowed += settings.get("permissions", {}).get("allow", [])
@@ -155,9 +150,10 @@ class SandboxSettings(unittest.TestCase):
                 with self.subTest(file=name, entry=entry):
                     self.assertNotIn("~/.claude", entry)
         for name, settings in (("agent-sandbox.json", AGENT), ("agent-case-settings.json", AGENT_CASE)):
-            legacy = [e for e in settings["sandbox"]["excludedCommands"] if "~/.claude" in e]
             with self.subTest(file=name):
-                self.assertTrue(all(e.startswith(("~/.claude/skills/research/scripts/", "~/.claude/hooks/run-agent.sh")) for e in legacy), legacy)
+                self.assertEqual(
+                    [e for e in settings["sandbox"]["excludedCommands"] if "~/.claude" in e], []
+                )
 
 
 if __name__ == "__main__":

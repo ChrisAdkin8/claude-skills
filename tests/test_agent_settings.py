@@ -75,18 +75,18 @@ class RenderedSettings(unittest.TestCase):
                 self.assertNotIn("${", out)
                 self.assertIn(str(REPO), out)
 
-    def test_both_spellings_are_excluded_until_the_skills_move(self):
+    def test_the_network_scripts_are_excluded_by_the_roots_spelling(self):
         for name, path in FILES.items():
             entries = json.loads(render(path, REPO)[1])["sandbox"]["excludedCommands"]
             for script in NET:
-                for spelling in (f"{REPO}/skills/research/scripts", "~/.claude/skills/research/scripts"):
-                    with self.subTest(file=name, entry=f"{spelling}/{script}"):
-                        self.assertIn(f"{spelling}/{script} *", entries)
+                entry = f"{REPO}/skills/research/scripts/{script} *"
+                with self.subTest(file=name, entry=entry):
+                    self.assertIn(entry, entries)
+                self.assertFalse([e for e in entries if e.startswith("~")], entries)
             self.assertIn("gh", entries)
         case = json.loads(render(FILES["agent-case-settings.json"], REPO)[1])
         entries = case["sandbox"]["excludedCommands"]
         self.assertIn(f"{REPO}/hooks/run-agent.sh *", entries)
-        self.assertIn("~/.claude/hooks/run-agent.sh *", entries)
         base = json.loads(render(FILES["agent-sandbox.json"], REPO)[1])
         self.assertNotIn(f"{REPO}/hooks/run-agent.sh *", base["sandbox"]["excludedCommands"])
 

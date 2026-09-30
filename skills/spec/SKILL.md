@@ -4,9 +4,9 @@ description: Turns a research note or a described change into an implementation 
 disable-model-invocation: true
 argument-hint: '[quick] <research note path> [direction] | [quick] <description of the change> | finish <spec path> | spike <spec path> | done <spec path>'
 allowed-tools: Read Grep Glob Edit(~/code/**/*.md) Edit(~/notes/**) Edit(~/.cache/spec-spikes/**) Bash(grep *) Bash(git rev-parse *) Bash(git status *) Bash(git ls-files *)
-  Bash(git -C ~/notes status *) Bash(~/.claude/hooks/git-read.py *) Bash(git -C ~/notes add *) Bash(git -C ~/notes commit *) Bash(~/.claude/skills/spec/scripts/check-spec.py *)
-  Bash(~/.claude/skills/research/scripts/check-note.py *) Bash(~/.claude/hooks/run-agent.sh *) Edit(~/.cache/agent-runs/**)
-  Bash(~/.claude/skills/spec/scripts/prepare-spike.sh ~/.cache/spec-spikes/*) Bash(~/.claude/skills/spec/scripts/run-spike.sh ~/.cache/spec-spikes/*)
+  Bash(git -C ~/notes status *) Bash(${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py *) Bash(git -C ~/notes add *) Bash(git -C ~/notes commit *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/check-spec.py *)
+  Bash(${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/check-note.py *) Bash(${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.sh *) Edit(~/.cache/agent-runs/**)
+  Bash(${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/prepare-spike.sh ~/.cache/spec-spikes/*) Bash(${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/run-spike.sh ~/.cache/spec-spikes/*)
 ---
 
 # Write an implementation spec
@@ -26,18 +26,18 @@ Request: $ARGUMENTS
 - [ ] Report and next steps
 ```
 
-**The record.** A spec's history goes in `<spec dir>/records/<basename>-record.md`, started from `~/.claude/skills/spec/record-template.md` when first needed: verifier rounds, reviews, the `Not reviewed:` log, spike routing, implementation notes.
+**The record.** A spec's history goes in `<spec dir>/records/<basename>-record.md`, started from `${CLAUDE_PLUGIN_ROOT}/skills/spec/record-template.md` when first needed: verifier rounds, reviews, the `Not reviewed:` log, spike routing, implementation notes.
 An older spec keeps it inline (`## Cold review` at its end, `Not reviewed:` lines in Open questions); move it to a record when you next edit the spec.
 
 Write no code in the repo, and don't branch or commit there.
 
-Run `git log`, `git diff` and any `git -C <dir>` read through `~/.claude/hooks/git-read.py`, and `git rev-parse`, `git status` and `git ls-files` too when the repo isn't the working directory.
+Run `git log`, `git diff` and any `git -C <dir>` read through `${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py`, and `git rev-parse`, `git status` and `git ls-files` too when the repo isn't the working directory.
 
-The checking rules are in `~/.claude/hooks/agents/spec-verifier.md`, and the cold review's prompt skeleton in `~/.claude/skills/cold-review/SKILL.md`. Don't restate either in a brief.
+The checking rules are in `${CLAUDE_PLUGIN_ROOT}/hooks/agents/spec-verifier.md`, and the cold review's prompt skeleton in `${CLAUDE_PLUGIN_ROOT}/skills/cold-review/SKILL.md`. Don't restate either in a brief.
 
 ## Agent runs
 
-Each agent runs as a headless, sandboxed session: read `~/.claude/hooks/run-agent.md` and follow it. The work dir is the repo root; the run dir is `~/.cache/agent-runs/<repo dir name>--<spec basename>/<agent>`. For a split spec, launch one per part at once.
+Each agent runs as a headless, sandboxed session: read `${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.md` and follow it. The work dir is the repo root; the run dir is `~/.cache/agent-runs/<repo dir name>--<spec basename>/<agent>`. For a split spec, launch one per part at once.
 
 ## Modes
 
@@ -62,7 +62,7 @@ Each agent runs as a headless, sandboxed session: read `~/.claude/hooks/run-agen
    - **Decision.** `grep -l '<note path, with ~>' ~/notes/decisions/*.md`; no match, or no files (grep errors), means none. Name an `accepted` one as the chosen option; mention a `proposed` one; ignore the rest.
 3. **Option.** The accepted decision, else the note's Recommendation, unless the direction says otherwise; if that's conditional or open, ask with AskUserQuestion, recommended first.
 4. **Where the spec goes.** Read `CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md`, `docs/*method*`, `docs/*process*`, `docs/adr*`, and look for `prompts/`, `docs/specs/`, `docs/design/`, `rfcs/`.
-   Follow a repo convention exactly (location, filename, sections, style, process); otherwise write `docs/specs/YYYY-MM-DD-short-slug.md` from `~/.claude/skills/spec/template.md`.
+   Follow a repo convention exactly (location, filename, sections, style, process); otherwise write `docs/specs/YYYY-MM-DD-short-slug.md` from `${CLAUDE_PLUGIN_ROOT}/skills/spec/template.md`.
 5. **Existing specs.** `grep -ril '<key terms>'` in the spec location. If one covers this, ask whether to update it or write a new one. Never rewrite a spec marked done or superseded.
 6. **Fresh session.** If this conversation has been building in this repo, suggest a fresh one.
 
@@ -91,7 +91,7 @@ Tell the user in one or two lines: the research note, the option, and where the 
 - **Spec files only**: in the repo, change only the spec (or its parts), its record and, in step 7, its spike results file.
 - **Length.** Past about 3,000 words or seven work items, split it into `<date>-<slug>-1-<phase>.md`, `-2-<phase>.md`…, each naming the earlier as a prerequisite; steps 3–5 run per part.
 
-Then run `~/.claude/skills/spec/scripts/check-spec.py <spec> --repo <repo root> --read-at <commit>` (`--cite-repo <path>` for a new repo citing another) until it prints `RESULT: PASS`. Fix the WARN lines that are real.
+Then run `${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/check-spec.py <spec> --repo <repo root> --read-at <commit>` (`--cite-repo <path>` for a new repo citing another) until it prints `RESULT: PASS`. Fix the WARN lines that are real.
 
 ## 4. Verify
 
@@ -125,7 +125,7 @@ If a cold review is saved, stop after step 5's item 5 and report as its item 7 d
 4. **Status**: leave `draft`, or the house equivalent; the user moves it on.
 5. **Link the notes.** Add the spec's `~` path to the research note's `related` (leave its status alone); for an idea note, also set `status: adopted`; for an accepted decision, add it to `related`. `git -C ~/notes add <files>`, then `git -C ~/notes commit -m 'spec: <title>' -- <files>`, following this session's attribution rules. Don't push. Leave the spec and record uncommitted.
 6. **Launch the cold review**, unless one is saved or this is `quick` mode.
-   - Read `~/.claude/skills/cold-review/SKILL.md` and build the prompt for the kind `Implementation spec` from three of its sections: *Read the document in full* (that kind's table row and extra lines), *Gather pointers* and *Write the prompt* (the skeleton).
+   - Read `${CLAUDE_PLUGIN_ROOT}/skills/cold-review/SKILL.md` and build the prompt for the kind `Implementation spec` from three of its sections: *Read the document in full* (that kind's table row and extra lines), *Gather pointers* and *Write the prompt* (the skeleton).
    - Fill in the repo root and cite repo; as entry points, the checks from step 2 (CI, Makefile or Taskfile targets, pre-commit, lint and policy config); as rules files, those from step 1; the research note, or "none". In `finish` mode, Glob for them.
    - Pointers only: no summary of the spec, your reasons, what you think is weak, or what the verifier found. One prompt per part of a split spec.
    - Run `cold-reviewer` (Agent runs), tell the user in one line, and end your turn.
@@ -145,12 +145,12 @@ If a cold review is saved, stop after step 5's item 5 and report as its item 7 d
    - Log a later change to a work item, Done when, the Design or the Decision the same way, `from spike S<n>` or `from the user`. No second full cold review; the one delta review of the `Not reviewed:` lines is `/cold-review <spec>`.
 5. **Spikes.** Unless Spike questions says "None.", offer step 7.
 6. **Next**, always: step 7, if it runs; `/spec finish <spec>` only after hand edits; `/cold-review <spec>` if there are `Not reviewed:` lines; `status: reviewed`; implement.
-   Give the implementation prompt only once `check-spec.py` passes with `status: reviewed`. The prompt, for a fresh session on a branch in plan mode: "implement `<spec path>`, W1 first. First run `~/.claude/skills/spec/scripts/check-spec.py <spec path> --repo <repo root>`, and if it prints `RESULT: FAIL`, stop and say why". Then `/spec done <spec>`.
+   Give the implementation prompt only once `check-spec.py` passes with `status: reviewed`. The prompt, for a fresh session on a branch in plan mode: "implement `<spec path>`, W1 first. First run `${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/check-spec.py <spec path> --repo <repo root>`, and if it prints `RESULT: FAIL`, stop and say why". Then `/spec done <spec>`.
 
 ## 7. Spike
 
-Read `~/.claude/skills/spec/spike-step.md` and follow it. In `spike` mode, start there.
+Read `${CLAUDE_PLUGIN_ROOT}/skills/spec/spike-step.md` and follow it. In `spike` mode, start there.
 
 ## 8. Done
 
-Read `~/.claude/skills/spec/done-step.md` and follow it. In `done` mode, start there.
+Read `${CLAUDE_PLUGIN_ROOT}/skills/spec/done-step.md` and follow it. In `done` mode, start there.

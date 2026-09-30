@@ -3,7 +3,7 @@ name: cold-review
 description: Gives a markdown document one adversarial read by an agent that never saw the conversation that wrote it, and relays what it found; on a reviewed document, reviews only the changes logged since. Runs when the user types /cold-review.
 disable-model-invocation: true
 argument-hint: <path to a markdown file> | prompt <path to a markdown file>
-allowed-tools: Read, Grep, Glob, Bash(git rev-parse *), Bash(git status *), Bash(git ls-files *), Bash(~/.claude/hooks/git-read.py *), Bash(~/.claude/skills/cold-review/scripts/review-state.py *), Bash(grep *), Bash(ls *), Bash(~/.claude/hooks/run-agent.sh *), Edit(~/.cache/agent-runs/**), Edit(~/code/**/records/*-record.md), Edit(~/notes/**/records/*-record.md)
+allowed-tools: Read, Grep, Glob, Bash(git rev-parse *), Bash(git status *), Bash(git ls-files *), Bash(${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py *), Bash(${CLAUDE_PLUGIN_ROOT}/skills/cold-review/scripts/review-state.py *), Bash(grep *), Bash(ls *), Bash(${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.sh *), Edit(~/.cache/agent-runs/**), Edit(~/code/**/records/*-record.md), Edit(~/notes/**/records/*-record.md)
 ---
 
 
@@ -14,7 +14,7 @@ Document: $ARGUMENTS
 An agent that never saw the document written gives it one adversarial read, and you relay it.
 One full round per document; changes logged afterwards as `Not reviewed:` lines get one **delta
 review**. Its history goes in the **record**, `records/<basename>-record.md` beside it (layout:
-`~/.claude/skills/spec/record-template.md`); older documents keep theirs at their end.
+`${CLAUDE_PLUGIN_ROOT}/skills/spec/record-template.md`); older documents keep theirs at their end.
 
 `/spec` builds its cold review from three sections of this file: *Read the document in full*
 (the `Implementation spec` row and its extra lines), *Gather pointers* and *Write the prompt*
@@ -40,7 +40,7 @@ reviewer runs, and in the final report. When it returns, carry on from the first
 
 1. **The document.** The path from `$ARGUMENTS`, else the document just discussed, else ask for
    one in one line and stop. It must exist and be markdown.
-2. **Where it stands.** Run `~/.claude/skills/cold-review/scripts/review-state.py <document>`.
+2. **Where it stands.** Run `${CLAUDE_PLUGIN_ROOT}/skills/cold-review/scripts/review-state.py <document>`.
    Its last line is the `state:`:
    - `full`: no saved review. Carry on with the full review.
    - `delta`: the delta review, from the `diff:` command and `logged:` lines it printed. Run
@@ -50,7 +50,7 @@ reviewer runs, and in the final report. When it returns, carry on from the first
      change; once the user confirms them, add them to the record and do the delta review.
    - `unchanged` (say its `review-date:`), `no-base` (no commit to diff from) or `done` (name any
      `logged:` lines left): say so, and stop.
-3. **Its repo**: `repo:` and `head:` from the script. If `~/.claude/hooks/git-read.py -C <repo>
+3. **Its repo**: `repo:` and `head:` from the script. If `${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py -C <repo>
    status --porcelain` shows the document or its code uncommitted, say so in one line.
 4. **Who wrote it.** If this session wrote or edited it, say so in one line and offer `prompt`
    mode.
@@ -114,7 +114,7 @@ path> | at its end, under "## Cold review">. Since then it has changed in the pl
 document straight through once as usual, then report only findings in these changes, or caused by
 them elsewhere in the document. The lines below say where it changed, as its author logged it, not
 whether the change is right. Leave the saved review alone: it is a record.
-- Diff: `<the diff: line from step 1, with "git" in place of "~/.claude/hooks/git-read.py">`<, or "none: there is no commit to diff from">
+- Diff: `<the diff: line from step 1, with "git" in place of "${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py">`<, or "none: there is no commit to diff from">
 - Changes logged since the review: <each Not reviewed: line, quoted exactly>>
 
 How to go about it:
@@ -135,7 +135,7 @@ Then one line each: `Counts: N findings - C correctness, R requirement, K neithe
 In `prompt` mode, give the user the filled-in prompt in a fenced block, to run in a session with
 no history of this one, ask them to paste the reply back here, and stop.
 
-Otherwise run the `cold-reviewer` agent: read `~/.claude/hooks/run-agent.md` and follow it, with
+Otherwise run the `cold-reviewer` agent: read `${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.md` and follow it, with
 the prompt as the brief. The work dir is the repo root, or the document's directory. The run dir is
 `~/.cache/agent-runs/<name>/cold-reviewer` (`cold-reviewer-delta` for a delta review), where
 `<name>` is `<repo dir name>--<document basename>` (outside a repo, its directory's name).

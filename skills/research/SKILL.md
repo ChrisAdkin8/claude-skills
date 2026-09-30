@@ -3,7 +3,7 @@ name: research
 description: Researches a question or idea and writes a cited markdown note to ~/notes/research, which an independent agent then verifies. Runs when the user types /research.
 disable-model-invocation: true
 argument-hint: '[quick | ideas] <question or path to an idea note> | finish <path to research note> ["claim to check" ...]'
-allowed-tools: Read Edit(~/notes/**) Bash(grep *) Bash(git -C ~/notes status *) Bash(~/.claude/hooks/git-read.py *) Bash(git -C ~/notes add *) Bash(git -C ~/notes commit *) Bash(~/.claude/skills/research/scripts/check-note.py *) Bash(~/.claude/skills/research/scripts/build-index.py *) Bash(~/.claude/hooks/run-agent.sh *) Edit(~/.cache/agent-runs/**)
+allowed-tools: Read Edit(~/notes/**) Bash(grep *) Bash(git -C ~/notes status *) Bash(${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py *) Bash(git -C ~/notes add *) Bash(git -C ~/notes commit *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/check-note.py *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/build-index.py *) Bash(${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.sh *) Edit(~/.cache/agent-runs/**)
 ---
 
 # Research and document
@@ -23,13 +23,13 @@ Request: $ARGUMENTS
 
 Every commit in `~/notes` names its files after `--`: `git -C ~/notes commit -m '<message>' -- <files>`. If git says `index.lock` exists, retry once.
 
-Run `git log`, `git diff` and every other read-only git command except `git -C ~/notes status` through `~/.claude/hooks/git-read.py`.
+Run `git log`, `git diff` and every other read-only git command except `git -C ~/notes status` through `${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py`.
 
-The research rules are in `~/.claude/hooks/agents/researcher.md` and the checking rules in `~/.claude/hooks/agents/research-verifier.md`. Don't restate them in briefs.
+The research rules are in `${CLAUDE_PLUGIN_ROOT}/hooks/agents/researcher.md` and the checking rules in `${CLAUDE_PLUGIN_ROOT}/hooks/agents/research-verifier.md`. Don't restate them in briefs.
 
 ## Agent runs
 
-Each agent runs as a headless, sandboxed session: read `~/.claude/hooks/run-agent.md` and follow it. The work dir is `~/notes`; the run dir is `~/.cache/agent-runs/<note basename>/<agent>`; `finish` mode uses `research-verifier-finish`.
+Each agent runs as a headless, sandboxed session: read `${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.md` and follow it. The work dir is `~/notes`; the run dir is `~/.cache/agent-runs/<note basename>/<agent>`; `finish` mode uses `research-verifier-finish`.
 
 ## Modes
 
@@ -69,10 +69,10 @@ If `git -C ~/notes status` fails or `~/notes/templates/research.md` is missing, 
 
 ## 2. When the researcher finishes
 
-1. Run `~/.claude/skills/research/scripts/check-note.py --headroom <note>`. If the agent failed, or the note is missing or has no Sources, tell the user and stop; don't commit.
+1. Run `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/check-note.py --headroom <note>`. If the agent failed, or the note is missing or has no Sources, tell the user and stop; don't commit.
    - Run `git -C ~/notes status --porcelain --untracked-files=all`: it lists every new file, where plain `--porcelain` shows a new directory as one line. The researcher may write only its note: flag any other changed file under `~/notes/research` not in the output kept at launch, and any change to `~/notes/projects/mindshare/attention-evidence.md` or `~/notes/ideas/`.
    - A flagged note another run's brief names (`grep -l 'Output file: <its absolute path>' ~/.cache/agent-runs/*/researcher*/brief.md`, in another run dir) is that run's; leave it. For any other, show the user the diff and ask. Commit neither.
-2. On FAIL, send the FAIL lines to the researcher as a follow-up (`~/.claude/hooks/run-agent.md`, Follow-ups) to fix. After two rounds, carry on and report what still fails.
+2. On FAIL, send the FAIL lines to the researcher as a follow-up (`${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.md`, Follow-ups) to fix. After two rounds, carry on and report what still fails.
 3. Run the `research-verifier` agent (Agent runs) with the brief `Note: <absolute path>. Today's date: <YYYY-MM-DD>.`, adding `Depth: ideas: run the prior-art hunt first.` at ideas depth. Tell the user in one line that it's being verified. End your turn.
 
 In `finish` mode, start here:
@@ -81,7 +81,7 @@ In `finish` mode, start here:
 2. Collect the claims to name in the brief:
    - claims passed as arguments;
    - claims the check reports as no longer matching;
-   - claims changed since the last verification: find the last `research:` commit that touched the note (`~/.claude/hooks/git-read.py -C ~/notes log --format='%h %s' -- <note>`), then `~/.claude/hooks/git-read.py -C ~/notes diff <that commit> -- <note>`. Skip this if the note has never been committed, or if `~/notes` has no commits yet: `log` fails there.
+   - claims changed since the last verification: find the last `research:` commit that touched the note (`${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py -C ~/notes log --format='%h %s' -- <note>`), then `${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py -C ~/notes diff <that commit> -- <note>`. Skip this if the note has never been committed, or if `~/notes` has no commits yet: `log` fails there.
 3. Run the verifier (Agent runs, in the run dir `research-verifier-finish`) with the brief above, plus `Also check: "<claim>"; "<claim>"` if there are any.
 
 ## 3. When the verifier finishes
@@ -129,8 +129,8 @@ If it's still missing, say in the report that novelty wasn't independently check
 
    A visibly marked claim that can't be verified (a JavaScript-only page, a login wall) doesn't hold a note in draft unless the Bottom line stands on it. Otherwise set `status: draft`, even if it was `final`, and say why.
 6. **Link the idea**, if there was one: set its `status: exploring` if it's still `seed` (never move `adopted`, `parked` or `dropped` back), and add the research note's path to its `related`. If the Bottom line recommends against the idea, say so in the report and suggest `parked` or `dropped`; that call is the user's.
-7. **Ideas depth only**: read `~/.claude/skills/research/ideas-finish.md` and follow it.
-8. **Rebuild the notes index**: run `~/.claude/skills/research/scripts/build-index.py ~/notes`. If it fails, say so in the report and commit without the index; don't write `index.md` yourself.
+7. **Ideas depth only**: read `${CLAUDE_PLUGIN_ROOT}/skills/research/ideas-finish.md` and follow it.
+8. **Rebuild the notes index**: run `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/build-index.py ~/notes`. If it fails, say so in the report and commit without the index; don't write `index.md` yourself.
 9. **Commit** only the files you created or changed in `~/notes` (the note, an edited idea note, `index.md` and, at ideas depth, the evidence note and new idea notes): `git -C ~/notes add <files>`, then `git -C ~/notes commit -m 'research: <title>' -- <files>`, following this session's commit attribution rules. Don't push.
 10. **Report** in five lines or fewer (six at ideas depth):
    - the note path;

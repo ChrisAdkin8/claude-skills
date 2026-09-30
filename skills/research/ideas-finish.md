@@ -1,6 +1,8 @@
 # /research at ideas depth: after the note is verified
 
-`~/.claude/skills/research/SKILL.md` loads this file from the *Ideas depth only* item of its *When the verifier finishes*, at `ideas` depth only, after the note's Verification, status and idea link are settled. Then it carries on with its commit step.
+`${CLAUDE_PLUGIN_ROOT}/skills/research/SKILL.md` loads this file from the *Ideas depth only* item of its *When the verifier finishes*, at `ideas` depth only, after the note's Verification, status and idea link are settled. Then it carries on with its commit step.
+
+`${CLAUDE_PLUGIN_ROOT}` in this file is the plugin's root, the directory that holds its `skills/` and `hooks/`. Claude Code expands it in `SKILL.md` but not in a file you read, so in a Bash call write the absolute path, never the variable.
 
 1. **Merge the attention evidence.** Append each row of the note's Findings → Attention evidence table to the table in `~/notes/projects/mindshare/attention-evidence.md`, unless a row with the same Item and Source is already there (several items can come from one query). Use corrected figures where the verifier corrected one. If the new rows change a reading in its Patterns list, or support a new one, update that line and its date. This is the only step that edits the evidence note.
 2. **File the top three as idea notes.** For Shortlist rows #1, #2 and #3 only; the rest of the Shortlist and the Candidate pool stay in the research note as the record:

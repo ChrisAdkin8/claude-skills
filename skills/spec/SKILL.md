@@ -109,6 +109,7 @@ Today's date: <YYYY-MM-DD>
 Tell the user in one line that the spec is being verified. End your turn.
 
 In `finish` mode, start here: the repo is the spec's, and `cite-repo` and `read-at` come from its frontmatter or "Read at" line (else `HEAD`, saying drift can't be measured). Run the check, fix FAIL lines, and launch the verifier in `spec-verifier-finish`.
+Before the verifier, move read-at on if the code has: run the check with `--drift`. For each `DRIFT: <path>:<range>` line, re-read those lines at HEAD (`${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py -C <cite repo> show HEAD:<path>`) and fix the citation: new line numbers, or the fact restated if it changed. Then set `read-at` (and the Background's "Read at" line) to `git rev-parse --short HEAD`, and re-run the check until it prints `RESULT: PASS` and no `DRIFT:` line. A re-cite that changes no work item, Done when, Design or Decision isn't logged as `Not reviewed:` (step 6 item 4); one that does is.
 If a cold review is saved, stop after step 5's item 5 and report as its item 7 does.
 
 ## 5. When the verifier finishes
@@ -129,7 +130,7 @@ If a cold review is saved, stop after step 5's item 5 and report as its item 7 d
    - Fill in the repo root and cite repo; as entry points, the checks from step 2 (CI, Makefile or Taskfile targets, pre-commit, lint and policy config); as rules files, those from step 1; the research note, or "none". In `finish` mode, Glob for them.
    - Pointers only: no summary of the spec, your reasons, what you think is weak, or what the verifier found. One prompt per part of a split spec.
    - Run `cold-reviewer` (Agent runs), tell the user in one line, and end your turn.
-7. **Quick mode ends here.** Report as step 6 item 1 says, without the review, then give step 6 item 6's implementation prompt. Say that `/spec finish <spec>` gives it a cold review.
+7. **Quick mode ends here.** Report as step 6 item 1 says, without the review, then give step 6 item 6's hand-off to `/implement`. Say that `/spec finish <spec>` gives it a cold review.
 
 ## 6. When the reviewer finishes
 
@@ -145,7 +146,7 @@ If a cold review is saved, stop after step 5's item 5 and report as its item 7 d
    - Log a later change to a work item, Done when, the Design or the Decision the same way, `from spike S<n>` or `from the user`. No second full cold review; the one delta review of the `Not reviewed:` lines is `/cold-review <spec>`.
 5. **Spikes.** Unless Spike questions says "None.", offer step 7.
 6. **Next**, always: step 7, if it runs; `/spec finish <spec>` only after hand edits; `/cold-review <spec>` if there are `Not reviewed:` lines; `status: reviewed`; implement.
-   Give the implementation prompt only once `check-spec.py` passes with `status: reviewed`. The prompt, for a fresh session on a branch in plan mode: "implement `<spec path>`, W1 first. First run `${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/check-spec.py <spec path> --repo <repo root>`, and if it prints `RESULT: FAIL`, stop and say why". Then `/spec done <spec>`.
+   Give the hand-off only once `check-spec.py` passes with `status: reviewed`: commit the spec, its record and its spike results (if any), then run `/implement <spec path>`. It checks them, implements the work items test first on a branch of its own, `implement/<spec basename>`, in a worktree beside the repo, and has each Done when re-run by a verifier. Then `/spec done <spec>`, run from that worktree.
 
 ## 7. Spike
 

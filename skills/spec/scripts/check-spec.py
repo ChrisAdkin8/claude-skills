@@ -2,6 +2,7 @@
 """Check a /spec implementation spec's citations, structure and links before it is verified.
 
 Usage: check-spec.py <spec.md> [--repo DIR] [--cite-repo DIR] [--read-at SHA]
+                     [--drift | --drift-at REV]
 
 --repo defaults to the git repo containing the spec. --cite-repo is the repo that `path:line`
 citations point into; it defaults to the spec's `cite-repo` frontmatter, else --repo (a new,
@@ -11,6 +12,11 @@ empty repo cites the repo it borrows fixtures or code from). --read-at defaults 
 Citations are checked against the files as they were at read-at, because that's what the spec
 describes; drift since then is reported separately. `(:48)` after a full citation in the same
 paragraph means the same file. Prints FAIL, WARN and INFO lines and exits 1 if anything failed.
+
+--drift also prints `DRIFT: <file>:<start>-<end>` for each cited range whose lines changed between
+read-at and the working tree (a hunk's read-at side overlaps it, or a hunk inserts lines inside
+it); --drift-at REV does the same between read-at and REV. The file-level WARN names the files;
+these name the ranges. Neither changes the result.
 
 A spec holds the plan; its review history lives in its record, `records/<spec basename>-record.md`
 beside it: the cold review and any delta review, the `Not reviewed:` changes since, verifier
@@ -247,8 +253,10 @@ def check_range(snap, rel, start, end, ref, fails, warns):
 
 
 def check_citations(body, snap, templated, fails, warns):
-    """Return the set of cite-repo files cited, and the citation count."""
+    """Return the set of cite-repo files cited, the citation count, and the cited ranges as
+    (file, start, end), in the order they appear."""
     cited, count, bare, unresolved, orphans = set(), 0, [], [], []
+    ranges = []
     last_file = None  # the file a `:48` shorthand refers to
     last_bad = None  # the last full citation, if it didn't resolve to a checkable file
     for line in body:
@@ -278,6 +286,7 @@ def check_citations(body, snap, templated, fails, warns):
                         count += 1
                         ref = f"{last_file}{item.group(0)}"
                         check_range(snap, last_file, start, end, ref, fails, warns)
+                        ranges.append((last_file, start, end))
                 continue
             path, start = m.group(1), int(m.group(2))
             end = int(m.group(3)) if m.group(3) else start
@@ -292,6 +301,7 @@ def check_citations(body, snap, templated, fails, warns):
                 cited.add(rel)
                 last_file, last_bad = rel, None
                 check_range(snap, rel, start, end, ref, fails, warns)
+                ranges.append((rel, start, end))
                 continue
             if "/" in rel and snap.dir_exists(rel.split("/")[0]):
                 count += 1
@@ -305,6 +315,7 @@ def check_citations(body, snap, templated, fails, warns):
                     # mustn't pass because the name is short.
                     cited.add(owners[0])
                     check_range(snap, owners[0], start, end, ref, fails, warns)
+                    ranges.append((owners[0], start, end))
                     last_file, last_bad = owners[0], None
                     continue
                 unresolved.append(f"{ref} (could be {', '.join(sorted(owners)[:3])})")
@@ -342,7 +353,29 @@ def check_citations(body, snap, templated, fails, warns):
             f"{len(orphans)} shorthand citations ({', '.join(orphans[:5])}) have no full "
             "citation earlier in their paragraph to take a file from"
         )
-    return cited, count
+    return cited, count, ranges
+
+
+HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+\d+(?:,\d+)? @@")
+
+
+def drifted(repo, read_at, rev, rel, spans):
+    """The (start, end) spans in rel whose lines `git diff -U0 read_at [rev]` changes: a hunk's
+    read-at side overlaps the span, or the hunk inserts lines strictly inside it."""
+    out = git(repo, "diff", "-U0", read_at, *([rev] if rev else []), "--", rel) or ""
+    hunks = []
+    for line in out.splitlines():
+        m = HUNK.match(line)
+        if m:
+            hunks.append((int(m.group(1)), 1 if m.group(2) is None else int(m.group(2))))
+    hit = []
+    for start, end in spans:
+        for at, n in hunks:
+            # n == 0 is a pure insertion after read-at line `at`.
+            if (n and at <= end and at + n - 1 >= start) or (not n and start <= at < end):
+                hit.append((start, end))
+                break
+    return hit
 
 
 def has_nested_list(lines, i):
@@ -413,6 +446,15 @@ def main():
     parser.add_argument("--repo")
     parser.add_argument("--cite-repo")
     parser.add_argument("--read-at")
+    drift = parser.add_mutually_exclusive_group()
+    drift.add_argument(
+        "--drift", action="store_true",
+        help="print the cited ranges whose lines changed between read-at and the working tree",
+    )  # fmt: skip
+    drift.add_argument(
+        "--drift-at", metavar="REV",
+        help="print the cited ranges whose lines changed between read-at and REV",
+    )  # fmt: skip
     args = parser.parse_args()
 
     spec = Path(args.spec).expanduser().resolve()
@@ -517,7 +559,7 @@ def main():
 
     # Citations, checked against the cite repo as it was at read-at.
     snap = Snapshot(cite_repo, read_at)
-    cited, count = check_citations(body, snap, templated, fails, warns)
+    cited, count, ranges = check_citations(body, snap, templated, fails, warns)
 
     # Borrowed facts need a URL a reader without ~/notes can follow.
     if templated:
@@ -539,6 +581,7 @@ def main():
             fails.append("no `path:line` citations: Background facts need them")
 
     # Drift since read-at.
+    changed = None
     if read_at and cited:
         changed = git(cite_repo, "diff", "--name-only", read_at, "--", *sorted(cited))
         if changed:
@@ -547,6 +590,24 @@ def main():
                 "as of read-at, so re-read these before relying on them: "
                 + ", ".join(changed.splitlines())
             )
+    # Range-level drift, on request: against the working tree (the files the WARN names), or
+    # against a commit (the cited files that differ between read-at and it).
+    drift_lines = []
+    drift_rev = args.drift_at
+    if drift_rev and read_at and (
+        git(cite_repo, "rev-parse", "--verify", "--quiet", f"{drift_rev}^{{commit}}") is None
+    ):
+        fails.append(f"--drift-at {drift_rev} is not a commit in {cite_repo}")
+        drift_rev = None
+    elif drift_rev and read_at and cited:
+        changed = git(
+            cite_repo, "diff", "--name-only", read_at, drift_rev, "--", *sorted(cited)
+        )  # fmt: skip
+    if (args.drift or drift_rev) and read_at and changed:
+        for rel in changed.splitlines():
+            spans = list(dict.fromkeys((s, e) for f, s, e in ranges if f == rel))
+            for start, end in drifted(cite_repo, read_at, drift_rev, rel, spans):
+                drift_lines.append(f"{rel}:{start}-{end}")
 
     # Linked notes must exist.
     text = "\n".join(lines)
@@ -720,7 +781,9 @@ def main():
         f"{marks} assumption/unverified marks, {words} words, status {stated or '?'}"
     )
 
-    for label, found in (("FAIL", fails), ("WARN", warns), ("INFO", infos)):
+    for label, found in (
+        ("FAIL", fails), ("WARN", warns), ("INFO", infos), ("DRIFT", drift_lines),
+    ):  # fmt: skip
         for item in found:
             print(f"{label}: {item}")
     print("RESULT: " + ("FAIL" if fails else "PASS"))

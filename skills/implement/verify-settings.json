@@ -1,0 +1,35 @@
+{
+  "sandbox": {
+    "enabled": true,
+    "allowUnsandboxedCommands": false,
+    "network": { "allowedDomains": [], "strictAllowlist": true },
+    "filesystem": {
+      "denyRead": [
+        "~/notes", "~/code", "~/.claude", "~/.claude.json", "~/.ssh", "~/.aws", "~/.kube", "~/.gnupg",
+        "~/.docker", "~/.azure", "~/.netrc", "~/.git-credentials", "~/.npmrc", "~/.pypirc",
+        "~/.config/gh", "~/.config/gcloud", "~/.config/op", "~/.config/doctl",
+        "~/.zsh_history", "~/.bash_history", "~/Library/Keychains", "~/Library/Cookies",
+        "~/Library/Application Support/Google/Chrome", "~/.cache/agent-runs"
+      ],
+      "allowWrite": ["~/.cache/spec-spikes/.uv-cache"]
+    }
+  },
+  "permissions": {
+    "deny": [
+      "Read(~/notes/**)", "Read(~/code/**)", "Read(~/.claude/**)", "Read(~/.ssh/**)", "Read(~/.aws/**)",
+      "Read(~/.claude.json)", "Read(~/.kube/**)", "Read(~/.gnupg/**)", "Read(~/.docker/**)", "Read(~/.azure/**)",
+      "Read(~/.netrc)", "Read(~/.git-credentials)", "Read(~/.npmrc)", "Read(~/.pypirc)",
+      "Read(~/.config/gh/**)", "Read(~/.config/gcloud/**)", "Read(~/.config/op/**)", "Read(~/.config/doctl/**)",
+      "Read(~/.zsh_history)", "Read(~/.bash_history)", "Read(~/Library/Keychains/**)", "Read(~/Library/Cookies/**)",
+      "Read(~/Library/Application Support/Google/Chrome/**)", "Read(~/.cache/agent-runs/**)",
+      "Write(~/notes/**)", "Write(~/code/**)", "Write(~/.claude/**)", "Write(~/.ssh/**)", "Write(~/.aws/**)",
+      "Edit(~/notes/**)", "Edit(~/code/**)", "Edit(~/.claude/**)", "Edit(~/.ssh/**)", "Edit(~/.aws/**)",
+      "Write(~/.zshrc)", "Write(~/.zprofile)", "Write(~/.bashrc)", "Write(~/.profile)",
+      "Edit(~/.zshrc)", "Edit(~/.zprofile)", "Edit(~/.bashrc)", "Edit(~/.profile)",
+      "Bash(aws *)", "Bash(gcloud *)", "Bash(az *)", "Bash(kubectl *)", "Bash(terraform *)", "Bash(docker *)",
+      "Bash(helm install *)", "Bash(helm upgrade *)", "Bash(helm uninstall *)", "Bash(helm rollback *)",
+      "Bash(helm test *)", "Bash(helm status *)", "Bash(helm list *)", "Bash(helm get *)", "Bash(helm history *)",
+      "Bash(helm status)", "Bash(helm list)", "Bash(helm get)", "Bash(helm history)"
+    ]
+  }
+}

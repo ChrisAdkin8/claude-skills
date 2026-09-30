@@ -1,0 +1,3 @@
+/claude-skills:spec done docs/specs/2026-09-20-rounding.md
+
+You are running unattended, so AskUserQuestion won't reach anyone. Where the skill would ask, take these as the user's answers: no cold review was run outside /cold-review or /spec. There is no answer to anything else it would ask.

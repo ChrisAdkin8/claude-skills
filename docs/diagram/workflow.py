@@ -59,7 +59,6 @@ STAGES = [
         "Implement the spec, W1 first, test first; a verifier re-runs the checks",
         "implement/ branch",
         True,
-        True,
     ),
     (
         6,

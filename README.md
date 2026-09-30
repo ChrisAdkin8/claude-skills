@@ -15,7 +15,7 @@ agent, capped at $5 a run ($10 for the research).
 [Try it](#try-it) · [How it works](#from-idea-to-merged-change) ·
 [A worked example](#a-worked-example) · [Safety and cost](#safety-and-cost)
 
-## The four commands
+## The five commands
 
 | Command | What it does |
 |---|---|
@@ -23,16 +23,17 @@ agent, capped at $5 a run ($10 for the research).
 | `/research <question or idea note>` | Researches it and writes a note that cites a source for each claim. An agent checks the claims. |
 | `/spec <research note>` | Writes a plan, called a *spec*, into the repo the change touches. Agents check it. |
 | `/cold-review <markdown file>` | Gives any document the same independent review a spec gets. |
+| `/implement <spec>` | Implements a reviewed spec, test first, on a branch of its own. A sandboxed checker re-runs each work item's test. |
 
-Notes live in `~/notes`, and specs live in the repo they describe. None of the commands writes
-code: that happens afterwards, in a new session, working from the spec.
+Notes live in `~/notes`, and specs live in the repo they describe. Only `/implement` writes code,
+and only on its own branch, in a separate copy of the repo called a *worktree*.
 
 ## The workflow at a glance
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/workflow-narrow-dark.png">
   <img src="docs/workflow-narrow.png" alt="Workflow diagram. Six stages run in order: Capture with /idea, Research with /research, Plan with
-/spec, Spike with /spec spike, Implement with /implement (planned, not built yet), and Close out
+/spec, Spike with /spec spike, Implement with /implement, and Close out
 with /spec done. Under each command, a line says whether the stage's work runs in your session or in
 a subagent: Research, Spike and Implement use subagents. Research also rebuilds the notes index; a
 research-verifier checks its key claims, and check-spec.py, a spec-verifier and a cold-reviewer
@@ -186,13 +187,19 @@ The six stages match the diagram.
    experiment that answers a question reading the code can't settle. Each runs as a separate
    Claude session, in a scratch copy of the code, inside a sandbox and under a cost cap. `/spec`
    then updates the spec with the answer.
-5. **Implement: `/implement <spec>`** is planned but not built yet
+5. **Implement: `/implement <spec>`**, once the spec, its record and its spike results are
+   committed. It first checks the spec: it must be `reviewed`, pass `check-spec.py`, and cite no
+   code that has changed since it was read (else `/spec finish <spec>` updates it). Then it makes
+   a worktree on the branch `implement/<spec name>` and hands the work to an implementer, an agent
+   in a session of its own. The implementer does the work items in order, each test first and in
+   its own commit, then tidies the code with `/simplify` and `/code-review`. A sandboxed checker
+   then re-runs each work item's "Done when" test. What they found goes in the spec's record, on
+   the branch. It never pushes or merges.
    ([tools spec](docs/specs/2026-09-26-implement-skill-1-tools.md),
-   [skill spec](docs/specs/2026-09-26-implement-skill-2-skill.md)). It will hand the work to an
-   agent on its own branch, then have a sandboxed checker re-run each work item's "Done when"
-   test. Until then, implement in a new session, working from the spec.
-6. **Close out: `/spec done <spec>`** notes in the record where the implementation left the spec,
-   marks the spec done, and points out any research the implementation proved wrong.
+   [skill spec](docs/specs/2026-09-26-implement-skill-2-skill.md))
+6. **Close out: `/spec done <spec>`**, run from `/implement`'s worktree, notes in the record
+   where the implementation left the spec, marks the spec done, and points out any research the
+   implementation proved wrong.
 
 ### Smaller changes: `/spec quick`
 
@@ -304,7 +311,9 @@ can do:
   it checks was written.
 
 A few things run outside the sandbox, and one, the researcher's AWS and Terraform documentation
-servers, isn't checked by the guard either. [How the agents are contained](docs/containment.md)
+servers, isn't checked by the guard either. The biggest is `/implement`'s implementer: it has to
+edit and commit your code, so it runs like your own session, in its worktree, with no sandbox or
+guard. Only use it on your own repos and reviewed specs. [How the agents are contained](docs/containment.md)
 lists them all.
 
 What things cost:
@@ -312,6 +321,9 @@ What things cost:
 - **Each agent run** is capped at $5, or $10 for the researcher. The `RUN_AGENT_MAX_USD`
   environment variable overrides both. Agents run on your default model, or on the one
   `RUN_AGENT_MODEL` names (`sonnet` or `opus`).
+- **Each `/implement` run's implementer** is capped at $20 in all, however many times it is
+  resumed with an answer. The `IMPLEMENT_MAX_USD` environment variable overrides it. Each of its
+  up to two checker runs is capped at $5.
 - **Each spike** is capped at $2 and 60 turns. A *turn* is one step: Claude replies once, and may
   use a tool. Assume a spike that fetches anything from the web costs close to its cap.
 - A cap stops a run only after the turn that crosses it, so a run can go over by up to one turn.

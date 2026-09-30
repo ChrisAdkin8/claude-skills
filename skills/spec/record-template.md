@@ -25,6 +25,11 @@ Reviewed on {{YYYY-MM-DD}} by cold-reviewer: the changes logged as Not reviewed.
 
 - Question {{n}}: Route: {{spike | research | decision | deferred}}. Changes: {{the work items and quoted claims that change with the answer}}. Expect: {{what the experiment should show, written before it ran}}. Box: {{$2, 60 turns; hosts: none}}.
 
+## Evidence
+
+- Started at {{commit the implementation branch started from}}
+- {{Wn}} ({{commit}}): Done when {{command}} -> {{result}}; suite {{pass | n failing, as baseline}}; scan {{clean | flags}}
+
 ## Implementation
 
 - {{YYYY-MM-DD}}, {{Wn}} ({{commit}}): {{what the build did differently from the spec, and why}}.

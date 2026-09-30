@@ -9,8 +9,8 @@ each step, and expect a skill you're editing to be the one you're running.
 
 - `python3 -m unittest discover -s tests` — deterministic tests for the guard, both checkers,
   `build-index.py`, `review-state.py`, `git-read.py`, `prepare-spike.sh`, `run-spike.sh`,
-  `run-agent.sh`, `agent-def.py`, `agent-settings.py`, `mdcheck.py`, `mine-sessions.py` and the research scripts, that the eval runners exit 1 on a failure, and that the
-  guard's and both sandbox settings' deny lists agree. CI runs these, with ruff and shellcheck.
+  `run-agent.sh`, `agent-def.py`, `agent-settings.py`, `mdcheck.py`, `mine-sessions.py`, `scan-diff.py`, `prepare-verify.sh`, `run-verify.sh`, `run-implementer.sh` and the research scripts, that the eval runners exit 1 on a failure, and that the
+  guard's and all three sandbox settings' deny lists agree. CI runs these, with ruff and shellcheck.
 - `python3 tests/replay_guard.py` — the guard against real recorded commands and file reads.
 - After changing an agent or skill file, run `tests/agent-evals/run.sh` by hand. A full run cost
   $3.70 to $4.68 on 2026-09-27 and each case is capped at $5 (`research-ideas` at $10), so it
@@ -22,13 +22,17 @@ each step, and expect a skill you're editing to be the one you're running.
   and `EVAL_MODEL=opus`. Record each model's results in the same dated `BASELINE.md` section, with a
   column for the model. Run one set after the other, never at the same time: each checks that
   nothing else in `~/notes` changed while it ran.
+- A change to `skills/implement/` or `hooks/agents/implementer.md` needs the implement skill-eval
+  cases, `implement-basic` and `implement-trap`, on both models. Each also runs the implementer
+  (capped at $5 under the runner) and up to two verifiers ($5 each), which the runner's printed
+  cost leaves out: add theirs from the `run.json` files in the results.
 - A change to `skills/spec/` or `hooks/agents/spec-*` usually needs `check-spec.py` run over
   `docs/specs/` too: the specs in this repo cite these files by `path:line`.
 
 ## Conventions
 
-- Commit messages: `spec:`, `research:`, `cold-review:`, `evals:`, `tests:`, `guard:`, `repo:`,
-  `readme:` — the area, then what changed. Branch before committing; never push unless asked.
+- Commit messages: `spec:`, `research:`, `cold-review:`, `implement:`, `evals:`, `tests:`, `guard:`,
+  `repo:`, `readme:` — the area, then what changed. Branch before committing; never push unless asked.
 - Commit from this checkout, not GitHub's web editor: its commits carry no prefix, skip the README
   record, and may use another email address.
 - Skills and the files they load refer to the repo's files as `${CLAUDE_PLUGIN_ROOT}/...`, which

@@ -52,6 +52,13 @@ Some things run outside the sandbox, and not all of them are checked by the guar
   looks like a token. Only the researcher and the research-verifier have web search.
 - **The researcher's documentation servers** (AWS and Terraform). **Nothing checks these.** The
   only limit is that only the researcher has them. Each agent's file lists its tools by name.
+- **`/implement`'s implementer.** It edits and commits code, which the sandbox refuses, so
+  `skills/implement/scripts/run-implementer.sh` runs it outside the sandbox and the guard, like
+  your own session: with the repo's own settings, hooks and `CLAUDE.md`, and every tool it has
+  pre-approved. **Nothing checks what it runs.** Its limits are its own session (it sees none of
+  your conversation), its working directory (a git worktree of a repo under `~/code`), its
+  instructions and a $20 cap for the whole run. The implement-verifier that re-runs its checks is
+  sandboxed, with no network (`skills/implement/verify-settings.json`).
 
 Every agent is also told these rules: [`hooks/agent-sandbox.md`](../hooks/agent-sandbox.md) is
 added to its instructions, with the list of allowed websites filled in from the sandbox settings.

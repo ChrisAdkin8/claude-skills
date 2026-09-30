@@ -18,12 +18,18 @@
 #                 which works only in a repo under ~/code. No leading dot: run-agent.sh refuses a
 #                 run dir name that starts with one, and /spec names its run dir after the repo.
 #   settings.txt  the settings file for --settings, in this directory, in place of
-#                 hooks/agent-sandbox.json: agent-case-settings.json for a case that runs agents.
+#                 hooks/agent-sandbox.json: agent-case-settings.json for a case that runs agents,
+#                 implement-case-settings.json (the sandbox off) for an /implement case, whose
+#                 worktree, commits and ~/.cache/implement-runs writes the sandbox refuses.
 # prompt.txt may use {{NOTE}}, filled in with ~/notes/research/eval-<case>-<stamp>.md, and {{STAMP}}.
 # grade.py gets that path as EVAL_NOTE, and `git -C ~/notes status --porcelain` from before and
 # after the case, eval notes left out, as NOTES_BEFORE and NOTES_AFTER. Afterwards the note, the
 # ~/code fixture and the agent run dirs named eval-<case>-<stamp>* are copied to the results and
-# removed. Run this and ../agent-evals/run.sh one after the other: each checks ~/notes.
+# removed, and so are an /implement case's worktrees (~/code/eval-<case>-<stamp>-worktrees), its
+# implementer run dirs (~/.cache/implement-runs) and its verifier scratch dirs
+# (~/.cache/implement-verify). IMPLEMENT_MAX_USD caps the implementer at $5 unless it is set; the
+# printed cost is the skill session's alone, so read the implementer's and verifiers' run.json files
+# in the results for theirs. Run this and ../agent-evals/run.sh one after the other: each checks ~/notes.
 # Exits 0 only if every case passed, 1 if any failed, 2 on a bad case name or no cases.
 set -uo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
@@ -43,10 +49,12 @@ done
 # Every temp fixture lives under one temp dir, and the rest are named by $stamp, so an interrupted
 # run leaves none behind.
 tmp_root=$(mktemp -d)
-trap 'rm -rf "$tmp_root" "$HOME"/code/eval-*-"$stamp" "$HOME"/.cache/agent-runs/eval-*-"$stamp"*; rm -f "$HOME"/notes/research/eval-*-"$stamp".md' EXIT
+trap 'rm -rf "$tmp_root" "$HOME"/code/eval-*-"$stamp" "$HOME"/code/eval-*-"$stamp"-worktrees "$HOME"/.cache/agent-runs/eval-*-"$stamp"* "$HOME"/.cache/implement-runs/eval-*-"$stamp"* "$HOME"/.cache/implement-verify/eval-*-"$stamp"*; rm -f "$HOME"/notes/research/eval-*-"$stamp".md' EXIT
 
 # An agent a skill launches runs on the model under test, not the default (hooks/run-agent.sh).
 export RUN_AGENT_MODEL=${EVAL_MODEL:-}
+# An /implement case's implementer (skills/implement/scripts/run-implementer.sh) gets $5, not $20.
+export IMPLEMENT_MAX_USD=${IMPLEMENT_MAX_USD:-5}
 
 # What in ~/notes has changed, leaving out eval notes from either eval set, hidden or not.
 notes_status() {
@@ -86,13 +94,16 @@ run_case() {
   echo "$r $c ($cost)"; sed 's/^/    /' "$out/$c.grade"; echo "$r" > "$out/$c.result"
   (cd "$work" && git status --short && git diff) > "$out/$c.diff" 2>&1
   [ -f "$note" ] && cp "$note" "$out/$c.note.md"
-  for d in "$HOME"/.cache/agent-runs/eval-"$c"-"$stamp"*; do
-    [ -d "$d" ] || continue
-    mkdir -p "$out/$c.agent-runs" && cp -R "$d" "$out/$c.agent-runs/"
-    rm -rf "$d"
+  for kind in agent-runs implement-runs implement-verify; do
+    for d in "$HOME"/.cache/"$kind"/eval-"$c"-"$stamp"*; do
+      [ -d "$d" ] || continue
+      mkdir -p "$out/$c.$kind" && cp -R "$d" "$out/$c.$kind/"
+      rm -rf "$d"
+    done
   done
   [ -d "$work/docs" ] && cp -R "$work/docs" "$out/$c.docs"
-  rm -rf "$work"
+  [ -d "$work-worktrees" ] && cp -R "$work-worktrees" "$out/$c.worktrees"
+  rm -rf "$work" "$work-worktrees"
   rm -f "$note"
 }
 for c in "${cases[@]}"; do run_case "$c" & done

@@ -27,6 +27,8 @@ with open(os.environ["STUB_ARGV"], "a") as f:
     f.write(json.dumps(sys.argv[1:]) + "\\n")
 with open(os.environ["STUB_ARGV"] + ".model", "a") as f:
     f.write(os.environ.get("RUN_AGENT_MODEL", "<unset>") + "\\n")
+with open(os.environ["STUB_ARGV"] + ".implement", "a") as f:
+    f.write(os.environ.get("IMPLEMENT_MAX_USD", "<unset>") + "\\n")
 # A skill that writes the eval note, leaves an agent run dir named after it, and changes another
 # file in ~/notes, as a skill eval's research case might.
 m = re.search(r"\\S*/eval-[^/\\s]*\\.md", sys.argv[-1])
@@ -262,7 +264,7 @@ class Runners(unittest.TestCase):
         # The bare /spec also resolves, but not to this plugin alone while an old install is present.
         for prompt in sorted((REPO / "tests" / "skill-evals" / "cases").glob("*/prompt.txt")):
             with self.subTest(case=prompt.parent.name):
-                self.assertRegex(prompt.read_text(), r"\A/claude-skills:(spec|research|idea|cold-review) ")
+                self.assertRegex(prompt.read_text(), r"\A/claude-skills:(spec|research|idea|cold-review|implement) ")
 
     def test_skill_evals_pass_the_model_to_the_skill_and_its_agents(self):
         self.skill_case("good", passes=True)
@@ -369,6 +371,62 @@ class Runners(unittest.TestCase):
         self.assertTrue(
             (self.tmp / "out/good.agent-runs" / note.stem / "researcher/reply.md").exists()
         )
+
+    def test_skill_evals_keep_and_remove_implement_runs(self):
+        # An implement case leaves a worktree beside its ~/code fixture, the implementer's run dir
+        # and the verifier's scratch dirs, all named after the fixture: copied to the results,
+        # then removed.
+        home = self.home()
+        self.skill_case("impl", passes=True)
+        (self.cases / "impl" / "location.txt").write_text("code\n")
+        (self.cases / "impl" / "setup.sh").write_text(
+            "#!/bin/sh\n"
+            'set -e\nname=$(basename "$1")\n'
+            'mkdir -p "$1-worktrees/spec" && echo w > "$1-worktrees/spec/f"\n'
+            'r="$HOME/.cache/implement-runs/$name--spec/implementer"\n'
+            'mkdir -p "$r" && echo "{}" > "$r/run.json"\n'
+            'v="$HOME/.cache/implement-verify/$name/spec/V1"\n'
+            'mkdir -p "$v" && echo verdict > "$v/reply.md"\n'
+            f'echo "$1" >> {self.tmp}/works\n'
+        )
+        code, out = self.run_script(SKILL_RUN, "impl")
+        self.assertEqual(code, 0, out)
+        (work,) = (self.tmp / "works").read_text().split()
+        name = Path(work).name
+        self.assertFalse(Path(work + "-worktrees").exists())
+        self.assertEqual(list((home / ".cache/implement-runs").iterdir()), [])
+        self.assertEqual(list((home / ".cache/implement-verify").iterdir()), [])
+        runs = self.tmp / "out/impl.implement-runs"
+        self.assertTrue((runs / f"{name}--spec/implementer/run.json").exists())
+        verify = self.tmp / "out/impl.implement-verify"
+        self.assertEqual((verify / name / "spec/V1/reply.md").read_text(), "verdict\n")
+
+    def test_skill_evals_remove_a_leftover_worktree_on_exit(self):
+        # A worktree dir the case's own clean-up never reached (an interrupted case) is removed
+        # by the exit trap, like the fixture itself.
+        home = self.home()
+        self.skill_case("impl", passes=True)
+        (self.cases / "impl" / "location.txt").write_text("code\n")
+        # The grader is the last step before the case's own clean-up: it makes the leftover
+        # after that clean-up has already run for everything the setup made.
+        (self.cases / "impl" / "grade.py").write_text(
+            "import sys\nfrom pathlib import Path\n"
+            "w = Path(sys.argv[1] + '-worktrees') / 'late'\nw.mkdir(parents=True)\n"
+            f"Path({str(self.tmp / 'late')!r}).write_text(str(w))\n"
+        )
+        code, out = self.run_script(SKILL_RUN, "impl")
+        self.assertEqual(code, 0, out)
+        late = Path((self.tmp / "late").read_text())
+        self.assertEqual(late.parents[1], home / "code")
+        self.assertFalse(late.parent.exists())
+
+    def test_skill_evals_cap_the_implementer_unless_set(self):
+        self.skill_case("good", passes=True)
+        self.run_script(SKILL_RUN)
+        self.env["IMPLEMENT_MAX_USD"] = "7"
+        self.run_script(SKILL_RUN)
+        caps = (self.tmp / "argv.jsonl.implement").read_text().splitlines()
+        self.assertEqual(caps, ["5", "7"])
 
     def test_no_cases_is_an_error_not_a_crash(self):
         for script in (AGENT_RUN, SKILL_RUN):

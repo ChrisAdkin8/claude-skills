@@ -1,8 +1,9 @@
-"""Tests that the three lists of paths agents may not read stay in step: the guard's SECRET_HOME
-and HISTORY_HOME (hooks/agent-guard.py), the agents' sandbox settings (hooks/agent-sandbox.json)
-and the spikes' (skills/spec/spike-settings.json). Each file only knows its own copy, so a path
-added to one is easily missed in the others. Also that the skill evals' settings for cases that
-launch agents differ from the agents' only as planned.
+"""Tests that the lists of paths agents may not read stay in step: the guard's SECRET_HOME and
+HISTORY_HOME (hooks/agent-guard.py), the agents' sandbox settings (hooks/agent-sandbox.json), the
+spikes' (skills/spec/spike-settings.json) and the implement-verifier's
+(skills/implement/verify-settings.json), which denies what the spikes' does. Each file only knows
+its own copy, so a path added to one is easily missed in the others. Also that the skill evals'
+settings for cases that launch agents differ from the agents' only as planned.
 
 Run with: python3 -m unittest discover -s ~/code/github.com/claude-skills/tests
 """
@@ -22,8 +23,14 @@ spec.loader.exec_module(guard)
 
 AGENT = json.loads((REPO / "hooks" / "agent-sandbox.json").read_text())
 SPIKE = json.loads((REPO / "skills" / "spec" / "spike-settings.json").read_text())
+VERIFY = json.loads(
+    (REPO / "skills" / "implement" / "verify-settings.json").read_text()
+)
 AGENT_CASE = json.loads(
     (REPO / "tests" / "skill-evals" / "agent-case-settings.json").read_text()
+)
+IMPLEMENT_CASE = json.loads(
+    (REPO / "tests" / "skill-evals" / "implement-case-settings.json").read_text()
 )
 
 # Written-down exceptions, and why.
@@ -116,10 +123,26 @@ class SandboxSettings(unittest.TestCase):
                     covered(path, known), f"~/{path} isn't in the guard's lists"
                 )
 
+    def test_verify_settings_deny_what_the_spike_settings_deny(self):
+        # The verifier runs code in an export as a spike does, under the same sandbox: no
+        # network, the same denies, and writes only to the uv cache the spikes share.
+        for key in ("denyRead", "allowWrite"):
+            with self.subTest(list=key):
+                self.assertEqual(
+                    VERIFY["sandbox"]["filesystem"][key], SPIKE["sandbox"]["filesystem"][key]
+                )
+        self.assertEqual(VERIFY["permissions"]["deny"], SPIKE["permissions"]["deny"])
+        self.assertEqual(VERIFY["sandbox"]["network"]["allowedDomains"], [])
+
     def test_os_and_read_denies_match(self):
         for name, os_deny, read_deny in (
             ("agent-sandbox.json", self.agent_os, self.agent_read),
             ("spike-settings.json", self.spike_os, self.spike_read),
+            (
+                "verify-settings.json",
+                entries(VERIFY["sandbox"]["filesystem"]["denyRead"]),
+                entries(VERIFY["permissions"]["deny"]),
+            ),
         ):
             with self.subTest(file=name):
                 self.assertEqual(os_deny, read_deny)
@@ -139,10 +162,19 @@ class SandboxSettings(unittest.TestCase):
         deny += ["Write(~/notes/index.md)", "Edit(~/notes/index.md)"]
         self.assertEqual(AGENT_CASE, expected)
 
+    def test_implement_case_settings_differ_only_in_the_sandbox(self):
+        # The implement eval cases run /implement, whose worktree, commits and
+        # ~/.cache/implement-runs writes the sandbox refuses (spike S1 of
+        # docs/specs/2026-09-26-implement-skill-2-skill.md). So they keep the agents' permission
+        # denies, which the Read tool obeys, and turn the OS sandbox off. Nothing else.
+        expected = json.loads(json.dumps(AGENT))
+        expected["sandbox"] = {"enabled": False}
+        self.assertEqual(IMPLEMENT_CASE, expected)
+
     def test_no_settings_file_locates_the_repo_through_home(self):
         # The `~/.claude` entries in the spike settings are denies (all of ~/.claude, plugins
         # included), so they stay. The others may name the repo only with the placeholder.
-        for name, settings in (("spike-settings.json", SPIKE),):
+        for name, settings in (("spike-settings.json", SPIKE), ("verify-settings.json", VERIFY)):
             allowed = list(settings["sandbox"].get("excludedCommands", []))
             allowed += settings.get("permissions", {}).get("allow", [])
             allowed += settings["sandbox"]["filesystem"].get("allowWrite", [])

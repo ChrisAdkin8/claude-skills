@@ -1,0 +1,96 @@
+---
+name: implement
+description: Implements a reviewed, committed spec test first. Checks the spec, makes a git worktree and branch, hands the work items to an implementer subagent in its own headless session there, then has the sandboxed implement-verifier re-run every Done when, and leaves the evidence in the spec's record on the branch. Runs when the user types /implement.
+disable-model-invocation: true
+argument-hint: <spec path>
+allowed-tools: Read Grep Glob Write(~/.cache/implement-runs/**) Edit(~/.cache/implement-runs/**) Write(~/.cache/implement-verify/**) Edit(~/code/**/*.md) Skill
+  Bash(git status *) Bash(git -C * status *) Bash(git worktree add *) Bash(git -C * worktree add *) Bash(git add *) Bash(git -C * add *) Bash(git commit *) Bash(git -C * commit *) Bash(git revert *) Bash(git -C * revert *)
+  Bash(${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/check-spec.py *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/run-implementer.sh *)
+  Bash(${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/prepare-verify.sh ~/.cache/implement-verify/*) Bash(${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/run-verify.sh ~/.cache/implement-verify/*) Bash(${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/scan-diff.py *)
+---
+
+# Implement a reviewed spec
+
+Request: $ARGUMENTS
+
+You frame, relay and verify; you don't write the code. The work items are done by the `implementer`, a headless session of its own that has seen none of this conversation, working in a git worktree on its own branch. Its steps are in `${CLAUDE_PLUGIN_ROOT}/hooks/agents/implementer.md`, and the verifier's in `${CLAUDE_PLUGIN_ROOT}/skills/implement/verifier.md`: don't restate either in a brief. Never commit on the user's branch, push, or open a pull request.
+
+**Progress.** Copy this checklist into your reply at the end of every turn that ends while a run is going, ticked to date, and once more in the final report. When a run returns, carry on from the first unticked line.
+
+```
+- [ ] Frame: names, new or resume
+- [ ] Gate passed
+- [ ] Worktree ready, first commit made
+- [ ] Implementer launched; questions relayed; Implementer: done
+- [ ] Verifier V1 (and V2 if needed); CANNOT-RUN rows run by the implementer
+- [ ] Evidence committed; worktree clean
+- [ ] Report
+```
+
+**Tool calls.** `allowed-tools` pre-approves only the command shapes this file gives, so use them exactly:
+- In every Bash call, write paths under the home directory with `~` (`~/code/…`, `~/.cache/…`), not expanded. The exception is this plugin's own files: `${CLAUDE_PLUGIN_ROOT}` is already expanded to an absolute path where this file gives it, so write that path exactly as you see it.
+- Run scripts directly, not through `python3` or `bash`, and each launcher as the whole command, never joined to another with `;`, `&&`, `||` or a pipe.
+- Read git through `${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py -C <dir> …` (`rev-parse`, `log`, `show`, `branch --list`, `worktree list`). The only git commands that change anything are `git -C <dir> worktree add`, `add`, `commit` and `revert`.
+- Read files with the Read tool; make them with Write or Edit, never `cp` or a redirect.
+- If a call this skill needs is refused anyway, stop and tell the user which call was refused and why. Don't work around it with another command.
+
+## 1. Frame
+
+- `<spec>`: the path given; stop if there is none. `<repo>`: `git-read.py -C <spec's dir> rev-parse --show-toplevel`, which must be under `~/code` (else stop: `/implement` works only on repos there). `<repo dir>`: its directory name.
+- `<basename>`: the spec's filename without `.md`. `<record>`: `<spec dir>/records/<basename>-record.md`. `<spikes>`: `<spec dir>/spikes/<basename>-results.md` (it may not exist). Paths below are from the repo root unless they start with `~`.
+- `<worktree>`: `<repo>/../<repo dir>-worktrees/<basename>`, written with `~`. `<branch>`: `implement/<basename>`.
+- `<run name>`: `<repo dir>--<basename>`. `<run dir>`: `~/.cache/implement-runs/<run name>/implementer`. `<baseline>`: `~/.cache/implement-runs/<run name>/baseline.txt`. `<scratch V<n>>`: `~/.cache/implement-verify/<repo dir>/<basename>/V<n>`.
+- **New or resume.** `git-read.py -C <repo> branch --list <branch>`: empty means a new run; a branch means resume (step 3's Resume).
+
+## 2. Gate
+
+In order, from the repo's checkout, stopping at the first failure with what to do:
+
+1. `git -C <repo> status --porcelain -- <spec> <record> <spikes>` prints nothing, so all three are committed at HEAD. Else: "commit them, then run `/implement <spec>` again". Name any other uncommitted files in the checkout in one line and leave them alone: the worktree starts from HEAD.
+2. The spec's frontmatter says `status: reviewed`.
+3. `${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/check-spec.py <spec> --repo <repo>` prints `RESULT: PASS`.
+4. `${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/check-spec.py <spec> --repo <repo> --drift-at HEAD` prints no `DRIFT:` line. Else: "run `/spec finish <spec>`, which re-reads those ranges and moves read-at, then commit it". Keep any file its drift WARN names, for step 3.
+
+On resume, run the Gate in the worktree instead, where the status must be `in-progress` and drift is checked with `--drift-at <the Started at commit>` (from the record's `## Evidence` on the branch), so the branch's own commits never count as drift.
+
+## 3. Worktree
+
+- **New:** `git -C <repo> worktree add <worktree> -b <branch>`. Then, in the worktree only: set the spec's `status: in-progress`, and add a `## Evidence` section to the record, between `## Spikes` and `## Implementation` as `${CLAUDE_PLUGIN_ROOT}/skills/spec/record-template.md` orders them (after the last section before them if those are missing), starting with `- Started at <short HEAD it branched from>` and, if step 2 kept any, `- Drift WARN, no DRIFT line: <files>`. `git -C <worktree> add <spec> <record>`, then `git -C <worktree> commit -m '<area>: <spec title> is in progress'`, the area as the repo's convention asks (its `CLAUDE.md` or recent `git log`), following this session's attribution rules.
+- **Resume:** reuse `<worktree>`, or, if the directory is gone, `git -C <repo> worktree add <worktree> <branch>` (no `-b`). Run the Gate there (step 2).
+
+## 4. The implementer
+
+1. **Brief.** With Write, write `<run dir>/brief.md`:
+
+   ```
+   Spec: <absolute path of the spec in the worktree>
+   Record: <absolute path of the record in the worktree>
+   Worktree: <absolute worktree path>
+   Baseline: <absolute path of baseline.txt>
+   Today's date: <YYYY-MM-DD>
+   ```
+
+   Add `Resume` on its own line on resume, and `Unattended` if the user said no one will answer questions.
+2. **Launch** `${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/run-implementer.sh <worktree> <run dir>` with `run_in_background: true`. Tell the user in one line that the implementer is running, and end your turn.
+3. **When it returns**, read `<run dir>/reply.md`. By exit code:
+   - **0**, and the last line says:
+     - `Implementer: done`: go to step 5.
+     - `Implementer: question: <text>`: put it to the user with AskUserQuestion, recommended answer first. Write the answer to `<run dir>/followup.md` and run the same command with `--resume` added, in the background. Unattended, don't ask: stop and report the question.
+     - `Implementer: stopped: <reason>`: stop and report the reason; don't verify.
+   - **3**: the reply doesn't end with an `Implementer:` line. Send one follow-up asking it to reply again, in full, ending with that line. If that exits 3 too, stop and tell the user.
+   - **2**: the run never started, or its cap is spent. Stop and give the script's message.
+   - **Any other**: stop; `run.err` and `run.json` in the run dir say why.
+
+## 5. Verify
+
+1. `${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/prepare-verify.sh <scratch V1> <worktree> <Started at> <the branch's HEAD>`.
+2. With Read and Write, copy the worktree's spec to `<scratch V1>/spec.md` and its record to `<scratch V1>/record.md`, and write `<scratch V1>/brief.md`: `Spec: spec.md`, `Work items: <each Wn with a commit ending (Wn)>`, `Today's date: <YYYY-MM-DD>`. Nothing about how the work went: this brief comes from a session that didn't write the code.
+3. Run `${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/run-verify.sh <scratch V1>` with `run_in_background: true`, and end your turn. When it returns, read `<scratch V1>/reply.md`; on exit 3 or 2, stop and tell the user, as step 4 does.
+4. **Copy its table** and closing lines under the record's `## Evidence` in the worktree, headed `- Verifier V1 (<head commit>):`.
+5. **CANNOT-RUN rows.** If any, write a follow-up listing each (its Done when and the verifier's reason) to `<run dir>/followup.md`, and resume the implementer. It runs them in the worktree and adds `implementer-run:` lines, apart from the table.
+6. **`Implementation holds: no`.** Send the implementer a follow-up naming the rows that failed or don't match the spec, resume it, then verify once more in `<scratch V2>`, steps 1 to 5 again. There is no third round: if V2 also says `no`, say so in the report.
+
+## 6. Evidence and report
+
+1. `git -C <worktree> add <record>`, then `git -C <worktree> commit -m '<area>: implementation evidence'`: the branch's last commit. The verifier ran on the commit before it, which changes only the record. `git -C <worktree> status --porcelain` must then print nothing; if it doesn't, name what's left.
+2. **Report**, one short line each: each work item, its commit and Done when result; the clean-up commits and any revert; the verifier's `Verified` and `Implementation holds` lines, per round; any departure or question and its answer; the cost of every run, from `total_cost_usd` in each `<run dir>/run-<n>.json` and each `<scratch V<n>>/run.json`, and their total. Then: "run `/spec done <spec>` from `<worktree>`". Don't push, merge or remove the worktree.

@@ -1075,7 +1075,7 @@ def secret_path(path):
     for secret in SECRET_HOME:
         if any(under(path, form) for form in spellings(secret)):
             return f"{secret} holds credentials"
-    if SESSION_RESULTS and under(path, SESSION_RESULTS):
+    if SESSION_RESULTS and any(under(path, form) for form in spellings(SESSION_RESULTS)):
         return None
     for history in HISTORY_HOME:
         if history == PLUGINS_HOME and OWN_ROOT and under(os.path.realpath(path), OWN_ROOT):

@@ -34,6 +34,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import os
 import re
 import subprocess
 import sys
@@ -118,6 +119,7 @@ def guard_root(path):
 def with_root(guard, root):
     """Point the guard's own-root exemption where the run's guard had it: the plugin root, if
     that lives under ~/.claude/plugins, as the guard itself decides."""
+    root = os.path.realpath(root) if root else None  # the guard's own ROOT is resolved
     guard.OWN_ROOT = (
         root
         if root

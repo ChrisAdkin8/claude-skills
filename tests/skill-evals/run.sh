@@ -67,6 +67,10 @@ run_case() {
   fi
   settings="$repo/hooks/agent-sandbox.json"
   [ -f "$dir/settings.txt" ] && settings="$here/$(cat "$dir/settings.txt")"
+  # ${CLAUDE_PLUGIN_ROOT} in the settings becomes this checkout, as an absolute path.
+  "$repo/hooks/agent-settings.py" "$settings" "$repo" > "$out/$c.settings.json" 2> "$out/$c.settings.err" \
+    || { echo "FAIL $c (settings)"; echo FAIL > "$out/$c.result"; rm -rf "$work"; return; }
+  settings="$out/$c.settings.json"
   prompt=$(sed -e "s#{{NOTE}}#$note#g" -e "s#{{STAMP}}#$stamp#g" "$dir/prompt.txt")
   "$dir/setup.sh" "$work" > "$out/$c.setup" 2>&1 || { echo "FAIL $c (setup)"; echo FAIL > "$out/$c.result"; rm -rf "$work"; return; }
   before=$(notes_status)

@@ -7,18 +7,21 @@ model. Run with: python3 -m unittest discover -s ~/code/github.com/claude-skills
 
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
 import uuid
 from pathlib import Path
 
-SCRIPT = Path(__file__).resolve().parents[1] / "hooks" / "run-agent.sh"
+REPO = Path(__file__).resolve().parents[1]
+SCRIPT = REPO / "hooks" / "run-agent.sh"
 STUB = """#!/usr/bin/env python3
 import json, os, sys
 calls = os.environ["STUB_CALLS"]
 with open(calls, "a") as f:
-    f.write(json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd()}) + "\\n")
+    f.write(json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd(),
+                        "root": os.environ.get("CLAUDE_PLUGIN_ROOT")}) + "\\n")
 n = sum(1 for _ in open(calls))
 tail = os.environ.get("STUB_TAIL", "| # | Kind |\\nCounts: 0 findings\\nCold read: yes")
 print(json.dumps({"session_id": "sess-1", "result": f"reply {n}\\n{tail}", "subtype": "success"}))
@@ -26,6 +29,8 @@ print(json.dumps({"session_id": "sess-1", "result": f"reply {n}\\n{tail}", "subt
 
 
 class RunAgent(unittest.TestCase):
+    script = SCRIPT
+
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
@@ -39,6 +44,7 @@ class RunAgent(unittest.TestCase):
         # script finds the agents in hooks/agents.
         home = self.tmp.resolve() / "home"
         (home / ".claude").mkdir(parents=True)
+        self.home = home
         self.root = home / ".cache" / "agent-runs"
         self.env = {
             **os.environ,
@@ -54,7 +60,7 @@ class RunAgent(unittest.TestCase):
 
     def run_agent(self, *args):
         run = subprocess.run(
-            [str(SCRIPT), *map(str, args)],
+            [str(self.script), *map(str, args)],
             capture_output=True,
             text=True,
             env=self.env,
@@ -106,9 +112,27 @@ class RunAgent(unittest.TestCase):
         self.assertEqual(list(defs), ["cold-reviewer"])
         self.assertIn("PreToolUse", defs["cold-reviewer"]["hooks"])
         self.assertEqual(argv[argv.index("--allowedTools") + 1], "Read,Grep,Glob,Bash")
-        self.assertTrue(
-            argv[argv.index("--settings") + 1].endswith("hooks/agent-sandbox.json")
-        )
+        # The settings are the committed file rendered with the plugin root, in the run dir.
+        root = self.script.parents[1]
+        settings = Path(argv[argv.index("--settings") + 1])
+        self.assertEqual(settings, run / "settings.json")
+        text = settings.read_text()
+        self.assertNotIn("${", text)
+        self.assertIn(f"{root}/skills/research/scripts/repo-health.sh *", text)
+        self.assertIn("~/.claude/skills/research/scripts/repo-health.sh *", text)
+        # The agent's guard hook is the root's own, not a path under ~/.claude.
+        (guard,) = {
+            h["command"]
+            for m in defs["cold-reviewer"]["hooks"]["PreToolUse"]
+            for h in m["hooks"]
+            if h["command"].endswith(" bash")
+        }
+        self.assertEqual(guard, f'python3 "{root}/hooks/agent-guard.py" bash')
+        self.assertEqual(call["root"], str(root))
+        # The plugin root is readable: an agent reads the plugin's own files from it, and a
+        # checkout outside ~/.claude is not covered by the $HOME/.claude entry.
+        dirs = argv[argv.index("--add-dir") + 1 :]
+        self.assertIn(str(root), dirs[: dirs.index("--append-system-prompt-file")])
         # The reviewed repo's own settings and CLAUDE.md are never loaded.
         self.assertEqual(argv[argv.index("--setting-sources") + 1], "user")
         prompt = Path(argv[argv.index("--append-system-prompt-file") + 1]).read_text()
@@ -196,6 +220,19 @@ class RunAgent(unittest.TestCase):
         code, out = self.run_agent("cold-reviewer", self.work, run, "--resume")
         self.assertEqual(code, 2)
         self.assertIn("session_id", out)
+
+
+class RunAgentFromACache(RunAgent):
+    """The same tests against a copy of hooks/ in a plugin cache path, with no ~/.claude/skills
+    or hooks link: the script finds its agents, guard and settings from where it lives."""
+
+    def setUp(self):
+        super().setUp()
+        cache = self.home / ".claude/plugins/cache/claude-skills/claude-skills/0.1.0"
+        shutil.copytree(REPO / "hooks", cache / "hooks")
+        self.script = cache / "hooks" / "run-agent.sh"
+        self.assertFalse((self.home / ".claude" / "hooks").exists())
+        self.assertFalse((self.home / ".claude" / "skills").exists())
 
 
 if __name__ == "__main__":

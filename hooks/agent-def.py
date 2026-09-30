@@ -2,7 +2,7 @@
 """Print one agent file as the JSON `claude --agents` takes, so the runners can pass the agent
 per run instead of Claude Code loading it from ~/.claude/agents into every session.
 
-Usage: agent-def.py <agent file>
+Usage: agent-def.py [--root <dir>] <agent file>
 
 The file is markdown with a frontmatter block. The output is {"<name>": {"description", "prompt",
 "tools", "hooks"}}: the prompt is the body, tools the comma-separated `tools:` line as a list, and
@@ -13,7 +13,12 @@ hooks the `hooks:` block. The reader knows only the shape the agent files use:
         - matcher: "Bash"
           hooks:
             - type: command
-              command: python3 "$HOME/.claude/hooks/agent-guard.py" bash
+              command: python3 "${CLAUDE_PLUGIN_ROOT}/hooks/agent-guard.py" bash
+
+${CLAUDE_PLUGIN_ROOT} is replaced by --root, in hook commands and in the prompt, so an agent
+writes the absolute path the guard and the sandbox settings match. A command may hold no other
+${...}, and a placeholder with no --root is an error: either would reach the agent's session
+as literal text.
 
 Anything else - an unknown key, another hook type, a line it can't place - exits 2 rather than
 drop a hook, since a dropped guard hook would fail open.
@@ -25,6 +30,7 @@ import sys
 from pathlib import Path
 
 KEYS = {"name", "description", "tools", "hooks"}
+PLACEHOLDER = "${CLAUDE_PLUGIN_ROOT}"
 
 
 class Bad(Exception):
@@ -38,7 +44,18 @@ def unquote(value):
     return value
 
 
-def parse_hooks(lines):
+def substitute(text, root, what):
+    """`text` with the placeholder replaced by `root`; a `${` left in a command is an error."""
+    if PLACEHOLDER in text:
+        if root is None:
+            raise Bad(f"{what} names {PLACEHOLDER}, so it needs --root")
+        text = text.replace(PLACEHOLDER, root)
+    if what == "a hook command" and "${" in text:
+        raise Bad(f"{what} holds a variable this reader doesn't know: {text!r}")
+    return text
+
+
+def parse_hooks(lines, root):
     """The indented lines under `hooks:` as {event: [{"matcher", "hooks": [{"type", "command"}]}]}."""
     events = {}
     matchers = handlers = None
@@ -56,7 +73,7 @@ def parse_hooks(lines):
         elif (m := re.fullmatch(r"          command: (.+)", line)) and handlers:
             if "command" in handlers[-1]:
                 raise Bad(f"two commands in one hook: {line!r}")
-            handlers[-1]["command"] = m[1].strip()
+            handlers[-1]["command"] = substitute(m[1].strip(), root, "a hook command")
         else:
             raise Bad(f"hooks: can't read {line!r}")
     for event, ms in events.items():
@@ -70,7 +87,7 @@ def parse_hooks(lines):
     return events
 
 
-def agent_def(path):
+def agent_def(path, root=None):
     text = Path(path).read_text()
     m = re.match(r"---\n(.*?)\n---\n", text, re.DOTALL)
     if not m:
@@ -110,22 +127,29 @@ def agent_def(path):
         raise Bad("no prompt after the frontmatter")
     agent = {
         "description": fields["description"],
-        "prompt": prompt + "\n",
+        "prompt": substitute(prompt, root, "the prompt") + "\n",
         "tools": [t.strip() for t in fields["tools"].split(",") if t.strip()],
     }
     if "hooks" in fields:
-        agent["hooks"] = parse_hooks(hook_lines)
+        agent["hooks"] = parse_hooks(hook_lines, root)
     return {fields["name"]: agent}
 
 
 def main():
-    if len(sys.argv) != 2:
-        print("usage: agent-def.py <agent file>", file=sys.stderr)
+    args = sys.argv[1:]
+    root = None
+    if args[:1] == ["--root"]:
+        if len(args) < 2 or not args[1]:
+            args = []
+        else:
+            root, args = args[1].rstrip("/") or "/", args[2:]
+    if len(args) != 1 or args[0].startswith("--"):
+        print("usage: agent-def.py [--root <dir>] <agent file>", file=sys.stderr)
         return 2
     try:
-        print(json.dumps(agent_def(sys.argv[1]), indent=2))
+        print(json.dumps(agent_def(args[0], root), indent=2))
     except (Bad, OSError) as e:
-        print(f"agent-def: {sys.argv[1]}: {e}", file=sys.stderr)
+        print(f"agent-def: {args[0]}: {e}", file=sys.stderr)
         return 2
     return 0
 

@@ -36,9 +36,11 @@ mkdir -p "$UV_CACHE_DIR"
 # --setting-sources user, as in hooks/run-agent.sh: a spike starts in its scratch dir, which has
 # no .claude/ of its own, but the flag keeps any project settings or CLAUDE.md above or beside it
 # from loading. The spike's own settings.json still applies through --settings.
+# The spiker prompt sits beside this script's directory, wherever the skill is installed.
+spiker=$(cd "$(dirname "$0")/.." && pwd -P)/spiker.md
 cd "$scratch"
 exec claude -p --model sonnet --setting-sources user \
-  --append-system-prompt-file "$HOME/.claude/skills/spec/spiker.md" \
+  --append-system-prompt-file "$spiker" \
   --settings settings.json \
   --allowedTools "Read Grep Glob Bash Write(./**) Edit(./**)" \
   --max-budget-usd 2 --max-turns 60 \

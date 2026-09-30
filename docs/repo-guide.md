@@ -39,7 +39,8 @@ such as commit prefixes and what to record, are in [`CLAUDE.md`](../CLAUDE.md).
 | `hooks/agent-def.py` | turns an agent file into the definition `claude --agents` takes |
 | `hooks/run-agent.sh` | launches an agent; exits with code 3 when a reply lacks its expected ending, so an error is never mistaken for a verdict |
 | `hooks/run-agent.md` | how `/research`, `/spec` and `/cold-review` run an agent with `run-agent.sh` and read its reply |
-| `hooks/agent-sandbox.json` | the agents' sandbox settings |
+| `hooks/agent-sandbox.json` | the agents' sandbox settings, with `${CLAUDE_PLUGIN_ROOT}` where a path names the repo |
+| `hooks/agent-settings.py` | renders a settings file with `${CLAUDE_PLUGIN_ROOT}` replaced by the repo's absolute path; `run-agent.sh` and both eval runners pass the result to `--settings` |
 | `hooks/agent-sandbox.md`, `sandbox-prompt.py` | the rules added to every agent's instructions |
 | `hooks/agent-guard.py` | the guard ([how the agents are contained](containment.md)) |
 | `hooks/git-read.py` | runs read-only git commands for `/research`, `/spec` and `/cold-review` |

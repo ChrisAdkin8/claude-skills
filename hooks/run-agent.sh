@@ -28,7 +28,7 @@
 #
 # Why headless: Claude Code's sandbox can't be set per subagent, and these agents read untrusted
 # web pages and repos. Run this way, each gets its agent file (prompt, tools, hooks) plus
-# hooks/agent-sandbox.json: OS-level read denies for credentials, no writes under ~/code,
+# hooks/agent-sandbox.json (rendered into the run dir): OS-level read denies for credentials, no writes under ~/code,
 # ~/notes or ~/.claude (its work dir included), secret environment variables removed, and Bash network limited to an allowlist. The
 # PreToolUse guard in the agent's frontmatter still runs, for what the sandbox can't see (gh and
 # the excluded scripts, git and curl semantics, WebFetch URL sizes, WebSearch queries). The agent evals run the
@@ -52,6 +52,10 @@ case "$agent" in
 esac
 
 here=$(cd "$(dirname "$0")" && pwd -P)
+# The plugin root (the repo, or the plugin cache copy) is found from this script's own location,
+# so nothing here depends on ~/.claude/skills or ~/.claude/hooks existing.
+plugin_root=$(dirname "$here")
+export CLAUDE_PLUGIN_ROOT=$plugin_root
 # The agent files live in hooks/agents, not ~/.claude/agents, so no session loads them as
 # subagents it could launch outside this sandbox. Each run passes its one agent by --agents.
 file="$here/agents/$agent.md"
@@ -68,7 +72,7 @@ case "$run/" in "$(cd "$root" && pwd -P)"/?*/?*/) ;; *) die "$run is outside $ro
 
 # The agent's definition (prompt, tools, hooks) as --agents takes it, and its own tools
 # pre-approved, e.g. "Read,Bash,WebFetch,WebSearch".
-"$here/agent-def.py" "$file" > "$run/agents.json" || die "couldn't read the agent file $file"
+"$here/agent-def.py" --root "$plugin_root" "$file" > "$run/agents.json" || die "couldn't read the agent file $file"
 tools=$(python3 -c 'import json,sys;(a,)=json.load(open(sys.argv[1])).values();print(",".join(a["tools"]))' "$run/agents.json")
 [ -n "$tools" ] || die "no tools in $file"
 # The researcher does the open-ended work; the others check something already written.
@@ -97,12 +101,17 @@ fi
 # settings that enforce it, rather than a copy in each agent file.
 "$here/sandbox-prompt.py" > "$run/sandbox.md" || die "couldn't write $run/sandbox.md"
 
+# The settings with ${CLAUDE_PLUGIN_ROOT} filled in as an absolute path: an excludedCommands entry
+# is matched as written, so it must spell the path the agent's calls use.
+"$here/agent-settings.py" "$here/agent-sandbox.json" "$plugin_root" > "$run/settings.json" \
+  || die "couldn't render $here/agent-sandbox.json"
+
 cd "$work"
 status=0
 claude -p --agents "$run/agents.json" --agent "$agent" --output-format json --max-turns 200 --max-budget-usd "$max_usd" \
-  --allowedTools "$tools" --add-dir "$HOME/.claude" "$HOME/notes" "$work" \
+  --allowedTools "$tools" --add-dir "$HOME/.claude" "$HOME/notes" "$work" "$plugin_root" \
   --append-system-prompt-file "$run/sandbox.md" \
-  --setting-sources user --settings "$here/agent-sandbox.json" ${mcp[@]+"${mcp[@]}"} ${model[@]+"${model[@]}"} ${resume[@]+"${resume[@]}"} \
+  --setting-sources user --settings "$run/settings.json" ${mcp[@]+"${mcp[@]}"} ${model[@]+"${model[@]}"} ${resume[@]+"${resume[@]}"} \
   "$prompt" < /dev/null > "$run/run.json" 2> "$run/run.err" || status=$?
 
 python3 - "$run" "$agent" "${RUN_AGENT_LOG:-$root/sessions.log}" <<'PY'

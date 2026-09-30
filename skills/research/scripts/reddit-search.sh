@@ -20,7 +20,7 @@
 #        security add-generic-password -s reddit-search -a client-id -w '<client id>'
 #        security add-generic-password -s reddit-search -a client-secret -w '<secret>'
 #        security add-generic-password -s reddit-search -a username -w '<reddit username>'
-#   3. Test: ~/.claude/skills/research/scripts/reddit-search.sh "rightsizing" kubernetes
+#   3. Test: skills/research/scripts/reddit-search.sh "rightsizing" kubernetes
 # Reads only: an app-only token (client_credentials grant), then one search. Rate-limited to
 # one request per second.
 set -uo pipefail

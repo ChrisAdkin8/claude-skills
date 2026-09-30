@@ -28,7 +28,8 @@ AGENT_CASE = json.loads(
 
 # Written-down exceptions, and why.
 # The agent's own tool output is saved under ~/.claude/projects, so only the guard covers it.
-AGENT_NOT_DENIED = {".claude/projects"}
+# Likewise ~/.claude/plugins: the guard exempts its own root there, which a deny can't say.
+AGENT_NOT_DENIED = {".claude/projects", ".claude/plugins"}
 # git and uv read their own config under ~/.config, so a spike is denied only parts of it.
 SPIKE_PARTLY_DENIED = {
     ".config": {".config/gh", ".config/gcloud", ".config/op", ".config/doctl"}
@@ -131,12 +132,32 @@ class SandboxSettings(unittest.TestCase):
         # a Sonnet run rewrote it by hand when build-index.py was refused. Nothing else.
         expected = json.loads(json.dumps(AGENT))
         sandbox = expected["sandbox"]
-        sandbox["excludedCommands"].append("~/.claude/hooks/run-agent.sh *")
+        # Both spellings of run-agent.sh, since the skills still call the `~` one until part 2's W3.
+        sandbox["excludedCommands"] += [
+            "${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.sh *",
+            "~/.claude/hooks/run-agent.sh *",
+        ]
         sandbox["filesystem"]["denyRead"].remove("~/.cache/agent-runs")
         deny = expected["permissions"]["deny"]
         deny.remove("Read(~/.cache/agent-runs/**)")
         deny += ["Write(~/notes/index.md)", "Edit(~/notes/index.md)"]
         self.assertEqual(AGENT_CASE, expected)
+
+    def test_no_settings_file_locates_the_repo_through_home(self):
+        # The `~/.claude` entries in the spike settings are denies (all of ~/.claude, plugins
+        # included), so they stay. The others may name the repo only with the placeholder or, for
+        # the legacy spelling, in the two agent files' excludedCommands until part 2's W3.
+        for name, settings in (("spike-settings.json", SPIKE),):
+            allowed = list(settings["sandbox"].get("excludedCommands", []))
+            allowed += settings.get("permissions", {}).get("allow", [])
+            allowed += settings["sandbox"]["filesystem"].get("allowWrite", [])
+            for entry in allowed:
+                with self.subTest(file=name, entry=entry):
+                    self.assertNotIn("~/.claude", entry)
+        for name, settings in (("agent-sandbox.json", AGENT), ("agent-case-settings.json", AGENT_CASE)):
+            legacy = [e for e in settings["sandbox"]["excludedCommands"] if "~/.claude" in e]
+            with self.subTest(file=name):
+                self.assertTrue(all(e.startswith(("~/.claude/skills/research/scripts/", "~/.claude/hooks/run-agent.sh")) for e in legacy), legacy)
 
 
 if __name__ == "__main__":

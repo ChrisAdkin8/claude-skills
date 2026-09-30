@@ -234,6 +234,16 @@ class PluginRoot(unittest.TestCase):
         self.assertBlocked(f"cat {self.cache}/skills/leak/x")
         self.assertEqual(self.tool("Read", file_path=f"{self.cache}/skills/leak/x"), 2)
 
+    def test_dotdot_after_a_link_is_followed(self):
+        # The shell resolves `leak/..` to the link target's parent, not to `skills`.
+        other = f"{self.home}/.claude/plugins/cache/other-plugin/other-plugin/1.0.0"
+        os.symlink(other, f"{self.cache}/skills/leak")
+        Path(self.cache, "x").write_text("decoy\n")
+        self.assertBlocked(f"cat {self.cache}/skills/leak/../x")
+        self.assertEqual(self.tool("Read", file_path=f"{self.cache}/skills/leak/../x"), 2)
+        # Without a link in the way, `..` still means the parent.
+        self.assertAllowed(f"cat {self.cache}/hooks/../skills/spec/SKILL.md")
+
     def test_the_whole_directory_is_private_from_a_checkout(self):
         # Under --plugin-dir the root is outside ~/.claude/plugins/, so nothing there is exempt.
         for command in (

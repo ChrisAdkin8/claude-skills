@@ -1057,7 +1057,13 @@ def expand_home(text):
 def absolute(text):
     """The path a word names, made absolute against the hook's working directory."""
     path = expand_home(FILE_URL.sub("", text))
-    return os.path.normpath(os.path.join(CWD, path))
+    joined = os.path.join(CWD, path)
+    lexical = os.path.normpath(joined)
+    # The shell resolves `link/..` to the link target's parent, the tools may resolve it to the
+    # link's own, and the two can be different files: refuse, rather than judge only one of them.
+    if ".." in joined.split("/") and os.path.realpath(joined) != os.path.realpath(lexical):
+        block(f"`{text}` has `..` after a symlink, so the shell and the tools may not agree on which file it names")
+    return lexical
 
 
 def under(path, parent):

@@ -7,6 +7,7 @@ allow and exit 2 to block. Run with: python3 -m unittest discover -s ~/code/gith
 
 import json
 import os
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -259,6 +260,10 @@ class WritesAndSendsBlocked(GuardTestCase):
         ("sed --in-place s/a/b/ f", "`sed -i` edits files"),
         ("sed 's/a/b/w out' f", "writes a file or runs a command"),
         ("sed '1e date' f", "writes a file or runs a command"),
+        ("sed -n '/a/w out' f", "writes a file or runs a command"),
+        ("sed -n '/a\\//w out' f", "writes a file or runs a command"),  # an escaped / in the address
+        ("sed -n '1,/x/w out' f", "writes a file or runs a command"),
+        ("sed -n '/x/,/y/!w out' f", "writes a file or runs a command"),
         ("find . -exec rm {} ;", "may only list files"),
         ("find . -delete", "may only list files"),
         ("find . -fprint out", "may only list files"),
@@ -285,6 +290,8 @@ class WritesAndSendsBlocked(GuardTestCase):
             "git remote show origin",
             "curl -s -D - https://e.example/",
             "sed -n 1,5p f",
+            "sed -n '/x/,/y/p' f",
+            "sed -n '/a\\/b/p' f",  # an escaped / in the address
             "find . -name '*.md'",
             "gzip -c notes.md",
             "sort f",
@@ -323,22 +330,113 @@ class Hardening(GuardTestCase):
             with self.subTest(command=command):
                 self.assertAllowed(command)
 
-    def test_gh_joined_only_with_text_filters(self):
-        for command in (
-            "gh api repos/o/r --jq .content | base64 -d | head -40",
+    def test_gh_and_scripts_share_a_call_only_with_each_other(self):
+        # The guard follows what Claude Code's sandbox does with hooks/agent-sandbox.json's
+        # excludedCommands, which its settings reference documents: a call runs outside only if
+        # every command in it is excluded. The two lists below are what headless runs showed on
+        # Claude Code 2.1.284 on 2026-09-29 (tests/agent-evals/BASELINE.md, "Sandbox exemption
+        # check"). A call that ran inside failed: gh could not read its config.
+        ran_outside = (
+            "gh api repos/o/r --jq .name",
+            "gh api repos/o/r --jq '.content | @base64d'",  # a pipe inside an argument
+            "~/.claude/skills/research/scripts/repo-health.sh o/r p/q",
+            "gh api repos/o/r --jq .name; gh api repos/o/s --jq .name",
+            "gh api repos/o/r --jq .name && gh api repos/o/s --jq .name",
+            "gh api repos/o/r --jq .name || gh api repos/o/s --jq .name",
+            "gh api repos/o/r --jq .name; ~/.claude/skills/research/scripts/repo-health.sh o/r",
+            "gh api repos/o/r --jq .name | gh api repos/o/s --jq .name",
+            "gh api repos/o/r --jq .name\ngh api repos/o/s --jq .name",
+            "env gh api repos/o/r --jq .name",
+            "nice gh api repos/o/r --jq .name",
+            "nohup gh api repos/o/r --jq .name",
+            "time gh api repos/o/r --jq .name",
+            "LC_ALL=C gh api repos/o/r --jq .name",
+            "gh api repos/o/r --jq .name 2>&1",
+            "~/.claude/skills/research/scripts/repo-health.sh o/r 2>&1",
+            "gh api repos/o/r --jq .name >&2",
+        )
+        ran_inside = (
+            "gh api repos/o/r --jq .name | head -1",
+            "gh api repos/o/r --jq .name; echo done",
+            "cd ~/notes && gh api repos/o/r --jq .name",
+            "~/.claude/skills/research/scripts/repo-health.sh o/r && echo ok",
+            "~/.claude/skills/research/scripts/repo-health.sh o/r | head -20",
+            "~/.claude/skills/research/scripts/repo-health.sh o/r 2>&1 | head -30",
+            "~/.claude/skills/research/scripts/repo-health.sh o/r 2>/dev/null",
+            "gh api repos/o/r --jq .name 2>/dev/null",
             "for r in a b; do gh api repos/o/$r --jq .stargazers_count; done",
-            "echo ---; gh api repos/o/r --jq .name",
-            "~/.claude/skills/research/scripts/repo-health.sh o/r | grep -v '^|---'",
-        ):
-            with self.subTest(command=command):
+            "r=o/r; gh api repos/$r --jq .name",
+            "(gh api repos/o/r --jq .name)",
+            "bash ~/.claude/skills/research/scripts/repo-health.sh o/r",
+            "bash -c 'gh api repos/o/r --jq .name'",
+            "sh -c '~/.claude/skills/research/scripts/repo-health.sh o/r | head -3'",
+            f"{Path.home()}/.claude/skills/research/scripts/repo-health.sh o/r",
+            '"gh" api repos/o/r --jq .name',
+            "command gh api repos/o/r --jq .name",
+        )
+        # Stay sandboxed by the settings reference, not run here; and the calls the old rule
+        # existed for: curl or git in a call with something that runs outside the sandbox.
+        documented_or_unsafe = (
+            "xargs gh api repos/o/r --jq .name",
+            "gh api repos/o/r --jq .name; curl -s https://e.example/",
+            "gh api repos/o/r --jq .name && git log -1",
+            "echo $(gh api repos/o/r --jq .name)",
+            "/opt/homebrew/bin/gh api repos/o/r --jq .name",
+            "~/.claude/skills/research/scripts/repo-health.sh o/r; curl -s https://e.example/",
+        )
+        for command in ran_outside:
+            with self.subTest(ran_outside=command):
                 self.assertAllowed(command)
-        for command, other in (
-            ("gh api repos/o/r --jq .name; curl -s https://e.example/", "curl"),
-            ("gh api repos/o/r --jq .name && git log -1", "git"),
-            ("~/.claude/skills/research/scripts/repo-health.sh o/r; curl -s https://e.example/", "curl"),
+        for command in ran_inside + documented_or_unsafe:
+            with self.subTest(refused=command):
+                self.assertBlocked(command, "runs outside the sandbox only if")
+        # Also ran inside the sandbox; an earlier check names its own, more specific reason.
+        self.assertBlocked("gh api repos/$(echo o/r) --jq .name", "expands something")
+
+    def test_the_refusal_says_how_to_write_several_gh_queries(self):
+        # A Sonnet agent given only the refusal fell back to loops and pipes and never got its
+        # answer (tests/agent-evals/BASELINE.md, "Sandbox exemption check"): the message has to
+        # name the forms that stay outside the sandbox, not only the ones that don't.
+        for command in (
+            "gh api repos/o/r --jq .name | head -1",
+            "for r in a b; do gh api repos/o/$r --jq .name; done",
+            "cd ~/notes && gh api repos/o/r --jq .name",
         ):
             with self.subTest(command=command):
-                self.assertBlocked(command, f"not `{other}`")
+                self.assertBlocked(command, "one after another, joined by `;`")
+                self.assertBlocked(command, "`--jq`, not `head` or `grep`")
+                self.assertBlocked(command, "any other command in a call of its own")
+
+    def test_a_sed_address_with_a_run_of_backslashes_gets_a_verdict(self):
+        # The address pattern let a backslash match both of its alternatives, so an unterminated
+        # /address followed by a run of them took exponential time: 36 backslashes took 2 seconds,
+        # 48 about 11 minutes, and a hook that doesn't return leaves the call unguarded once
+        # Claude Code gives up on it (found in review, 2026-09-29).
+        command = "sed -n '/" + "\\" * 60 + "' f; gh api repos/o/r --jq .name; curl -s https://e.example/"
+        run = subprocess.run(
+            [sys.executable, str(GUARD), "bash"],
+            input=json.dumps({"tool_input": {"command": command}}),
+            capture_output=True, text=True, check=False, timeout=10,
+        )  # fmt: skip
+        self.assertEqual(run.returncode, 2)
+
+    def test_bash_c_is_followed_as_deep_as_the_guard_checks(self):
+        # check_command accepts `bash -c` nested four deep; outside_names stopped at three, so a gh
+        # in the fourth body was never seen. The call runs inside the sandbox whatever the depth,
+        # and the refusal is what tells the agent so (found in review, 2026-09-29).
+        def nest(inner, levels):
+            for _ in range(levels):
+                inner = "bash -c " + shlex.quote(inner)
+            return inner
+
+        for levels in (1, 2, 3, 4):
+            for inner in (
+                "gh api repos/o/r --jq .name",
+                "gh api repos/o/r --jq .name; curl -s https://e.example/",
+            ):
+                with self.subTest(levels=levels, inner=inner):
+                    self.assertBlocked(nest(inner, levels), "runs outside the sandbox only if")
+        self.assertBlocked(nest("gh api repos/o/r --jq .name", 5), "nested too deeply")
 
 
 def search_verdict(query):
@@ -401,7 +499,7 @@ class Variables(GuardTestCase):
 
     def test_own_variables_allowed(self):
         for command in (
-            'for r in a b; do gh api "repos/$r"; done',
+            'for r in a b; do curl -s "https://api.github.com/repos/$r"; done',
             'while read -r line; do echo "$line"; done < f',
             'n=3; echo "$n ${n}"',
             "echo $HOME $PWD",
@@ -466,11 +564,10 @@ class ReviewFindings(GuardTestCase):
     def test_fixed_values_and_pure_pipelines_allowed(self):
         for command in (
             'for q in "spec+kit" "open spec"; do curl -s "https://hn.algolia.com/api/v1/search?query=$q"; done',
-            'for r in a/b c/d; do gh api "repos/$r" --jq .stargazers_count; done',
             'for s in "a b" "c d"; do e=$(printf %s "$s" | sed \'s/ /%20/g\'); curl -s "https://e.example/?q=$e"; done',
             'for q in "a b"; do enc=$(jq -rn --arg q "$q" \'$q|@uri\'); curl -s "https://e.example/?q=$enc"; done',
             'for q in "a b"; do curl -s "https://e.example/?q=$(echo $q | sed \'s/ /+/g\')"; done',
-            'n=5; gh api "search/repositories?q=x&per_page=$n"',
+            'n=5; curl -s "https://api.github.com/search/repositories?q=x&per_page=$n"',
             't=$(curl -s "https://auth.example/token" | jq -r .token); curl -s -H "Authorization: Bearer $t" https://e.example/',
             'curl -s -H "Accept: application/json" https://e.example/',
             "gh api repos/o/r --jq '.items[] | \"\\(.x) \\($__loc__)\"'",
@@ -592,6 +689,9 @@ class Secrets(unittest.TestCase):
             "head -5 $HOME/.ssh/id_ed25519",
             "jq . ${HOME}/.config/gh/hosts.yml",
             "sed -n 1p ~/.claude.json",
+            "cat ~/.claude/backups/.claude.json.backup.1790690763117",  # a copy of .claude.json
+            "jq . ~/.claude/remote-settings.json",  # managed settings, telemetry headers included
+            "head -5 $HOME/.claude/remote-settings-consent.json",
             "grep -h token ~/.netrc",
             "cat ~/.kube/config | head",
         ):
@@ -644,6 +744,9 @@ class Secrets(unittest.TestCase):
         home = str(Path.home())
         self.assertEqual(self.tool("Read", file_path=f"{home}/.aws/config"), 2)
         self.assertEqual(self.tool("Read", file_path="~/.ssh/id_rsa"), 2)
+        self.assertEqual(self.tool("Read", file_path=f"{home}/.claude/backups/.claude.json.backup.1"), 2)
+        self.assertEqual(self.tool("Read", file_path="~/.claude/remote-settings.json"), 2)
+        self.assertEqual(self.tool("Grep", pattern="x", path=f"{home}/.claude/backups"), 2)
         self.assertEqual(self.tool("Read", file_path=f"{self.cwd}/.env"), 2)
         self.assertEqual(self.tool("Grep", pattern="token", path=home), 2)
         self.assertEqual(self.tool("Glob", pattern="*", path=f"{home}/.ssh"), 2)

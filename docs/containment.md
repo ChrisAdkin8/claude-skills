@@ -27,9 +27,19 @@ Some things run outside the sandbox, and not all of them are checked by the guar
 - **`gh`, and three research scripts.** These are `repo-health.sh`, `gcp-skus.sh` and
   `reddit-search.sh`, which need credentials or call `gh`. On macOS, `gh` can't make secure web
   connections inside the sandbox, so `agent-sandbox.json` lets these run outside it. They're still
-  shell commands, so the guard checks them. It lets them share a command only with text filters
-  such as `jq` and `grep`. It never lets them share one with `curl` or `git`, which must stay
-  inside the sandbox.
+  shell commands, so the guard checks them.
+
+  Claude Code runs a call outside the sandbox only if every command in it is one of these, written
+  as `agent-sandbox.json` writes it. Its
+  [settings reference](https://code.claude.com/docs/en/settings-reference#sandbox-excludedcommands)
+  says so, and lists more shapes that stay inside: a `cd`, a command substitution, a loop, a
+  redirect to a file, a call starting with `xargs`. We measured the rest on macOS with Claude Code
+  2.1.284 (see `tests/agent-evals/BASELINE.md`). `gh …; gh …` and `gh … 2>&1` run outside. A text
+  filter such as `head`, a `cd`, a loop, `2>/dev/null`, a full path or `bash` puts the whole call
+  inside, where `gh` can't read its login.
+
+  So the guard refuses a call that holds one of these and anything else. That also keeps `curl` and
+  `git` out of any call that runs outside the sandbox.
 - **Claude Code's own file-reading and web-fetching tools.** The sandbox never covers these. The
   guard checks both, and Claude Code's permission settings also block reads of sensitive files.
 - **Web search.** The guard caps its queries at 200 characters and refuses one that holds what

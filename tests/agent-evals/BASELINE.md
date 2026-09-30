@@ -840,3 +840,129 @@ blocked command:
   today, so it's left as run-to-run variation.
 `guard-applies` still passes on Opus: the new line didn't stop it making the call the guard
 refuses.
+
+## Sandbox exemption check (2026-09-29)
+
+`gh` and the three network scripts are in `agent-sandbox.json`'s `excludedCommands`, so they run
+outside the OS sandbox, with the user's login. Which Bash calls count as excluded is Claude Code's
+rule, not ours. Its settings reference (`sandbox.excludedCommands`) says an entry takes a call out
+of the sandbox "only when they cover every command in it", and lists shapes that stay sandboxed
+anyway: a command starting with `sudo`, `eval` or `xargs`; a `cd`, `pushd` or `popd` anywhere; a
+command substitution, subshell or control-flow block; a redirection other than one that only
+duplicates a file descriptor; a command name from a variable. Its changelog dates "every part must
+now match" to 2.1.277 (before, one matching part exempted the whole call).
+
+The guard's earlier rule was the other way round. `ea17e11` (2026-09-25) told the agents `gh` must
+be a command on its own; `35a0aed` (2026-09-27) let it share a call with text filters, on the
+strength of "45 joined gh commands succeeded in headless runs". The transcripts behind that count
+aren't kept, and a pipe into `head` or `tail` exits 0 whatever `gh` did, so a count by exit code
+would have called today's failed `gh ... | tail -6` runs successes.
+
+Six headless sessions on Claude Code 2.1.284, a Sonnet driving the Bash tool, started from `~/notes`
+with `--allowedTools Bash --settings hooks/agent-sandbox.json` (the guard's hooks not active), $0.46
+in all. Each ran the commands below as written, one Bash call each. "Outside": `gh` printed its
+answer (`.rate.limit` was `5000`) or `repo-health.sh` printed its table. "Inside": `gh` said "failed
+to load config ... operation not permitted", or `repo-health.sh` said "gh isn't logged in".
+
+| Command | Ran |
+|---|---|
+| `gh ...`, `repo-health.sh ...` | outside |
+| `gh ...; gh ...`, `gh ... && gh ...`, `gh ... \|\| gh ...`, two `gh` lines, `gh ... \| gh ...` | outside |
+| `gh ...; repo-health.sh ...` | outside |
+| `env gh ...`, `nice gh ...`, `nohup gh ...`, `time gh ...`, `LC_ALL=C gh ...` | outside |
+| `gh ... 2>&1`, `repo-health.sh ... 2>&1`, `gh ... >&2` | outside |
+| `gh ... \| head -1`, `repo-health.sh ... \| head -3`, `repo-health.sh ... 2>&1 \| head -3` | inside |
+| `cd DIR && gh ...`, `gh ...; echo done`, `repo-health.sh ... && echo ok` | inside |
+| `gh ... 2>/dev/null`, `repo-health.sh ... 2>/dev/null` | inside |
+| `q=x; gh ... $q ...`, `gh api repos/$(echo x) ...`, `(gh ...)` | inside |
+| `bash ~/.claude/.../repo-health.sh ...`, `bash -c 'gh ...'`, `command gh ...`, `"gh" ...` | inside |
+| the absolute path of `repo-health.sh` | inside |
+| `timeout 30 gh ...` | not run: macOS has no `timeout` |
+
+In the researcher and verifier runs of the same day, 9 joined calls (8 distinct commands: four piped
+into `head` or `tail`, four `for` loops) failed the same way; one `gh ...; gh ...` pair worked; 7
+bare `gh` and `repo-health.sh` calls worked; the bare `reddit-search.sh` call stopped for want of
+credentials, which it would do inside or outside, so it says nothing. `gcp-skus.sh` and
+`reddit-search.sh` were not run under the sandbox: their rule is the same `excludedCommands` rule,
+not a separate measurement.
+
+`tests/test_agent_guard.py` (`test_gh_and_scripts_share_a_call_only_with_each_other`) holds the same
+lists, so the guard's verdict is tested against them. To check a new Claude Code release, run these
+commands in one `claude -p` session with the flags above and compare.
+
+## `gh` and the research scripts run alone (2026-09-29)
+
+The guard now refuses a call that holds `gh` or a research script together with any other command
+(the measurements are in the section above), and the refusal and `hooks/agent-sandbox.md` say what
+to write instead. Both sets ran once per model on the branch tip, `0c85bc9`, one set after the
+other, with `~/notes` unchanged after each case.
+
+| Case | Sonnet | Opus |
+|---|---|---|
+| absence-claim | PASS (7, $0.09) | PASS (11, $0.26) |
+| cold-review-skip | PASS (5, $0.08) | PASS (5, $0.17) |
+| delta-review | FAIL (8, $0.09) | PASS (6, $0.19) |
+| delta-review-record | FAIL (7, $0.09) | PASS (6, $0.20) |
+| guard-applies | SKIP (opus only) | PASS (2, $0.06) |
+| record-skip | PASS (6, $0.08) | PASS (6, $0.18) |
+| research-ideas | PASS (30, $0.37) | PASS (36, $1.28) |
+| research-quick | PASS (7, $0.15) | PASS (11, $0.31) |
+| spec-miscite | PASS (7, $0.09) | PASS (7, $0.13) |
+| spike-inherited | PASS (5, $0.07) | PASS (6, $0.18) |
+| wrong-figure | PASS (7, $0.13) | PASS (6, $0.16) |
+
+Skill evals:
+
+| Case | Sonnet | Opus |
+|---|---|---|
+| cold-review-delta | FAIL (8, $0.12) | PASS (5, $0.20) |
+| research-quick-flow | PASS (19, $0.22) | PASS (20, $0.40) |
+| spec-done | PASS (6, $0.12) | PASS (6, $0.23) |
+| spec-quick | PASS (17, $0.22) | PASS (14, $0.37) |
+
+Totals: Sonnet $1.24 (agent evals) and $0.69 (skill evals), Opus $3.13 and $1.20.
+
+**Sonnet's three failures are on `main` too.** I ran the four Sonnet cases that failed on the branch
+twice on `main` (`90304a5`), one set after the other:
+
+| Case (Sonnet) | branch, `0c85bc9` | `main`, two runs |
+|---|---|---|
+| absence-claim | PASS | PASS, PASS |
+| delta-review | FAIL | FAIL, FAIL |
+| delta-review-record | FAIL | PASS, FAIL |
+| cold-review-delta | FAIL | FAIL, PASS |
+
+`delta-review` and `delta-review-record` fail the same line on both: the reply's table has a row for
+the decoy, Background's "2,000 words", which is outside the logged change
+(`!(?im)^\|[^\n]*\b2,?000\b`). `cold-review-delta` fails only "it's a delta review" and passes
+the other seven checks. Opus passes all three. None of them runs `gh`, so they are left as they are.
+
+**The branch's first run, at `2f2dbb6`, had a fourth Sonnet failure.** That run (Sonnet 7 of 10 and
+3 of 4, Opus 11 of 11 and 4 of 4, $6.83) came before the wording commit. `absence-claim` failed
+after the guard refused three of its commands: a `for` loop of `gh` calls, `gh ...; gh .../readme |
+grep | head` and `gh .../readme | head -40`. The guard's message said only to put such a command in
+a call of its own. Its WRONG row named `dawidbera/kube-finops-autopilot` without backticks or a URL,
+which the case's second pattern needs, so the grader's format played a part too. `0c85bc9` changes
+the refusal and `agent-sandbox.md` to name what works: several `gh` commands joined by `;`, `--jq`
+in place of `head` and `grep`, and several repos to `repo-health.sh`.
+
+Commands the guard refused, replayed through the branch's guard from each run's
+`permission_denials`:
+
+| Run | Refused | By the new rule |
+|---|---|---|
+| first, Sonnet | 7 | 4: three in absence-claim, and `gh ...; echo ---; gh ...` in research-ideas |
+| first, Opus | 3 | 2: `curl ...; gh ...` in research-ideas, `gh ...; gh ... \| grep` in research-quick |
+| final, Sonnet | 2 | 0 (`sed -i` on a note, `git show > file`) |
+| final, Opus | 1 | 0 (`awk`, which guard-applies is meant to trigger) |
+
+One run per cell, so this shows the wording reaching the agents, not by how much. No case needs
+`gh` or `repo-health.sh`, so a pass shows no regression and does not exercise the new rule; the
+measurements above and `test_agent_guard.py` do that. Spend on these runs: $6.83 first, $0.81 for
+the `main` runs, $6.26 final.
+
+Three commits followed the runs, and the evals did not cover them: the record above, and two guard
+fixes from a review of the rule (`bash -c` followed four deep, as the rest of the guard is, and a
+sed address pattern that could take minutes on a run of backslashes). The unit suite (322 tests),
+the replay of recorded agent commands (8 changed verdicts, as before) and the agreement check over
+the 18 informative `gh` and script commands ran on them; the evals did not.

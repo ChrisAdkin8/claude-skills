@@ -49,7 +49,7 @@ If `git -C ~/notes status` fails or `~/notes/templates/research.md` is missing, 
 3. **Ranking and lenses** (ideas depth only). Rank by "likely mindshare" (stars, shares, Hacker News, Reddit and LinkedIn traction, talks, demos) unless the request names another criterion; novelty counts for more than usefulness to clients. Lenses: finding, tool, dataset, game, lab and essay, less any the question rules out.
 4. **Repo context**: if the working directory is in a git repo under `~/code`, note its path; don't read its files.
 5. **Output path**: `~/notes/research/YYYY-MM-DD-short-slug.md` (today's date, 3–6 word lowercase hyphenated slug), or the existing note if updating.
-6. **Launch.** Run `git -C ~/notes status --porcelain` and keep its output. Then run the `researcher` agent (Agent runs) with this brief. Leave out `Rank by` and `Lenses` except at ideas depth.
+6. **Launch.** Run `git -C ~/notes status --porcelain --untracked-files=all` and keep its output. Then run the `researcher` agent (Agent runs) with this brief. Leave out `Rank by` and `Lenses` except at ideas depth.
 
    ```
    Depth: <full | quick | ideas>
@@ -70,7 +70,7 @@ If `git -C ~/notes status` fails or `~/notes/templates/research.md` is missing, 
 ## 2. When the researcher finishes
 
 1. Run `~/.claude/skills/research/scripts/check-note.py --headroom <note>`. If the agent failed, or the note is missing or has no Sources, tell the user and stop; don't commit.
-   - Run `git -C ~/notes status --porcelain`. The researcher may write only its note: flag any other changed file under `~/notes/research` not in the output kept at launch, and any change to `~/notes/projects/mindshare/attention-evidence.md` or `~/notes/ideas/`.
+   - Run `git -C ~/notes status --porcelain --untracked-files=all`: it lists every new file, where plain `--porcelain` shows a new directory as one line. The researcher may write only its note: flag any other changed file under `~/notes/research` not in the output kept at launch, and any change to `~/notes/projects/mindshare/attention-evidence.md` or `~/notes/ideas/`.
    - A flagged note another run's brief names (`grep -l 'Output file: <its absolute path>' ~/.cache/agent-runs/*/researcher*/brief.md`, in another run dir) is that run's; leave it. For any other, show the user the diff and ask. Commit neither.
 2. On FAIL, send the FAIL lines to the researcher as a follow-up (`~/.claude/hooks/run-agent.md`, Follow-ups) to fix. After two rounds, carry on and report what still fails.
 3. Run the `research-verifier` agent (Agent runs) with the brief `Note: <absolute path>. Today's date: <YYYY-MM-DD>.`, adding `Depth: ideas: run the prior-art hunt first.` at ideas depth. Tell the user in one line that it's being verified. End your turn.
@@ -81,7 +81,7 @@ In `finish` mode, start here:
 2. Collect the claims to name in the brief:
    - claims passed as arguments;
    - claims the check reports as no longer matching;
-   - claims changed since the last verification: find the last `research:` commit that touched the note (`~/.claude/hooks/git-read.py -C ~/notes log --format='%h %s' -- <note>`), then `~/.claude/hooks/git-read.py -C ~/notes diff <that commit> -- <note>`. Skip this if the note has never been committed.
+   - claims changed since the last verification: find the last `research:` commit that touched the note (`~/.claude/hooks/git-read.py -C ~/notes log --format='%h %s' -- <note>`), then `~/.claude/hooks/git-read.py -C ~/notes diff <that commit> -- <note>`. Skip this if the note has never been committed, or if `~/notes` has no commits yet: `log` fails there.
 3. Run the verifier (Agent runs, in the run dir `research-verifier-finish`) with the brief above, plus `Also check: "<claim>"; "<claim>"` if there are any.
 
 ## 3. When the verifier finishes
@@ -96,7 +96,7 @@ If it's still missing, say in the report that novelty wasn't independently check
    - UNSUPPORTED or UNREACHABLE: mark the claim *(unverified)*, or soften it to what the sources say.
    - Other problems: fix dangling citations; add missed evidence to Findings or Counter-evidence with its source, adjusting the wording it contradicts.
    - Prior art (ideas depth): add every `same` and `overlaps` hit to Findings → Prior art with its source. For a WRONG Novelty row, narrow that cell, and the Bottom line and Recommendation if they repeat it, to what is still new. Cut or narrow pool lines a hit makes redundant.
-2. **Record the verification** in a `## Verification` section after Sources, outside the word budget. `/spec` reads it.
+2. **Record the verification** in a `## Verification` section after Sources (at ideas depth, after the Candidate pool: `check-note.py` fails the other order), outside the word budget. `/spec` reads it.
 
    ```
    ## Verification

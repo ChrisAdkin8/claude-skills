@@ -42,7 +42,7 @@ query=$1 sub=${2:-} sort=${3:-top} window=${4:-year}
 
 secret() { security find-generic-password -s reddit-search -a "$1" -w 2>/dev/null; }
 id=$(secret client-id) && key=$(secret client-secret) ||
-  unavailable "no credentials in the keychain (service reddit-search); see the setup steps at the top of $0"
+  unavailable "no credentials in the keychain (service reddit-search; see the setup steps at the top of $0). If this call held any other command, the sandbox hid the keychain: run this script on its own"
 user=$(secret username) || user=unknown
 ua="macos:notes-research-reddit-search:v1.0 (by /u/$user)"
 

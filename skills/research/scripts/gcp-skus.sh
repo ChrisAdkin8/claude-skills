@@ -24,7 +24,7 @@ for tool in gcloud curl jq; do
 done
 
 token=$(gcloud auth print-access-token 2>/dev/null) || {
-  echo "gcloud isn't logged in, so GCP prices can't be checked against a Google source; mark them (unverified)" >&2
+  echo "gcloud isn't logged in, so GCP prices can't be checked against a Google source. If this call held any other command, the sandbox hid gcloud's login: run this script on its own. Otherwise mark them (unverified)" >&2
   exit 1
 }
 

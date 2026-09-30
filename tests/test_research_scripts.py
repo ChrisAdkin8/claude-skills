@@ -103,6 +103,8 @@ class RepoHealth(Scripts):
         code, out, err = self.run_script("repo-health.sh", "cli/cli", GH_AUTH="1")
         self.assertEqual(code, 1, out + err)
         self.assertIn("isn't logged in", err)
+        # Run in a call with another command, the sandbox hides gh's login too; the message says so.
+        self.assertIn("run this script on its own", err)
 
     def test_missing_repo_is_not_found(self):
         self.stub("gh", GH)

@@ -1196,3 +1196,33 @@ different verdict. Before W4's replay fix it was 58: 29 more were the old instal
 to the plugin root. All 29 left are `gh` or a research script in a call with other commands, PR #27's
 `check_outside_only`, recorded by sessions that ran the other checkout's older guard. There were 8
 in the section above; the rest are runs since.
+
+
+## Report steps without line counts (2026-09-29)
+
+Recorded on 2026-09-29 at `dad662d`, on a branch from before the history rewrite and the plugin
+work, and carried onto `main` on 2026-09-30 by cherry-pick. These runs used the symlinked skills;
+the wording change is the same on the plugin layout.
+
+The end-of-run reports in `/research` (step 10), `/spec` (step 6 item 1), `/spec spike` (7e) and
+`/spec done` (step 8) say "one short line for each" of the items they list, in place of "in N lines
+or fewer", after a prompt audit found the counts were a fixed ceiling on a list that already sets
+the report's length. Skill evals only: no agent file changed. `EVAL_MODEL=sonnet` now resolves to
+`claude-sonnet-5-5`; every earlier Sonnet run was `claude-sonnet-5`.
+
+| Case | Sonnet | Opus |
+|---|---|---|
+| cold-review-delta | FAIL (5 turns, $0.14), re-run FAIL (5, $0.15) | FAIL (7, $0.30) |
+| research-quick-flow | PASS (24, $0.36) | PASS (15, $0.43) |
+| spec-done | PASS (10, $0.18) | PASS (11, $0.34) |
+| spec-quick | PASS (18, $0.32) | PASS (12, $0.43) |
+
+Totals: Sonnet $1.00, and $0.15 for the re-run; Opus $1.50. `~/notes` was left as it was. The three
+cases that reach a changed report step passed on both models; `/spec spike`'s 7e has no case.
+`cold-review-delta` touches no changed file, and both its failures are the grader missing new wording,
+not a wrong prompt:
+- Sonnet, twice: the prompt was a correct delta review (right base, logged line quoted, unlogged
+  Rollback edit named), but the reply said "State is `delta`", never "delta review", which the
+  check greps for.
+- Opus: it named the unlogged Rollback edit as "Something not written down … `## Rollback` isn't on
+  it", which the check's `UNLOGGED` pattern doesn't accept.

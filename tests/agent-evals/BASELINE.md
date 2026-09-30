@@ -961,6 +961,12 @@ One run per cell, so this shows the wording reaching the agents, not by how much
 measurements above and `test_agent_guard.py` do that. Spend on these runs: $6.83 first, $0.81 for
 the `main` runs, $6.26 final.
 
+Three commits followed the runs, and the evals did not cover them: the record above, and two guard
+fixes from a review of the rule (`bash -c` followed four deep, as the rest of the guard is, and a
+sed address pattern that could take minutes on a run of backslashes). The unit suite (322 tests),
+the replay of recorded agent commands (8 changed verdicts, as before) and the agreement check over
+the 18 informative `gh` and script commands ran on them; the evals did not.
+
 ## Quoted argument hints in `/spec` and `/research` (2026-09-30)
 
 `skills/spec/SKILL.md`'s frontmatter did not parse: its `argument-hint` began with `[quick]`, which
@@ -1025,4 +1031,3 @@ That is 1 of 5 against 2 of 4, too few runs to tell the branch from `main`. It i
 caused by the change, and it is not shown to be free of it either.
 
 Spend: $6.76 on the four runs, and $0.66 on the six single-case runs, so $7.42.
-

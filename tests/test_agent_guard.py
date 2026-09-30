@@ -7,6 +7,7 @@ allow and exit 2 to block. Run with: python3 -m unittest discover -s ~/code/gith
 
 import json
 import os
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -259,6 +260,10 @@ class WritesAndSendsBlocked(GuardTestCase):
         ("sed --in-place s/a/b/ f", "`sed -i` edits files"),
         ("sed 's/a/b/w out' f", "writes a file or runs a command"),
         ("sed '1e date' f", "writes a file or runs a command"),
+        ("sed -n '/a/w out' f", "writes a file or runs a command"),
+        ("sed -n '/a\\//w out' f", "writes a file or runs a command"),  # an escaped / in the address
+        ("sed -n '1,/x/w out' f", "writes a file or runs a command"),
+        ("sed -n '/x/,/y/!w out' f", "writes a file or runs a command"),
         ("find . -exec rm {} ;", "may only list files"),
         ("find . -delete", "may only list files"),
         ("find . -fprint out", "may only list files"),
@@ -285,6 +290,8 @@ class WritesAndSendsBlocked(GuardTestCase):
             "git remote show origin",
             "curl -s -D - https://e.example/",
             "sed -n 1,5p f",
+            "sed -n '/x/,/y/p' f",
+            "sed -n '/a\\/b/p' f",  # an escaped / in the address
             "find . -name '*.md'",
             "gzip -c notes.md",
             "sort f",
@@ -399,6 +406,37 @@ class Hardening(GuardTestCase):
                 self.assertBlocked(command, "one after another, joined by `;`")
                 self.assertBlocked(command, "`--jq`, not `head` or `grep`")
                 self.assertBlocked(command, "any other command in a call of its own")
+
+    def test_a_sed_address_with_a_run_of_backslashes_gets_a_verdict(self):
+        # The address pattern let a backslash match both of its alternatives, so an unterminated
+        # /address followed by a run of them took exponential time: 36 backslashes took 2 seconds,
+        # 48 about 11 minutes, and a hook that doesn't return leaves the call unguarded once
+        # Claude Code gives up on it (found in review, 2026-09-29).
+        command = "sed -n '/" + "\\" * 60 + "' f; gh api repos/o/r --jq .name; curl -s https://e.example/"
+        run = subprocess.run(
+            [sys.executable, str(GUARD), "bash"],
+            input=json.dumps({"tool_input": {"command": command}}),
+            capture_output=True, text=True, check=False, timeout=10,
+        )  # fmt: skip
+        self.assertEqual(run.returncode, 2)
+
+    def test_bash_c_is_followed_as_deep_as_the_guard_checks(self):
+        # check_command accepts `bash -c` nested four deep; outside_names stopped at three, so a gh
+        # in the fourth body was never seen. The call runs inside the sandbox whatever the depth,
+        # and the refusal is what tells the agent so (found in review, 2026-09-29).
+        def nest(inner, levels):
+            for _ in range(levels):
+                inner = "bash -c " + shlex.quote(inner)
+            return inner
+
+        for levels in (1, 2, 3, 4):
+            for inner in (
+                "gh api repos/o/r --jq .name",
+                "gh api repos/o/r --jq .name; curl -s https://e.example/",
+            ):
+                with self.subTest(levels=levels, inner=inner):
+                    self.assertBlocked(nest(inner, levels), "runs outside the sandbox only if")
+        self.assertBlocked(nest("gh api repos/o/r --jq .name", 5), "nested too deeply")
 
 
 def search_verdict(query):

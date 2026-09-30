@@ -1070,12 +1070,21 @@ def spellings(private):
     return {str(private), os.path.realpath(private)}
 
 
+def results_spellings():
+    """SESSION_RESULTS as written, and resolved only while that stays inside the resolved
+    ~/.claude/projects: a link there to another private directory must not exempt it."""
+    real = os.path.realpath(SESSION_RESULTS)
+    if under(real, os.path.realpath(HOME / ".claude/projects")):
+        return {SESSION_RESULTS, real}
+    return {SESSION_RESULTS}
+
+
 def secret_path(path):
     """Why an absolute path is a secret, or None."""
     for secret in SECRET_HOME:
         if any(under(path, form) for form in spellings(secret)):
             return f"{secret} holds credentials"
-    if SESSION_RESULTS and any(under(path, form) for form in spellings(SESSION_RESULTS)):
+    if SESSION_RESULTS and any(under(path, form) for form in results_spellings()):
         return None
     for history in HISTORY_HOME:
         if history == PLUGINS_HOME and OWN_ROOT and under(os.path.realpath(path), OWN_ROOT):

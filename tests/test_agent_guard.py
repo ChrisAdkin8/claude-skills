@@ -982,6 +982,55 @@ class HomeBehindALink(unittest.TestCase):
         self.assertEqual(self.tool("Grep", pattern="x", path=self.home), 2)
 
 
+class SessionResultsLink(unittest.TestCase):
+    """The exemption for an agent's own saved tool output covers the directory as written, and
+    its resolved spelling only while that stays inside ~/.claude/projects: a link there to
+    another private directory must not exempt it."""
+
+    SESSION = "11111111-2222-3333-4444-555555555555"
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.home = os.path.realpath(tmp.name)
+        project = Path(self.home, ".claude/projects/p")
+        (project / self.SESSION).mkdir(parents=True)
+        self.results = project / self.SESSION / "tool-results"
+        self.project = project
+
+    def read(self, path):
+        run = subprocess.run(
+            [sys.executable, str(GUARD), "read"],
+            input=json.dumps(
+                {
+                    "tool_name": "Read",
+                    "tool_input": {"file_path": path},
+                    "cwd": self.home,
+                    "session_id": self.SESSION,
+                    "transcript_path": f"{self.project}/{self.SESSION}.jsonl",
+                }
+            ),
+            capture_output=True,
+            text=True,
+            check=False,
+            env={**os.environ, "HOME": self.home},
+        )
+        return run.returncode
+
+    def test_a_link_to_another_private_directory_exempts_nothing(self):
+        other = Path(self.home, ".claude/sessions")
+        other.mkdir(parents=True)
+        (other / "x").write_text("x\n")
+        self.results.symlink_to(other)
+        self.assertEqual(self.read(str(other / "x")), 2)
+        self.assertEqual(self.read(str(self.results / "x")), 2)
+
+    def test_the_directory_itself_stays_readable(self):
+        self.results.mkdir()
+        (self.results / "b1.txt").write_text("x\n")
+        self.assertEqual(self.read(str(self.results / "b1.txt")), 0)
+
+
 class SessionHistory(unittest.TestCase):
     """Transcripts and the agents' run dirs stay out of reach: a verifier or cold reviewer that
     could read the session that wrote a document would no longer be checking it cold. An agent

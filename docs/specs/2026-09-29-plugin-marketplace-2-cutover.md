@@ -1,7 +1,7 @@
 ---
 title: Install the skills from the Claude Code plugin marketplace, part 2: cutover
 created: 2026-09-29
-status: in-progress # draft | reviewed | in-progress | done | superseded
+status: done # draft | reviewed | in-progress | done | superseded
 research: none
 idea: none
 read-at: fa02c7c

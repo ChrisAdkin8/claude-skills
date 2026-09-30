@@ -101,9 +101,35 @@ def session_results(path):
     return str(path.with_suffix("") / "tool-results")
 
 
-def verdict(guard, command, results=None):
+def guard_root(path):
+    """The plugin root the guard of a headless run lived in, or None: run-agent.sh renders it
+    into the run dir's agents.json, which is where the run's hooks were configured from."""
+    for f in RUNS.glob("*/*/session_id"):
+        if f.read_text().strip() == path.stem:
+            try:
+                text = (f.parent / "agents.json").read_text()
+            except OSError:
+                return None
+            found = re.search(r'python3 \\"([^"\\]+)/hooks/agent-guard\.py\\"', text)
+            return found and found.group(1)
+    return None
+
+
+def with_root(guard, root):
+    """Point the guard's own-root exemption where the run's guard had it: the plugin root, if
+    that lives under ~/.claude/plugins, as the guard itself decides."""
+    guard.OWN_ROOT = (
+        root
+        if root
+        and any(p in (guard.PLUGINS_HOME, guard.PLUGINS_HOME.resolve()) for p in Path(root).parents)
+        else None
+    )
+
+
+def verdict(guard, command, results=None, root=None):
     """('allowed', '') or ('blocked', reason)."""
     guard.SESSION_RESULTS = results
+    with_root(guard, root)
     err = io.StringIO()
     try:
         with contextlib.redirect_stderr(err):
@@ -114,13 +140,17 @@ def verdict(guard, command, results=None):
                 "Blocked by agent-guard: "
             )
         raise
+    finally:
+        with_root(guard, None)
     return "allowed", ""
 
 
-def read_verdict(guard, tool, tool_input, cwd, results=None):
+def read_verdict(guard, tool, tool_input, cwd, results=None, root=None):
     """('allowed', '') or ('blocked', reason) for one Read, Grep or Glob call."""
+    saved = guard.CWD
     guard.CWD = cwd
     guard.SESSION_RESULTS = results
+    with_root(guard, root)
     err = io.StringIO()
     try:
         with contextlib.redirect_stderr(err):
@@ -131,11 +161,15 @@ def read_verdict(guard, tool, tool_input, cwd, results=None):
                 "Blocked by agent-guard: "
             )
         raise
+    finally:
+        # The next call is judged where the guard was loaded, not where this one ran.
+        guard.CWD = saved
+        with_root(guard, None)
     return "allowed", ""
 
 
 def read_calls(path, agent=None):
-    """(tool, input, cwd, own results folder) for each Read, Grep and Glob call in a guarded agent's transcript. A
+    """(tool, input, cwd, own results folder, guard root) for each Read, Grep and Glob call in a guarded agent's transcript. A
     subagent's type is in the .meta.json beside it; a headless run's comes from `agent`."""
     if agent is None:
         meta = path.with_name(path.name.removesuffix(".jsonl") + ".meta.json")
@@ -145,6 +179,7 @@ def read_calls(path, agent=None):
             return
     if agent not in GUARDED:
         return
+    root = guard_root(path)
     for line in path.read_text(errors="replace").splitlines():
         try:
             entry = json.loads(line)
@@ -158,6 +193,7 @@ def read_calls(path, agent=None):
                     item.get("input") or {},
                     entry.get("cwd") or "",
                     session_results(path),
+                    root,
                 )
 
 
@@ -277,8 +313,8 @@ def main():
         {json.dumps(call, sort_keys=True): call for call in reads}.values()
     )
     refused = []
-    for tool, tool_input, cwd, results in unique_reads:
-        after, reason = read_verdict(new, tool, tool_input, cwd, results)
+    for tool, tool_input, cwd, results, root in unique_reads:
+        after, reason = read_verdict(new, tool, tool_input, cwd, results, root)
         if after == "blocked":
             refused.append((tool, tool_input, reason))
     print(
@@ -296,7 +332,7 @@ def main():
             if (command, blocked_then) in seen:
                 continue
             seen.add((command, blocked_then))
-            now, reason = verdict(new, command, session_results(f))
+            now, reason = verdict(new, command, session_results(f), guard_root(f))
             if (now == "blocked") != blocked_then:
                 changed.append((command, "blocked" if blocked_then else "allowed", now, reason))
     print(

@@ -114,3 +114,44 @@ EXPECTED: an entry written with the absolute path excludes a call written with i
 
 - The script was a stand-in for `repo-health.sh`; the test shows the exclusion pattern matching, not `gh` itself.
 - The model was told the absolute path, as skills will be once `${CLAUDE_PLUGIN_ROOT}` expands (spike Q1).
+
+## Q3 (run by the user, 2026-09-30)
+
+### Does `run-agent.sh` run an agent end to end from the cache path, with the agent's Read and Bash guarded there?
+
+Runs: 1, by the user, recorded in part 1's record (`## Implementation`); not re-run for this file. `run-agent.sh spec-verifier` from the plugin cache copy, `~/.claude/plugins/cache/claude-skills/claude-skills/0.1.0/hooks/run-agent.sh`, on a tiny spec whose cite repo was that cache copy.
+
+#### Output
+
+```
+exit 0; run.json subtype success; 4 turns; $0.07
+reply.md closing lines: the claim table, "Confirmed: 1 of 3", "Plan holds: no"
+the verifier read hooks/run-agent.sh in the cache to check its citation (it quoted line 1 and lines 54 and 61)
+run.json holds no denial; the rendered settings.json names the absolute cache path in excludedCommands
+```
+
+#### Verdict
+
+EXPECTED: an agent ran end to end from the cache path, and the guard's own-root exemption let it read the plugin's files.
+
+#### Notes
+
+- The run used the user's real `HOME`, not a scratch one, so the marketplace install went into the real `~/.claude/plugins` and the credentials were the real login. The scratch-`HOME` half is covered by W1's and spike 2's installs and by `RunAgentFromACache`.
+- Not tested: an agent that runs a `SCRIPTS` script from the cache (the tiny spec needed none), and a scratch `HOME` behind a link.
+
+## Q4 (replay of recorded agent sessions, 2026-09-30)
+
+### Which paths under the plugin root do the four agents actually read, so the guard's "own root only" rule for `~/.claude/plugins/` doesn't block one?
+
+Runs: 1, `python3 tests/replay_guard.py`, recorded in part 1's record (`## Implementation`); not re-run for this file. It was run with the own-root rule in place, after a fix (`7731c56`) so each headless run is judged with the plugin root its `agents.json` names; before that it judged the spike 3 run by a checkout's guard and let one call's working directory leak into the next (153 headless differences).
+
+#### Output
+
+```
+refused reads: 0
+headless differences: 8, the same 8 as at edca724
+```
+
+#### Verdict
+
+INCONCLUSIVE on the list of paths, EXPECTED on the concern: the rule refused none of the recorded reads, but the replay counts refusals and does not list which plugin paths the agents read, and it covers only the transcripts on this machine.

@@ -105,6 +105,7 @@ Needs a run: 7
 - Not reviewed: the Subagent step spells out the launcher's inputs, outputs and exit codes, the implementer's closing `Implementer:` lines, and its tools line (with Bash, so the clean-up skills can check their fixes, from spike S2) and no hooks; W4's Done when tests the shape check, from delta review row 8, on 2026-09-30.
 - Not reviewed: W7's `CLAUDE.md` edit lists only `run-implementer.sh`, since part 1's W3 now lists its own scripts, from part 1's verifier, on 2026-09-30.
 - Not reviewed: W4 adds `tests/test_eval_runners.py`, and its Done when tests `run.sh`'s new clean-up and `IMPLEMENT_MAX_USD` export, from the verifier, on 2026-09-30.
+- Not reviewed: W5's red-before check moves to a new `spec-done-branch` case (no `## Evidence`, an `implement/<basename>` branch exists: the reply must say to run `/spec done` from the worktree), because `spec-done-implement` passed on both models against the unchanged `done-step.md`, which already reads the record; `spec-done-implement` stays as a regression check, and Effort counts the extra case, from the user, on 2026-09-30.
 
 ## Spikes
 

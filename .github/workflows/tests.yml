@@ -37,3 +37,8 @@ jobs:
         run: npm install -g @anthropic-ai/claude-code@2.1.285
       - name: Validate the plugin and marketplace manifests
         run: claude plugin validate . --strict
+      # `validate .` reads only marketplace.json. This walks the plugin's skills, and fails on an
+      # error such as frontmatter that does not parse, which loads a skill with empty metadata.
+      # It is not --strict: a CLAUDE.md at the plugin root draws a warning that is expected here.
+      - name: Validate the plugin's skills
+        run: claude plugin validate .claude-plugin/plugin.json

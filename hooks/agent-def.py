@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Print one agent file as the JSON `claude --agents` takes, so the runners can pass the agent
-per run instead of Claude Code loading it from ~/.claude/agents into every session.
+per run instead of Claude Code loading it from the user's agents directory into every session.
 
 Usage: agent-def.py [--root <dir>] <agent file>
 

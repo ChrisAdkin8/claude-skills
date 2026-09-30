@@ -12,10 +12,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+# The repo this case lives in: tests/skill-evals/cases/<case>/grade.py.
+ROOT = Path(__file__).resolve().parents[4]
+
 note = Path(os.environ["EVAL_NOTE"])
 text = note.read_text() if note.exists() else ""
 check = (
-    subprocess.run([str(Path.home() / ".claude/skills/research/scripts/check-note.py"), str(note)],
+    subprocess.run([str(ROOT / "skills/research/scripts/check-note.py"), str(note)],
                    capture_output=True, text=True, check=False).stdout
     if text else ""
 )

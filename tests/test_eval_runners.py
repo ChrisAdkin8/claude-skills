@@ -252,6 +252,18 @@ class Runners(unittest.TestCase):
         )
         self.assertIn("--strict-mcp-config", first)
 
+    def test_skill_evals_load_the_checkout_as_the_plugin(self):
+        self.skill_case("good", passes=True)
+        self.run_script(SKILL_RUN)
+        (argv,) = self.argv()
+        self.assertEqual(self.flag(argv, "--plugin-dir"), str(REPO))
+
+    def test_skill_eval_prompts_type_the_namespaced_skill(self):
+        # The bare /spec also resolves, but not to this plugin alone while an old install is present.
+        for prompt in sorted((REPO / "tests" / "skill-evals" / "cases").glob("*/prompt.txt")):
+            with self.subTest(case=prompt.parent.name):
+                self.assertRegex(prompt.read_text(), r"\A/claude-skills:(spec|research|idea|cold-review) ")
+
     def test_skill_evals_pass_the_model_to_the_skill_and_its_agents(self):
         self.skill_case("good", passes=True)
         self.env["RUN_AGENT_MODEL"] = "stale"

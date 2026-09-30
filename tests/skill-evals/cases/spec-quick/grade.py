@@ -9,6 +9,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+# The repo this case lives in: tests/skill-evals/cases/<case>/grade.py.
+ROOT = Path(__file__).resolve().parents[4]
+
 repo = Path(sys.argv[1])
 specs = sorted((repo / "docs/specs").glob("*.md"))
 spec = specs[0] if len(specs) == 1 else None
@@ -16,7 +19,7 @@ record = spec.parent / "records" / f"{spec.stem}-record.md" if spec else None
 rec = record.read_text() if record and record.exists() else ""
 verification = re.split(r"(?m)^## ", rec.split("## Verification", 1)[1])[0] if "## Verification" in rec else ""
 check = (
-    subprocess.run([str(Path.home() / ".claude/skills/spec/scripts/check-spec.py"), str(spec), "--repo", str(repo)],
+    subprocess.run([str(ROOT / "skills/spec/scripts/check-spec.py"), str(spec), "--repo", str(repo)],
                    capture_output=True, text=True).stdout
     if spec else ""
 )

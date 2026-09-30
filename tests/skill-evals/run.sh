@@ -5,6 +5,7 @@
 #
 # Usage: run.sh [case ...]   all cases by default, in parallel
 # Runs inside hooks/agent-sandbox.json, so Bash writes stay in the fixture and network is limited.
+# Loads this checkout as the plugin (--plugin-dir), so prompt.txt types /claude-skills:<skill>.
 # Costs real tokens; run by hand after changing a skill's steps. Results: results/<timestamp>/.
 #   SKILL_EVAL_MAX_USD  per-case cost ceiling, passed as --max-budget-usd (default 3)
 #   EVAL_MODEL          model to run the skills on, passed as --model (default: your default model);
@@ -74,7 +75,7 @@ run_case() {
   prompt=$(sed -e "s#{{NOTE}}#$note#g" -e "s#{{STAMP}}#$stamp#g" "$dir/prompt.txt")
   "$dir/setup.sh" "$work" > "$out/$c.setup" 2>&1 || { echo "FAIL $c (setup)"; echo FAIL > "$out/$c.result"; rm -rf "$work"; return; }
   before=$(notes_status)
-  (cd "$work" && claude -p --output-format json --max-turns 60 --max-budget-usd "${SKILL_EVAL_MAX_USD:-3}" ${EVAL_MODEL:+--model "$EVAL_MODEL"} \
+  (cd "$work" && claude -p --plugin-dir "$repo" --output-format json --max-turns 60 --max-budget-usd "${SKILL_EVAL_MAX_USD:-3}" ${EVAL_MODEL:+--model "$EVAL_MODEL"} \
     --settings "$settings" --permission-mode acceptEdits \
     --allowedTools "Read Write Edit Glob Grep Bash Skill" --strict-mcp-config --no-session-persistence \
     "$prompt" < /dev/null) > "$out/$c.json" 2> "$out/$c.err"

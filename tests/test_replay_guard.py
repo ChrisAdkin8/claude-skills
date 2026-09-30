@@ -61,6 +61,31 @@ class Replay(unittest.TestCase):
             finally:
                 replay_guard.RUNS = old
 
+    def test_a_symlink_install_run_has_no_plugin_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp) / "name" / "researcher"
+            run.mkdir(parents=True)
+            (run / "session_id").write_text("abc-123\n")
+            hook = 'python3 "$HOME/.claude/hooks/agent-guard.py" bash'
+            (run / "agents.json").write_text(json.dumps({"a": {"hooks": hook}}))
+            old, replay_guard.RUNS = replay_guard.RUNS, Path(tmp)
+            try:
+                self.assertIsNone(replay_guard.guard_root(Path("/x/abc-123.jsonl")))
+            finally:
+                replay_guard.RUNS = old
+
+    def test_an_old_install_script_is_judged_at_the_plugin_root(self):
+        script = "research/scripts/repo-health.sh a/b"
+        for home in ("~", "$HOME", "${HOME}", str(Path.home())):
+            with self.subTest(home=home):
+                command = f"{home}/.claude/skills/{script}"
+                self.assertEqual(replay_guard.plugin_spelling(command, None), f"{REPO}/skills/{script}")
+                self.assertEqual(replay_guard.plugin_spelling(command, "/r/p/1"), f"/r/p/1/skills/{script}")
+        # The recorded spelling was allowed then, and the plugin's spelling of it is allowed now.
+        now = replay_guard.plugin_spelling(f"~/.claude/skills/{script}", None)
+        self.assertEqual(replay_guard.verdict(self.guard, now)[0], "allowed")
+        self.assertEqual(replay_guard.plugin_spelling("ls ~/.claude/projects", None), "ls ~/.claude/projects")
+
 
 if __name__ == "__main__":
     unittest.main()

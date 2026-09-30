@@ -53,10 +53,10 @@ esac
 
 here=$(cd "$(dirname "$0")" && pwd -P)
 # The plugin root (the repo, or the plugin cache copy) is found from this script's own location,
-# so nothing here depends on ~/.claude/skills or ~/.claude/hooks existing.
+# so nothing here depends on where the plugin is installed.
 plugin_root=$(dirname "$here")
 export CLAUDE_PLUGIN_ROOT=$plugin_root
-# The agent files live in hooks/agents, not ~/.claude/agents, so no session loads them as
+# The agent files live in hooks/agents, not the user's agents directory, so no session loads them as
 # subagents it could launch outside this sandbox. Each run passes its one agent by --agents.
 file="$here/agents/$agent.md"
 [ -f "$file" ] || die "no agent file: $file"

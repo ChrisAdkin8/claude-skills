@@ -1,7 +1,7 @@
 ---
 title: "/implement, part 1: range-level drift, a diff scanner and a sandboxed implement-verifier"
 created: 2026-09-26
-status: reviewed # draft | reviewed | in-progress | done | superseded
+status: in-progress # draft | reviewed | in-progress | done | superseded
 research: none
 idea: none
 read-at: 1c7ea6e

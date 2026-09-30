@@ -1139,3 +1139,60 @@ resolved-root fix after it): it judged spike 3's run, which read its plugin cach
 checkout's guard (1 read refused), and it left the last read's working directory set for the
 Bash half (153 differences). The replay now judges each headless run by the plugin root its
 `agents.json` names, and keeps each call's directory to itself.
+
+## Plugin marketplace part 2, W3 to W5: the skills, tests and evals on the plugin layout (2026-09-30)
+
+Both sets ran once per model on `3a97fc3`, W4's commit, one set after the other. The skill evals
+loaded the checkout with `--plugin-dir` and typed `/claude-skills:<skill>`. The agent evals load no
+plugin: `agent-def.py --root` writes the checkout into each definition, and each rendered
+`sandbox.md` names the checkout's `hooks/run-agent.sh` with no `${CLAUDE_PLUGIN_ROOT}` left in it.
+The machine still had the old `~/.claude/skills` and `hooks` links, pointing at another checkout;
+the namespaced prompts reach this one.
+
+| Case | Sonnet | Opus |
+|---|---|---|
+| absence-claim | PASS (8, $0.12) | PASS (9, $0.26) |
+| cold-review-skip | PASS (7, $0.09) | PASS (6, $0.16) |
+| delta-review | FAIL (8, $0.08) | PASS (6, $0.18) |
+| delta-review-record | FAIL (7, $0.08); reruns FAIL, FAIL | PASS (9, $0.21) |
+| guard-applies | SKIP (opus only) | PASS (2, $0.06) |
+| record-skip | PASS (6, $0.07) | PASS (7, $0.18) |
+| research-ideas | FAIL (29, $0.54); reruns PASS, PASS | PASS (53, $2.04) |
+| research-quick | PASS (9, $0.16) | PASS (10, $0.25) |
+| spec-miscite | PASS (6, $0.08) | PASS (6, $0.16) |
+| spike-inherited | PASS (5, $0.07) | PASS (9, $0.18) |
+| wrong-figure | PASS (6, $0.09) | PASS (7, $0.19) |
+
+Skill evals:
+
+| Case | Sonnet | Opus |
+|---|---|---|
+| cold-review-delta | FAIL (4, $0.13) | PASS (4, $0.26) |
+| research-quick-flow | PASS (17, $0.24) | PASS (21, $0.59) |
+| spec-done | PASS (6, $0.15) | FAIL (11, $0.31); reruns PASS, PASS |
+| spec-quick | PASS (30, $0.38) | PASS (15, $0.45) |
+
+Totals: Sonnet $1.38 (agent evals, 7 of 10) and $0.90 (skill evals, 3 of 4); Opus $3.86 (11 of 11)
+and $1.61 (3 of 4). Reruns of the three failures not seen in the section above cost $1.79 more, so
+$9.54 in all.
+
+**No failure is from the plugin layout or the guard.** No transcript holds a `Blocked by agent-guard`
+reply except `guard-applies`, which is meant to be blocked. The skills ran under their namespaced
+names, and each failing skill case passed every check but one.
+- `delta-review` and `cold-review-delta` fail on Sonnet as in the section above, on the same checks.
+- `delta-review-record` fails the same decoy-row check as `delta-review`, three times in three
+  runs. It failed that check on Sonnet in three of the five sections above and passed in the other
+  two. `hooks/agents/cold-reviewer.md` is unchanged since `06b4288`; `hooks/agent-sandbox.md`
+  changed only its two script paths.
+- `research-ideas` on Sonnet tagged its candidate pool with idea types (`[dataset]`, `[game]`,
+  `[lab]`), which the case refuses; both reruns passed.
+- `spec-done` on Opus left the status at in-progress and wrote the Implementation note, but its
+  reply said "Once W2 is built" rather than a phrase the "names W2 as not landed" check reads; both
+  reruns passed.
+
+**`tests/replay_guard.py`** reports 0 recorded reads refused and 29 headless commands with a
+different verdict. Before W4's replay fix it was 58: 29 more were the old install's
+`~/.claude/skills/research/scripts/...` spelling, which W3 stopped allowing, and the replay now moves
+to the plugin root. All 29 left are `gh` or a research script in a call with other commands, PR #27's
+`check_outside_only`, recorded by sessions that ran the other checkout's older guard. There were 8
+in the section above; the rest are runs since.

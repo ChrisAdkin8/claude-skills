@@ -3,8 +3,9 @@
 What's where, how to check a change, and what the checks cost. The rules for making a change,
 such as commit prefixes and what to record, are in [`CLAUDE.md`](../CLAUDE.md).
 
-**Whatever branch is checked out is what the agents run**, because `~/.claude/skills` and
-`~/.claude/hooks` are links into this repo. An edit is live as soon as you save it.
+**Whatever branch is checked out is what the agents run** when you start Claude Code from the
+checkout with `claude --plugin-dir .`: an edit is live as soon as you save it. An installed plugin
+runs a copy in Claude Code's plugin cache, which an edit here doesn't reach.
 
 ## Layout
 

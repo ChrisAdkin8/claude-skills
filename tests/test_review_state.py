@@ -207,7 +207,7 @@ class ReviewState(unittest.TestCase):
         self.repo_with_review()
         self.write(self.doc, DOC + "\nMore.\n")
         got, out = state(self.doc, self.home)
-        # No ~/.claude/hooks link: the script names git-read.py by where it is, quoted.
+        # The script names git-read.py by where it is, quoted.
         hint = shlex.quote(str(ROOT / "hooks" / "git-read.py"))
         self.assertTrue(got["diff"].startswith(f"{hint} -C "), out)
         run = subprocess.run(
@@ -215,23 +215,6 @@ class ReviewState(unittest.TestCase):
         )
         self.assertEqual(run.returncode, 0, run.stderr)
         self.assertIn("+More.", run.stdout)
-
-    def test_diff_line_keeps_the_home_spelling_through_the_symlink_install(self):
-        # cold-review's allowed-tools names ~/.claude/hooks/git-read.py until part 2 moves it, so
-        # while that link points at this repo the hint is spelled the way the permission is.
-        self.repo_with_review()
-        self.write(self.doc, DOC + "\nMore.\n")
-        (self.home / ".claude").mkdir(parents=True)
-        (self.home / ".claude" / "hooks").symlink_to(ROOT / "hooks")
-        got, out = state(self.doc, self.home)
-        self.assertTrue(got["diff"].startswith("~/.claude/hooks/git-read.py -C "), out)
-        other = self.home / "other"
-        (other / "hooks").mkdir(parents=True)
-        (other / "hooks" / "git-read.py").write_text("")
-        (self.home / ".claude" / "hooks").unlink()
-        (self.home / ".claude" / "hooks").symlink_to(other / "hooks")
-        got, out = state(self.doc, self.home)  # a link to some other copy is not this script
-        self.assertFalse(got["diff"].startswith("~"), out)
 
     def test_shallow_clone_cut_off_is_not_the_review_commit(self):
         self.repo_with_review()

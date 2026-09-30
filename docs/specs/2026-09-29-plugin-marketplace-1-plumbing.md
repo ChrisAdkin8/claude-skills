@@ -1,7 +1,7 @@
 ---
 title: Install the skills from the Claude Code plugin marketplace, part 1: plumbing
 created: 2026-09-29
-status: in-progress # draft | reviewed | in-progress | done | superseded
+status: done # draft | reviewed | in-progress | done | superseded
 research: none
 idea: none
 read-at: 65906e2
@@ -102,7 +102,7 @@ The numbers continue from the unsplit spec, [2026-09-29-plugin-marketplace](2026
 4. Which paths under the plugin root do the four agents actually read, so the guard's "own root only" rule for `~/.claude/plugins/` doesn't block one? Experiment: replay the recorded agent sessions (`tests/replay_guard.py`) with the rule in place, and count new denials.
    Partly answered: `tests/replay_guard.py`, with the own-root rule in place and each run judged by the plugin root its `agents.json` names, refused 0 recorded reads and showed the same 8 headless differences as at `edca724`; it covers only this machine's transcripts and counts refusals without listing which plugin paths the agents read (spike Q4, docs/specs/spikes/2026-09-29-plugin-marketplace-1-plumbing-results.md)
 5. Does `claude plugin validate` run without credentials, so CI can call it? Experiment: run it with a scratch `HOME` and no `ANTHROPIC_API_KEY`.
-   Partly answered: `claude plugin validate . --strict` ran with no API key or login prompt in a scratch `HOME`, but macOS Keychain logins survive that, so only a fresh CI runner proves it; and it exited 1 because the stand-in `marketplace.json` had no top-level `description`, which W1 now adds (run by hand, docs/specs/spikes/2026-09-29-plugin-marketplace-1-plumbing-results.md)
+   Answered: yes. On a fresh macOS runner with no login and no secret, `claude plugin validate . --strict` and `claude plugin validate .claude-plugin/plugin.json` both passed in CI (run 36704261516 at `04dd1b7`; the second with the expected warning about the root `CLAUDE.md`), after the local run in a scratch `HOME` that a Keychain login could have helped, and with the top-level `description` W1 added (spike Q5, run by hand and in CI, docs/specs/spikes/2026-09-29-plugin-marketplace-1-plumbing-results.md)
 6. Does a sandbox `excludedCommands` entry written with the absolute plugin root exclude a call written with that same absolute path? `hooks/agent-guard.py:213-217` says an absolute spelling ran inside the sandbox against the `~` entry. Experiment: in a scratch `HOME`, a settings file whose `excludedCommands` holds `<root>/skills/research/scripts/repo-health.sh *`, and `claude -p` told to run that path with `gh` available, checking the call reaches the network.
    Answered: yes. In a sandbox with no allowed hosts, an `excludedCommands` entry holding the absolute path let a call written with that path reach the network, while an entry holding `~` did not, and neither did no entry (spike Q6, run by hand, with a stand-in for the script, docs/specs/spikes/2026-09-29-plugin-marketplace-1-plumbing-results.md)
 

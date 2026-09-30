@@ -40,7 +40,7 @@ class RunAgent(unittest.TestCase):
         (bin_dir / "claude").write_text(STUB)
         (bin_dir / "claude").chmod(0o755)
         self.calls = self.tmp / "calls.jsonl"
-        # A home of its own, so runs land in no real ~/.cache. It has no ~/.claude/agents: the
+        # A home of its own, so runs land in no real ~/.cache. It has no agents directory: the
         # script finds the agents in hooks/agents.
         home = self.tmp.resolve() / "home"
         (home / ".claude").mkdir(parents=True)
@@ -106,7 +106,7 @@ class RunAgent(unittest.TestCase):
         (call,) = self.calls_made()
         argv = call["argv"]
         self.assertEqual(argv[argv.index("--agent") + 1], "cold-reviewer")
-        # The agent is passed by --agents, not loaded from ~/.claude/agents, with its own tools
+        # The agent is passed by --agents, not loaded from the user's agents directory, with its own tools
         # pre-approved and its guard hooks in the definition.
         defs = json.loads(Path(argv[argv.index("--agents") + 1]).read_text())
         self.assertEqual(list(defs), ["cold-reviewer"])
@@ -119,7 +119,7 @@ class RunAgent(unittest.TestCase):
         text = settings.read_text()
         self.assertNotIn("${", text)
         self.assertIn(f"{root}/skills/research/scripts/repo-health.sh *", text)
-        self.assertIn("~/.claude/skills/research/scripts/repo-health.sh *", text)
+        self.assertNotIn("~/.claude/skills", text)
         # The agent's guard hook is the root's own, not a path under ~/.claude.
         (guard,) = {
             h["command"]
@@ -223,8 +223,8 @@ class RunAgent(unittest.TestCase):
 
 
 class RunAgentFromACache(RunAgent):
-    """The same tests against a copy of hooks/ in a plugin cache path, with no ~/.claude/skills
-    or hooks link: the script finds its agents, guard and settings from where it lives."""
+    """The same tests against a copy of hooks/ in a plugin cache path, with no link under
+    ~/.claude: the script finds its agents, guard and settings from where it lives."""
 
     def setUp(self):
         super().setUp()

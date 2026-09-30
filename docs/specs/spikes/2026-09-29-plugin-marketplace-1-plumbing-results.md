@@ -155,3 +155,29 @@ headless differences: 8, the same 8 as at edca724
 #### Verdict
 
 INCONCLUSIVE on the list of paths, EXPECTED on the concern: the rule refused none of the recorded reads, but the replay counts refusals and does not list which plugin paths the agents read, and it covers only the transcripts on this machine.
+
+## Q5 (CI, 2026-09-30)
+
+### Does `claude plugin validate` run without credentials, so CI can call it?
+
+Runs: 1, on the GitHub `macos-latest` runner with no secret configured: run `36704261516`, at `04dd1b7`, on the branch behind draft PR #28. It closes the question the local run (above, `## Q5 (run by hand, 2026-09-29)`) left open, since a macOS Keychain login survives a scratch `HOME` and a fresh runner has none.
+
+#### Output
+
+```
+Install the claude CLI, pinned:  npm install -g @anthropic-ai/claude-code@2.1.285  ->  added 2 packages in 3s
+                                 npm warn install-scripts: @anthropic-ai/claude-code@2.1.285 (postinstall: node install.cjs) not yet covered by allowScripts
+Validate the plugin and marketplace manifests:  claude plugin validate . --strict  ->  Validation passed
+Validate the plugin's skills:  claude plugin validate .claude-plugin/plugin.json  ->  Validation passed with warnings
+    (one warning: CLAUDE.md at the plugin root is not loaded as project context)
+all seven steps of the job: success
+```
+
+#### Verdict
+
+EXPECTED: `validate` ran on a fresh runner with no login and no secret, and both validate steps passed.
+
+#### Notes
+
+- The runner had npm, and the pinned package installed and ran.
+- npm warns that the package's `postinstall` script is not yet covered by `allowScripts`. It ran here, or is not needed, since `validate` worked. A later npm that blocks such scripts by default could break the install step, so that warning is the thing to look at if this step ever fails.

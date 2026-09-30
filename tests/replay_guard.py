@@ -102,6 +102,19 @@ def session_results(path):
     return str(path.with_suffix("") / "tool-results")
 
 
+# A run from the symlink install wrote a skill script by its link: ~, $HOME or the home path, then
+# .claude/skills or .claude/hooks. The plugin writes the same script under its root instead.
+OLD_INSTALL = re.compile(
+    r"(?:~|\$HOME|\$\{HOME\}|" + re.escape(str(Path.home())) + r")/\.claude/(skills|hooks)/"
+)
+
+
+def plugin_spelling(command, root):
+    """The command as the run would write it under the plugin: an old-install script path moved
+    to the root, so the replay shows rule changes rather than that install-layout difference."""
+    return OLD_INSTALL.sub(lambda m: f"{root or REPO}/{m.group(1)}/", command)
+
+
 def guard_root(path):
     """The plugin root the guard of a headless run lived in, or None: run-agent.sh renders it
     into the run dir's agents.json, which is where the run's hooks were configured from."""
@@ -112,7 +125,9 @@ def guard_root(path):
             except OSError:
                 return None
             found = re.search(r'python3 \\"([^"\\]+)/hooks/agent-guard\.py\\"', text)
-            return found and found.group(1)
+            root = found and found.group(1)
+            # The symlink install's guard lived in its link, so the run had no plugin root.
+            return None if root and OLD_INSTALL.match(f"{root}/hooks/") else root
     return None
 
 
@@ -278,8 +293,8 @@ def main():
         old_path = Path(tmp) / "agent_guard_old.py"
         old_path.write_text(old_source)
         old = load_guard(old_path, "agent_guard_old")
-        # The old guard compared unresolved script paths, which never match now that
-        # ~/.claude/skills is a symlink into this repo. Resolve them, so the replay shows rule
+        # An old guard, from the symlink install, compared unresolved script paths, which never
+        # match the resolved paths the plugin root gives. Resolve them, so the replay shows rule
         # changes rather than that install-layout difference.
         old.SCRIPTS = {path.resolve() for path in old.SCRIPTS}
         new = load_guard(REPO / "hooks" / "agent-guard.py", "agent_guard_new")
@@ -334,7 +349,8 @@ def main():
             if (command, blocked_then) in seen:
                 continue
             seen.add((command, blocked_then))
-            now, reason = verdict(new, command, session_results(f), guard_root(f))
+            root = guard_root(f)
+            now, reason = verdict(new, plugin_spelling(command, root), session_results(f), root)
             if (now == "blocked") != blocked_then:
                 changed.append((command, "blocked" if blocked_then else "allowed", now, reason))
     print(

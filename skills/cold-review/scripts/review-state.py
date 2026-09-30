@@ -82,14 +82,8 @@ def oldest(root, commits):
 
 def git_read_command():
     """git-read.py by the path this script finds it at (hooks/ beside skills/), quoted for the
-    shell. While ~/.claude/hooks is a link to the same hooks/, it is spelled `~/.claude/hooks/...`
-    with the ~ unquoted so the shell expands it, because the skill's allowed-tools names that
-    spelling until the skills move to ${CLAUDE_PLUGIN_ROOT}."""
-    script = Path(__file__).resolve().parents[3] / "hooks" / "git-read.py"
-    legacy = Path.home() / ".claude" / "hooks" / "git-read.py"
-    if legacy.exists() and legacy.resolve() == script:
-        return "~/.claude/hooks/git-read.py"
-    return shlex.quote(str(script))
+    shell. It is the absolute spelling the skill's allowed-tools expand ${CLAUDE_PLUGIN_ROOT} to."""
+    return shlex.quote(str(Path(__file__).resolve().parents[3] / "hooks" / "git-read.py"))
 
 
 def path_at(root, commit, rel):

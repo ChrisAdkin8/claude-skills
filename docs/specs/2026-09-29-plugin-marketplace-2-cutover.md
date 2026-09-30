@@ -1,7 +1,7 @@
 ---
 title: Install the skills from the Claude Code plugin marketplace, part 2: cutover
 created: 2026-09-29
-status: reviewed # draft | reviewed | in-progress | done | superseded
+status: in-progress # draft | reviewed | in-progress | done | superseded
 research: none
 idea: none
 read-at: fa02c7c
@@ -108,3 +108,4 @@ The numbers continue from the unsplit spec, [2026-09-29-plugin-marketplace](2026
 ## Open questions
 
 - How does a user run a plugin's script by hand under a marketplace install? `README.md:271` does it for `build-index.py`, but the script sits at a versioned cache path. A plugin `bin/` directory would put it on `PATH` *(unverified)*; the alternative is to run it only through the skill. W5 needs one of them, and no spike has tested either.
+  Partly tested on 2026-09-30: the README's `python3 ~/.claude/plugins/cache/claude-skills/claude-skills/*/skills/research/scripts/build-index.py ~/notes` runs by hand under a scratch `HOME`'s versioned cache path (`claude plugin install`, no model needed). Whether a `bin/` directory puts the script on `PATH` is still untested: it needs a model run, and a scratch `HOME` has no login.

@@ -6,6 +6,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+# The repo this case lives in: tests/skill-evals/cases/<case>/grade.py.
+ROOT = Path(__file__).resolve().parents[4]
+
 repo, result = Path(sys.argv[1]), json.loads(Path(sys.argv[2]).read_text())
 spec = repo / "docs/specs/2026-09-20-rounding.md"
 record = repo / "docs/specs/records/2026-09-20-rounding-record.md"
@@ -17,7 +20,7 @@ diff = subprocess.run(["git", "-C", str(repo), "diff", head, "--", str(spec)], c
 changed = [l for l in diff.splitlines() if l[:1] in "+-" and not l.startswith(("+++", "---"))]
 rec = record.read_text() if record.exists() else ""
 impl = rec.split("## Implementation", 1)[1] if "## Implementation" in rec else ""
-check = subprocess.run([str(Path.home() / ".claude/skills/spec/scripts/check-spec.py"), str(spec)],
+check = subprocess.run([str(ROOT / "skills/spec/scripts/check-spec.py"), str(spec)],
                        capture_output=True, text=True).stdout
 checks = {
     "status is in-progress (W2 hasn't landed)": re.search(r"(?m)^status: in-progress\b", spec.read_text()) is not None,

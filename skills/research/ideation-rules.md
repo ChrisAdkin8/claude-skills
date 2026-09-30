@@ -1,6 +1,8 @@
 # Ideation rules (depth: ideas)
 
-The `researcher` agent reads this file at `ideas` depth only (`~/.claude/hooks/agents/researcher.md`, Depth). Its Research rules, Safety rules and Before you reply still hold.
+The `researcher` agent reads this file at `ideas` depth only (`${CLAUDE_PLUGIN_ROOT}/hooks/agents/researcher.md`, Depth). Its Research rules, Safety rules and Before you reply still hold.
+
+`${CLAUDE_PLUGIN_ROOT}` in this file is the plugin's root, the directory that holds its `skills/` and `hooks/`. Claude Code expands it in `SKILL.md` but not in a file you read, so in a Bash call write the absolute path, never the variable.
 
 The aim is a wide pool narrowed with evidence, not five ideas ranked in one breath. Work in this order.
 
@@ -27,7 +29,7 @@ The aim is a wide pool narrowed with evidence, not five ideas ranked in one brea
 7. **Where attention data comes from.**
    - HN: `curl -s "https://hn.algolia.com/api/v1/search?query=<q>&tags=story"`, reading `points` and `num_comments`.
    - GitHub: `gh api repos/<owner>/<repo> --jq .stargazers_count`.
-   - Reddit: `~/.claude/skills/research/scripts/reddit-search.sh "<query>" [subreddit] [top|relevance] [year|all]` prints a table and a `Source:` line to cite. If it says Reddit is unavailable, say so; don't fetch reddit.com pages directly, which return block pages.
+   - Reddit: `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/reddit-search.sh "<query>" [subreddit] [top|relevance] [year|all]` prints a table and a `Source:` line to cite. If it says Reddit is unavailable, say so; don't fetch reddit.com pages directly, which return block pages.
    - LinkedIn has no usable source: call it unmeasured.
 
    The Bottom line's confidence names what was measured, e.g. "HN and GitHub checked, Reddit unavailable, LinkedIn unmeasured", instead of lowering confidence for what couldn't be.

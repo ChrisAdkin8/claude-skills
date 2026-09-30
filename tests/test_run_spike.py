@@ -94,6 +94,9 @@ class RunSpike(unittest.TestCase):
         self.assertEqual(flag("--allowedTools"), "Read Grep Glob Bash Write(./**) Edit(./**)")
         self.assertIn("--strict-mcp-config", argv)
         self.assertIn("--no-session-persistence", argv)
+        # The spiker prompt is found beside the script, not under ~/.claude (this HOME has none).
+        self.assertEqual(flag("--append-system-prompt-file"), str(SCRIPT.parents[1] / "spiker.md"))
+        self.assertTrue(SCRIPT.parents[1].joinpath("spiker.md").is_file())
         self.assertTrue(call["uv"].endswith("/.cache/spec-spikes/.uv-cache"))
         self.assertIn("done", (self.root / "repo/spec/S1/run.json").read_text())
 

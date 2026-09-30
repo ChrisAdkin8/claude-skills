@@ -56,6 +56,17 @@ def with_review(text, review=REVIEW):
     return text.rstrip("\n") + "\n\n" + review
 
 
+class TemplateLocation(unittest.TestCase):
+    def test_template_is_found_beside_the_script_not_under_home(self):
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("check_spec", CHECKER)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertEqual(module.TEMPLATE, ROOT / "skills" / "spec" / "template.md")
+        self.assertTrue(module.TEMPLATE.is_file())
+
+
 class ColdReview(unittest.TestCase):
     def setUp(self):
         self.base = FIXTURE.read_text()

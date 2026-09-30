@@ -143,6 +143,22 @@ class SandboxSettings(unittest.TestCase):
         deny += ["Write(~/notes/index.md)", "Edit(~/notes/index.md)"]
         self.assertEqual(AGENT_CASE, expected)
 
+    def test_no_settings_file_locates_the_repo_through_home(self):
+        # The `~/.claude` entries in the spike settings are denies (all of ~/.claude, plugins
+        # included), so they stay. The others may name the repo only with the placeholder or, for
+        # the legacy spelling, in the two agent files' excludedCommands until part 2's W3.
+        for name, settings in (("spike-settings.json", SPIKE),):
+            allowed = list(settings["sandbox"].get("excludedCommands", []))
+            allowed += settings.get("permissions", {}).get("allow", [])
+            allowed += settings["sandbox"]["filesystem"].get("allowWrite", [])
+            for entry in allowed:
+                with self.subTest(file=name, entry=entry):
+                    self.assertNotIn("~/.claude", entry)
+        for name, settings in (("agent-sandbox.json", AGENT), ("agent-case-settings.json", AGENT_CASE)):
+            legacy = [e for e in settings["sandbox"]["excludedCommands"] if "~/.claude" in e]
+            with self.subTest(file=name):
+                self.assertTrue(all(e.startswith(("~/.claude/skills/research/scripts/", "~/.claude/hooks/run-agent.sh")) for e in legacy), legacy)
+
 
 if __name__ == "__main__":
     unittest.main()

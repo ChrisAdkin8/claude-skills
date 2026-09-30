@@ -42,7 +42,7 @@ from mdcheck import (  # noqa: E402  shared with check-note.py
 )
 import mdcheck  # noqa: E402
 
-TEMPLATE = Path.home() / ".claude" / "skills" / "spec" / "template.md"
+TEMPLATE = Path(__file__).resolve().parents[1] / "template.md"
 REQUIRED = [
     "## Goal",
     "## Decision",

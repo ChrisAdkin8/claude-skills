@@ -69,7 +69,7 @@ REQUIRED = {
 }
 # Sections allowed after `## Sources`, in this order. Candidate pool is for depth: ideas only.
 AFTER_SOURCES = ("## Candidate pool", "## Verification")
-# depth: ideas. Keep in step with ~/.claude/skills/research/ideation-rules.md.
+# depth: ideas. Keep in step with skills/research/ideation-rules.md.
 LENSES = ("finding", "tool", "dataset", "game", "lab", "essay")
 POOL_MIN = 20
 SHORTLIST_SIZE = (5, 7)

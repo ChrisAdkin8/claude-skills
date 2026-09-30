@@ -1,5 +1,5 @@
 """Markdown helpers shared by check-note.py, build-index.py,
-~/.claude/skills/spec/scripts/check-spec.py and ~/.claude/skills/cold-review/scripts/review-state.py.
+skills/spec/scripts/check-spec.py and skills/cold-review/scripts/review-state.py.
 
 Not run on its own. Each script loads it by path, so a fix here reaches all of them: frontmatter,
 code fences (and a fence left open), headings, sections, citations, template leftovers, the topic

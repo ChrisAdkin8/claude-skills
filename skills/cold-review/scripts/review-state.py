@@ -22,7 +22,7 @@ added the review's "Reviewed on <date> by" line, searched in the record and the 
 a rename of either. If the review is now in a record and that commit also changed a document
 that already existed, the diff base is the commit's parent, so folds saved in the same commit
 aren't missed. The diff names the document's old path too, if it was renamed since, and is
-printed as a ~/.claude/hooks/git-read.py command, which /cold-review may run without a prompt.
+printed as a git-read.py command, which /cold-review may run without a prompt.
 In a shallow clone, a review commit with no parent may be the clone's cut-off rather than the
 commit that added the review, so there is no base. Read-only: runs git log, show, cat-file,
 merge-base, rev-parse and diff, nothing else.
@@ -78,6 +78,18 @@ def oldest(root, commits):
         if first is None or git(root, "merge-base", "--is-ancestor", commit, first) is not None:
             first = commit
     return first
+
+
+def git_read_command():
+    """git-read.py by the path this script finds it at (hooks/ beside skills/), quoted for the
+    shell. While ~/.claude/hooks is a link to the same hooks/, it is spelled `~/.claude/hooks/...`
+    with the ~ unquoted so the shell expands it, because the skill's allowed-tools names that
+    spelling until the skills move to ${CLAUDE_PLUGIN_ROOT}."""
+    script = Path(__file__).resolve().parents[3] / "hooks" / "git-read.py"
+    legacy = Path.home() / ".claude" / "hooks" / "git-read.py"
+    if legacy.exists() and legacy.resolve() == script:
+        return "~/.claude/hooks/git-read.py"
+    return shlex.quote(str(script))
 
 
 def path_at(root, commit, rel):
@@ -171,8 +183,7 @@ def main():
         if base:
             # Both names if the document was renamed since, so the diff pairs them up.
             names = list(dict.fromkeys([path_at(root, base, rel), rel]))
-            # Unquoted ~, so the shell expands it; everything after is quoted for the shell.
-            out["diff"] = "~/.claude/hooks/git-read.py " + shlex.join(
+            out["diff"] = git_read_command() + " " + shlex.join(
                 ["-C", str(root), "diff", "-M", base, "--", *names]
             )
             stat = (git(root, "diff", "-M", "--stat", base, "--", *names) or "").strip()

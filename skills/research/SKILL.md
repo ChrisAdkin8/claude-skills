@@ -2,7 +2,7 @@
 name: research
 description: Researches a question or idea and writes a cited markdown note to ~/notes/research, which an independent agent then verifies. Runs when the user types /research.
 disable-model-invocation: true
-argument-hint: [quick | ideas] <question or path to an idea note> | finish <path to research note> ["claim to check" ...]
+argument-hint: '[quick | ideas] <question or path to an idea note> | finish <path to research note> ["claim to check" ...]'
 allowed-tools: Read Edit(~/notes/**) Bash(grep *) Bash(git -C ~/notes status *) Bash(~/.claude/hooks/git-read.py *) Bash(git -C ~/notes add *) Bash(git -C ~/notes commit *) Bash(~/.claude/skills/research/scripts/check-note.py *) Bash(~/.claude/skills/research/scripts/build-index.py *) Bash(~/.claude/hooks/run-agent.sh *) Edit(~/.cache/agent-runs/**)
 ---
 

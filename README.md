@@ -62,7 +62,7 @@ How to read it:
 ### Requirements
 
 - **Claude Code 2.1.219 or later.** The agents rely on a sandbox setting added in that version.
-  Last tested on 2.1.282; don't assume the sandbox works on anything older.
+  Last tested on 2.1.285; don't assume the sandbox works on anything older.
 - **macOS.** Nothing has been tried anywhere else ([Linux notes](docs/containment.md#on-linux)).
 - **`python3`**, for the checking scripts. Some spikes also use `uv`.
 - **Optional: `gh` (logged in) and `jq`**, to check how well maintained an open-source project is,

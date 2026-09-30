@@ -104,3 +104,4 @@ Needs a run: none
 - Not reviewed: Working on this repo links a new page, `docs/checker-models.md`, which compares six models as a first check on research claims, on 2026-09-29.
 - Not reviewed: Set up `~/notes` creates `~/notes/projects/mindshare` in its `mkdir` line, and says the `researcher` agent reads `CLAUDE.md` before it writes (`hooks/agents/researcher.md` has it read the template first), on 2026-09-29.
 - Not reviewed: Install is the plugin marketplace's two commands, with `~/notes` and the deny rules to copy by hand as what a plugin can't install, `claude --plugin-dir .` for working on the repo, and how to remove the old symlinks; the hand-run `build-index.py` command names the plugin cache path; the repo-guide, containment and CLAUDE.md lines about the symlinks are reworded, on 2026-09-30.
+- Not reviewed: Requirements says the skills were last tested on Claude Code 2.1.285, not 2.1.282, on 2026-09-30.

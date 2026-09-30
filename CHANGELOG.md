@@ -5,6 +5,23 @@ section is a date. Within a day, changes are grouped by area.
 
 ## 2026-09-30
 
+### Security
+
+- Closed four ways past the guard. It follows `bash -c` as deep as it checks, so a `gh` nested four
+  deep is seen. A `sed` address with a long run of backslashes no longer takes minutes to check
+  (a hook that times out lets the call through). A private path is matched however a linked home
+  is spelled, such as macOS's `/var` and `/private/var`. And a path with `..` after a symlink is
+  refused, since the guard and the shell could read it differently.
+- Under `~/.claude/plugins`, an agent may read only this plugin's own folder: other plugins' files,
+  marketplace clones and `plugins/data` stay hidden. A link inside the agent's saved tool results
+  exempts only what stays under `~/.claude/projects`.
+
+### Fixed
+
+- `/spec` and `/research` quote their `argument-hint`. `/spec`'s began with `[quick]`, which a
+  strict YAML parser rejects, so the skill had loaded with empty settings since 2026-09-25: listed
+  by its heading, and without `disable-model-invocation` applying.
+
 ### Changed
 
 - The skills install as a Claude Code plugin: `/plugin marketplace add ChrisAdkin8/claude-skills`,
@@ -17,8 +34,32 @@ section is a date. Within a day, changes are grouped by area.
 - The tests and both eval runners no longer need the links: CI drops its link step, the skill evals
   load the plugin and type `/claude-skills:<skill>`, and a new test fails on an old install-path
   reference outside the dated documents.
+- CI checks the plugin with `claude plugin validate`: the marketplace manifest, and the plugin's
+  skills, so frontmatter that doesn't parse fails the build.
 
 ## 2026-09-29
+
+### Security
+
+- Agents can't read `~/.claude/backups`, which holds copies of `~/.claude.json`, or the two
+  remote-settings files, which hold a telemetry header and an account ID. `~/.claude.json` itself
+  was already denied.
+
+### Fixed
+
+- `gh` and the research scripts (`repo-health.sh`, `gcp-skus.sh`, `reddit-search.sh`) run only
+  on their own in a Bash call, joined at most by `;` or `&&`. Claude Code takes a call out of the
+  sandbox only when every command in it is exempt, so one that also held a text filter, `cd` or a
+  loop ran inside it and couldn't log in. The guard refuses those calls and says how to write several queries.
+- `/research ideas` works on a new `~/notes`: it sees files in new folders when it compares the
+  notes before and after, and `/research finish` skips its history step in a repo with no
+  commits. Four wording fixes in all.
+
+### Changed
+
+- The end-of-run reports of `/research`, `/spec`, `/spec spike` and `/spec done` give one short line
+  for each item they list, in place of a fixed number of lines.
+- The README's Set up `~/notes` creates `projects/mindshare` too, which `/research ideas` needs.
 
 ### Added
 

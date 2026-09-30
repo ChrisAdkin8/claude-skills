@@ -1226,3 +1226,32 @@ not a wrong prompt:
   check greps for.
 - Opus: it named the unlogged Rollback edit as "Something not written down … `## Rollback` isn't on
   it", which the check's `UNLOGGED` pattern doesn't accept.
+
+## /implement part 1: check-spec.py --drift, scan-diff.py and the implement-verifier (2026-09-30)
+
+Both agent-eval sets ran once per model on `f82f9a1`, part 1's last work-item commit, Sonnet first and
+then Opus, never at the same time. W1 changes `skills/spec/scripts/check-spec.py` and W3 adds
+`skills/implement/`: its verifier prompt, sandbox settings and two scripts. No agent file and no
+skill's steps changed, so the skill evals didn't run. `EVAL_MODEL=sonnet` ran on `claude-sonnet-5-5`.
+
+| Case | Sonnet | Opus |
+|---|---|---|
+| absence-claim | PASS (8, $0.11) | PASS (13, $0.27) |
+| cold-review-skip | PASS (6, $0.08) | PASS (6, $0.15) |
+| delta-review | FAIL (8, $0.08) | PASS (4, $0.15) |
+| delta-review-record | FAIL (6, $0.08) | PASS (6, $0.17) |
+| guard-applies | SKIP (opus only) | PASS (2, $0.06) |
+| record-skip | PASS (5, $0.07) | PASS (6, $0.15) |
+| research-ideas | PASS (32, $0.49) | PASS (51, $1.90) |
+| research-quick | PASS (9, $0.15) | PASS (10, $0.28) |
+| spec-miscite | PASS (7, $0.07) | PASS (7, $0.17) |
+| spike-inherited | PASS (5, $0.06) | PASS (7, $0.17) |
+| wrong-figure | PASS (5, $0.09) | PASS (7, $0.17) |
+
+Totals: Sonnet $1.29 (8 of 10), Opus $3.63 (11 of 11), $4.92 in all. No reruns.
+
+Both Sonnet failures are the decoy-row check (`!(?im)^\|[^\n]*\b2,?000\b`) that `delta-review` and
+`delta-review-record` have failed on Sonnet in earlier sections, among them the plugin marketplace
+part 2 section above. Neither case reaches a file this part changed: `hooks/agents/cold-reviewer.md`
+and `hooks/agent-sandbox.md` are unchanged. They weren't re-run on `spec-implement-refresh` without
+this part.

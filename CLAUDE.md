@@ -1,8 +1,9 @@
 # Working in this repo
 
-The files here are what Claude Code runs: `~/.claude/skills` and `hooks` are symlinks into
-this repo, so an edit is live the moment it's saved. Keep every file valid at each step, and expect a
-skill you're editing to be the one you're running.
+The files here are what Claude Code runs when you start it from this checkout with
+`claude --plugin-dir .`, so an edit is live the moment it's saved. (An installed plugin runs a copy
+in Claude Code's plugin cache instead, which an edit here doesn't reach.) Keep every file valid at
+each step, and expect a skill you're editing to be the one you're running.
 
 ## Before committing
 
@@ -30,8 +31,12 @@ skill you're editing to be the one you're running.
   `readme:` — the area, then what changed. Branch before committing; never push unless asked.
 - Commit from this checkout, not GitHub's web editor: its commits carry no prefix, skip the README
   record, and may use another email address.
-- Files refer to themselves and each other by `~/.claude/...` paths, which the symlinks keep valid.
-  Don't rewrite them as repo-relative paths; the guard resolves them to recognise its own scripts.
+- Skills and the files they load refer to the repo's files as `${CLAUDE_PLUGIN_ROOT}/...`, which
+  Claude Code expands to the plugin root: this checkout, or the plugin cache. Don't rewrite them as
+  repo-relative or `~` paths; the guard finds its root from its own location to recognise its
+  scripts. Dated documents (`docs/specs/`, every `records/`, `CHANGELOG.md`,
+  `tests/agent-evals/BASELINE.md`) keep the paths they were written with, and
+  `tests/test_no_stale_paths.py` fails on an old install-path reference anywhere else.
 - Specs live in `docs/specs/`, and `/spec`'s step 7 writes spike results to `docs/specs/spikes/`.
 - `skills/synced/` holds skills Claude Code syncs from the claude.ai account. It's git-ignored and
   machine-managed: don't edit or commit it.

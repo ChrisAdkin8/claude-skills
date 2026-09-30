@@ -3,6 +3,21 @@
 What changed, by day, drawn from the commit history. The repo has no releases or tags, so each
 section is a date. Within a day, changes are grouped by area.
 
+## 2026-09-30
+
+### Changed
+
+- The skills install as a Claude Code plugin: `/plugin marketplace add ChrisAdkin8/claude-skills`,
+  then `/plugin install claude-skills@claude-skills`. The four skills, the guard, the agent files
+  and both sandbox settings now find their files through `${CLAUDE_PLUGIN_ROOT}`, and the symlinks
+  from `~/.claude/skills` and `~/.claude/hooks` are no longer used. An existing install should
+  remove them (`ls -l ~/.claude` shows them), or every skill is defined twice and its commands are
+  no longer pre-approved. Work on the repo with `claude --plugin-dir .`. `~/notes` stays a
+  prerequisite, and the README says which deny rules to add to your own settings by hand.
+- The tests and both eval runners no longer need the links: CI drops its link step, the skill evals
+  load the plugin and type `/claude-skills:<skill>`, and a new test fails on an old install-path
+  reference outside the dated documents.
+
 ## 2026-09-29
 
 ### Added

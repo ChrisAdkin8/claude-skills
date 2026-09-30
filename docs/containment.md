@@ -5,7 +5,7 @@ The [README](../README.md#safety-and-cost) gives the short version. This page ha
 The skills launch every agent (the researcher, both verifiers and the cold reviewer) through
 `hooks/run-agent.sh`. Each runs as a separate, *headless* Claude Code session: `claude -p` with no
 one at the keyboard. They don't run inside your session, because Claude Code can't put a sandbox
-around an agent that does. So the agent files aren't in `~/.claude/agents`, where every session
+around an agent that does. So the agent files aren't in the agents directory Claude Code reads, where every session
 would offer them; `run-agent.sh` passes each one to its own run. Two layers contain them.
 
 - **The sandbox** ([`hooks/agent-sandbox.json`](../hooks/agent-sandbox.json)): Claude Code's
@@ -15,7 +15,7 @@ would offer them; `run-agent.sh` passes each one to its own run. Two layers cont
   Claude Code doesn't expand in `--settings`, so [`hooks/agent-settings.py`](../hooks/agent-settings.py)
   renders it with the repo's absolute path for each run, and `run-agent.sh` passes the result. An
   `excludedCommands` entry matches a call only as written, so the rendered file lists the absolute
-  spelling and, until the skills move off `~/.claude/skills`, the `~` one too.
+  spelling.
 - **The guard** ([`hooks/agent-guard.py`](../hooks/agent-guard.py)): a script Claude Code runs
   before each tool call, which can refuse it. It checks the agents' shell commands, file reads and
   writes, searches and web fetches. It keeps credentials out of their reach, since a fetched page

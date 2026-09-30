@@ -71,24 +71,42 @@ How to read it:
 
 ### Install
 
-The files expect this repo at `~/code/github.com/claude-skills`, so clone it there:
+Inside Claude Code, add this repo as a *marketplace* (a catalogue of plugins), then install the
+plugin from it:
 
 ```
-git clone https://github.com/ChrisAdkin8/claude-skills.git ~/code/github.com/claude-skills
+/plugin marketplace add ChrisAdkin8/claude-skills
+/plugin install claude-skills@claude-skills
 ```
 
-Claude Code looks in `~/.claude` for *skills* (the commands) and *hooks* (scripts it runs
-automatically at set moments). Move anything already at `~/.claude/skills` or `~/.claude/hooks`
-out of the way, then link both to this repo:
+That gives you `idea`, `research`, `spec` and `cold-review`, and the hooks and agent files they
+use, from Claude Code's plugin cache. The commands are named `/claude-skills:idea`,
+`/claude-skills:research`, `/claude-skills:spec` and `/claude-skills:cold-review`, and the short
+names `/idea`, `/research`, `/spec` and `/cold-review` work too while no other skill has the name.
+This README writes the short ones.
+
+**Two things a plugin can't install for you.**
+
+- **`~/notes`.** The commands keep their notes there, and the location isn't configurable yet. Set
+  it up as the next section says.
+- **Deny rules for your own sessions.** A plugin can't ship permission settings. What keeps the
+  agents away from your credentials and session history, the sandbox settings and the guard,
+  travels with the plugin. Your own sessions get none of it. To give them the same denies, copy
+  the `permissions.deny` list in [`hooks/agent-sandbox.json`](hooks/agent-sandbox.json) into
+  `permissions.deny` in your user settings file, `~/.claude/settings.json`.
+
+**To work on the repo** rather than use it, clone it anywhere and run Claude Code from the clone
+with the plugin loaded from that directory:
 
 ```
-ln -s ~/code/github.com/claude-skills/skills ~/.claude/skills
-ln -s ~/code/github.com/claude-skills/hooks  ~/.claude/hooks
+git clone https://github.com/ChrisAdkin8/claude-skills.git
+cd claude-skills && claude --plugin-dir .
 ```
 
-If an earlier install also linked `~/.claude/agents` to this repo, remove that link with
-`rm ~/.claude/agents`. The agents now live in `hooks/agents`, so your own sessions can't start
-them outside their sandbox.
+**If you installed this repo the old way**, by linking it into your `.claude` folder, remove the
+links: `ls -l ~/.claude` shows any of `skills`, `hooks` or `agents` with an arrow into this repo,
+and `rm ~/.claude/<name>` removes one. Left in place, they define every skill a second time, and
+their commands are no longer pre-approved.
 
 `/research`, `/spec` and `/cold-review` start only when you type them, because each launches paid
 agents. `/idea` is cheap, so Claude may also start it when you ask it to jot something down.
@@ -267,9 +285,11 @@ There are three ways to view it, easiest first:
 3. **Without Markmap.** Open `~/notes/index.md` in any markdown viewer, such as GitHub, Obsidian or
    VS Code's normal preview. It shows the same tree as an indented list.
 
-To rebuild the index by hand, for example after `/idea` adds a note, run
-`~/.claude/skills/research/scripts/build-index.py ~/notes`. Don't edit `index.md` itself: the next
-rebuild overwrites it.
+To rebuild the index by hand, for example after `/idea` adds a note, run the script from the
+installed plugin, whose versioned folder the `*` fills in:
+`python3 ~/.claude/plugins/cache/claude-skills/claude-skills/*/skills/research/scripts/build-index.py ~/notes`
+(from a clone, `skills/research/scripts/build-index.py ~/notes`). Don't edit `index.md` itself:
+the next rebuild overwrites it.
 
 ## Safety and cost
 

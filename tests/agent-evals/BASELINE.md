@@ -1081,3 +1081,61 @@ still needs that.
 different verdict than the one recorded. The same 8 appear at `edca724`, before W2, so they come
 from PR #27's `check_outside_only`, not from this change. Zero refused reads is the count spike
 question 4 asks for.
+
+## Plugin marketplace part 1, after W2's cold review of the guard (2026-09-30)
+
+The cold review of the W2 guard diff (`docs/specs/records/2026-09-29-plugin-marketplace-1-plumbing-record.md`,
+"Guard diff review") led to two guard changes: the resolved spelling of the session results folder
+counts only while it stays inside `~/.claude/projects` (`c0028cb`), and a path with `..` after a
+symlink is refused when the shell's and the tools' readings differ (`4798ee5`). Both sets ran once
+per model on the branch tip after them, `06b4288` plus the replay fix, one set after the other,
+with `~/notes` unchanged after each. Before the runs, the plugin that spike 3 had installed into
+the real `~/.claude` (enabled in `settings.json`, at `860000b`) was uninstalled with
+`claude plugin uninstall` and `claude plugin marketplace remove`, so the headless sessions loaded
+only the symlinked skills, as in the runs above.
+
+| Case | Sonnet | Opus |
+|---|---|---|
+| absence-claim | FAIL (8, $0.10) | PASS (11, $0.32) |
+| cold-review-skip | PASS (7, $0.07) | PASS (6, $0.17) |
+| delta-review | FAIL (7, $0.08) | PASS (6, $0.18) |
+| delta-review-record | PASS (7, $0.09) | PASS (7, $0.24) |
+| guard-applies | SKIP (opus only) | PASS (2, $0.06) |
+| record-skip | PASS (6, $0.07) | PASS (5, $0.14) |
+| research-ideas | PASS (31, $0.43) | PASS (46, $1.50) |
+| research-quick | PASS (8, $0.19) | PASS (9, $0.21) |
+| spec-miscite | PASS (5, $0.06) | PASS (6, $0.14) |
+| spike-inherited | PASS (4, $0.05) | PASS (6, $0.14) |
+| wrong-figure | PASS (5, $0.11) | PASS (8, $0.18) |
+
+Skill evals:
+
+| Case | Sonnet | Opus |
+|---|---|---|
+| cold-review-delta | FAIL (4, $0.11) | PASS (3, $0.20) |
+| research-quick-flow | PASS (17, $0.22) | PASS (17, $0.36) |
+| spec-done | PASS (6, $0.12) | PASS (5, $0.23) |
+| spec-quick | PASS (16, $0.25) | PASS (16, $0.38) |
+
+Totals: Sonnet $1.25 (agent evals, 8 of 10) and $0.70 (skill evals, 3 of 4); Opus $3.27 (11 of 11)
+and $1.16 (4 of 4). Two reruns of `absence-claim` on Sonnet cost $0.29 more, so $6.67 in all.
+
+**Three Sonnet failures, none from the guard.** No case's transcript holds a `Blocked by agent-guard`
+reply except `guard-applies`, which is meant to be blocked.
+- `delta-review` fails the decoy-row check `!(?im)^\|[^\n]*\b2,?000\b`, as it did in both sections
+  above; Opus passes it.
+- `cold-review-delta` fails "it's a delta review", one of the two checks that vary between runs
+  (see the 2026-09-30 section on quoted argument hints: 1 of 5 on the branch, 2 of 4 on `main`).
+  It passed on Sonnet in W2's section and on Opus here.
+- `absence-claim` passed on Sonnet in W2's section and failed here. The reply marks the pull-request
+  bots as `WRONG` but names them as `dawidbera/kube-finops-autopilot`, with no backticks or
+  `github.com/`, and none of the four repos the grader lists, so the check found no match. Two reruns
+  alone gave PASS and FAIL: 1 of 3 on this tip. That is search and wording variance, not a
+  change in what the agent can read; it is not shown to be free of the change either.
+
+**`tests/replay_guard.py`** reports 0 recorded reads refused and the same 8 headless commands with a
+different verdict as at `edca724`. That took two fixes to the replay itself (`7731c56`, and the
+resolved-root fix after it): it judged spike 3's run, which read its plugin cache, with a
+checkout's guard (1 read refused), and it left the last read's working directory set for the
+Bash half (153 differences). The replay now judges each headless run by the plugin root its
+`agents.json` names, and keeps each call's directory to itself.

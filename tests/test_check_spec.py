@@ -101,7 +101,9 @@ class ColdReview(unittest.TestCase):
         text = self.long().replace("status: draft", "status: in-progress")
         out, result = check(with_review(text))
         self.assertEqual(result, "RESULT: FAIL", out)
-        self.assertRegex(out, r"FAIL: \d+ words; the limit is 4000 while the spec is in-progress")
+        self.assertRegex(
+            out, r"FAIL: \d+ words; the limit is 4000 while the spec is in-progress"
+        )
 
     def test_long_spec_done_warns(self):
         text = self.long().replace("status: draft", "status: done")
@@ -153,7 +155,9 @@ class Placeholders(unittest.TestCase):
         self.assertNotIn("placeholder", out)
 
     def test_expression_in_fenced_code_passes(self):
-        text = self.with_background("Like this:\n\n```yaml\nvalue: {{ .Values.x }}\n```\n")
+        text = self.with_background(
+            "Like this:\n\n```yaml\nvalue: {{ .Values.x }}\n```\n"
+        )
         out, result = check(text)
         self.assertEqual(result, "RESULT: PASS", out)
 
@@ -182,7 +186,9 @@ class SpikeResultSecrets(unittest.TestCase):
         token = "gh" + "p_" + "A" * 36  # split, so this file doesn't look like a secret
         out, result = check(self.base, results=f"# Spike results\n\n{token}\n")
         self.assertEqual(result, "RESULT: FAIL", out)
-        self.assertIn("spike results spec-results.md contain what looks like a GitHub token", out)
+        self.assertIn(
+            "spike results spec-results.md contain what looks like a GitHub token", out
+        )
 
     def test_account_id_in_results_warns(self):
         out, result = check(self.base, results="account 123456789012 owns it\n")
@@ -230,7 +236,9 @@ class ChangesSinceReview(unittest.TestCase):
                 text = self.base.replace("status: draft", f"status: {status}", 1)
                 out, result = check(with_review(text))
                 self.assertEqual(result, "RESULT: FAIL", out)
-                self.assertRegex(out, rf"FAIL: 1 changes .*no delta review, but the spec is {status}")
+                self.assertRegex(
+                    out, rf"FAIL: 1 changes .*no delta review, but the spec is {status}"
+                )
                 out, result = check(with_review(text, REVIEW + DELTA))
                 self.assertEqual(result, "RESULT: PASS", out)
 
@@ -247,7 +255,9 @@ EXISTING_RESULTS = "docs/specs/spikes/2026-09-17-spec-spike-phase-results.md"
 def with_spikes(text, entry):
     """The fixture with its Spike questions section replaced by one question and these lines."""
     question = "1. Does the checker run? Experiment: run it once.\n" + entry
-    return text.replace("## Spike questions\n\nNone.", "## Spike questions\n\n" + question)
+    return text.replace(
+        "## Spike questions\n\nNone.", "## Spike questions\n\n" + question
+    )
 
 
 class SpikeResults(unittest.TestCase):
@@ -270,7 +280,10 @@ class SpikeResults(unittest.TestCase):
         self.assertEqual(result, "RESULT: PASS", out)
 
     def test_results_line_in_review_not_checked(self):
-        review = REVIEW + "\n   Answered: it runs (spike S1, `docs/specs/spikes/nope-results.md`)\n"
+        review = (
+            REVIEW
+            + "\n   Answered: it runs (spike S1, `docs/specs/spikes/nope-results.md`)\n"
+        )
         out, result = check(with_review(self.base, review))
         self.assertEqual(result, "RESULT: PASS", out)
         self.assertNotIn("nope-results", out)
@@ -322,18 +335,25 @@ class SpikeResults(unittest.TestCase):
         self.assertRegex(out, r"FAIL: \d+ words; the limit is 4000")
 
     def test_one_answer_line_per_question_does_not_warn(self):
-        entry = f"   Route: spike\n   Answered: it runs (spike S1, `{EXISTING_RESULTS}`)\n"
+        entry = (
+            f"   Route: spike\n   Answered: it runs (spike S1, `{EXISTING_RESULTS}`)\n"
+        )
         text = with_spikes(self.base, entry).replace(
-            "## Open questions", "2. Is it fast? Experiment: time it.\n   Open: needs docker\n\n## Open questions", 1
+            "## Open questions",
+            "2. Is it fast? Experiment: time it.\n   Open: needs docker\n\n## Open questions",
+            1,
         )
         out, result = check(text)
         self.assertEqual(result, "RESULT: PASS", out)
         self.assertNotIn("more than one", out)
 
 
-RECORD = """# Record: a spec
+RECORD = (
+    """# Record: a spec
 
-""" + REVIEW
+"""
+    + REVIEW
+)
 
 
 HOUSE = """# Prompt: a house-format spec
@@ -346,7 +366,10 @@ Change nothing much.
 
 - **W1**: a thing.
 """
-UNREVIEWED = RECORD + "\n## Changes since the review\n\n- Not reviewed: W1 changed, on 2026-09-24.\n"
+UNREVIEWED = (
+    RECORD
+    + "\n## Changes since the review\n\n- Not reviewed: W1 changed, on 2026-09-24.\n"
+)
 
 
 class HouseStatus(unittest.TestCase):
@@ -359,9 +382,15 @@ class HouseStatus(unittest.TestCase):
         self.assertIn("status ?", out)
 
     def test_status_line_is_read(self):
-        for line in ("Status: in-progress", "**Status:** in-progress", "> Status: in-progress"):
+        for line in (
+            "Status: in-progress",
+            "**Status:** in-progress",
+            "> Status: in-progress",
+        ):
             with self.subTest(line=line):
-                out, result = check(HOUSE.format(status=f"\n{line}\n"), record=UNREVIEWED)
+                out, result = check(
+                    HOUSE.format(status=f"\n{line}\n"), record=UNREVIEWED
+                )
                 self.assertEqual(result, "RESULT: FAIL", out)
                 self.assertRegex(out, r"FAIL: 1 changes .*but the spec is in-progress")
 
@@ -373,7 +402,9 @@ class HouseStatus(unittest.TestCase):
         self.assertNotIn("states no status", out)
 
     def test_status_list_item_is_read(self):
-        out, result = check(HOUSE.format(status="\n- Status: reviewed\n"), record=UNREVIEWED)
+        out, result = check(
+            HOUSE.format(status="\n- Status: reviewed\n"), record=UNREVIEWED
+        )
         self.assertEqual(result, "RESULT: FAIL", out)
         self.assertRegex(out, r"FAIL: 1 changes .*but the spec is reviewed")
 
@@ -407,7 +438,9 @@ class HouseStatus(unittest.TestCase):
         ):
             with self.subTest(line=line):
                 record = RECORD + f"\n## Changes since the review\n\n{line}\n"
-                out, result = check(HOUSE.format(status="\nStatus: reviewed\n"), record=record)
+                out, result = check(
+                    HOUSE.format(status="\nStatus: reviewed\n"), record=record
+                )
                 self.assertEqual(result, "RESULT: FAIL", out)
 
 
@@ -423,17 +456,22 @@ class Record(unittest.TestCase):
         self.assertNotIn("review history kept in the spec", out)
 
     def test_changes_logged_in_record_warn_until_delta(self):
-        record = RECORD + "\n## Changes since the review\n\n- Not reviewed: W1 changed, on 2026-09-24.\n"
+        record = (
+            RECORD
+            + "\n## Changes since the review\n\n- Not reviewed: W1 changed, on 2026-09-24.\n"
+        )
         out, _ = check(self.base, record=record)
         self.assertRegex(out, r"WARN: 1 changes since the cold review .*delta review")
-        out, _ = check(self.base, record=RECORD + DELTA + record[len(RECORD):])
+        out, _ = check(self.base, record=RECORD + DELTA + record[len(RECORD) :])
         self.assertNotIn("WARN: 1 changes", out)
         self.assertIn("INFO: 1 changes marked 'Not reviewed:' in spec-record.md", out)
 
     def test_history_in_spec_warns(self):
         out, result = check(with_review(self.base))
         self.assertEqual(result, "RESULT: PASS", out)
-        self.assertIn("review history kept in the spec: the '## Cold review' section", out)
+        self.assertIn(
+            "review history kept in the spec: the '## Cold review' section", out
+        )
 
     def test_spike_routing_in_spec_warns(self):
         entry = f"   Route: spike\n   Box: $2\n   Answered: it runs (spike S1, `{EXISTING_RESULTS}`)\n"
@@ -445,7 +483,9 @@ class Record(unittest.TestCase):
         self.assertNotIn("review history kept in the spec", out)
 
     def test_implemented_but_draft_warns(self):
-        record = RECORD + "\n## Implementation\n\n- 2026-09-24, W1 (abc1234): it differed.\n"
+        record = (
+            RECORD + "\n## Implementation\n\n- 2026-09-24, W1 (abc1234): it differed.\n"
+        )
         out, result = check(self.base, record=record)
         self.assertEqual(result, "RESULT: PASS", out)
         self.assertIn("1 implementation notes but the spec is still draft", out)
@@ -454,7 +494,9 @@ class Record(unittest.TestCase):
         token = "gh" + "p_" + "A" * 36
         out, result = check(self.base, record=RECORD + f"\nleaked {token}\n")
         self.assertEqual(result, "RESULT: FAIL", out)
-        self.assertIn("its record spec-record.md contains what looks like a GitHub token", out)
+        self.assertIn(
+            "its record spec-record.md contains what looks like a GitHub token", out
+        )
 
 
 class Numbering(unittest.TestCase):
@@ -467,7 +509,11 @@ class Numbering(unittest.TestCase):
 
     def test_gap_warns(self):
         base = FIXTURE.read_text()
-        text = base.replace("## Spike questions", "### W3: another\n\n- **Change:** x\n- **Files:** y\n- **Done when:** `true` exits 0\n\n## Spike questions", 1)
+        text = base.replace(
+            "## Spike questions",
+            "### W3: another\n\n- **Change:** x\n- **Files:** y\n- **Done when:** `true` exits 0\n\n## Spike questions",
+            1,
+        )
         out, _ = check(text)
         self.assertIn("work items are numbered [1, 3]", out)
 
@@ -505,7 +551,10 @@ class Citations(unittest.TestCase):
         self.repo = Path(tmp.name) / "repo"
         self.read_at = git_repo(
             self.repo,
-            {"src/app.py": "".join(f"line {n}\n" for n in range(1, 11)), "README.md": "hi\n"},
+            {
+                "src/app.py": "".join(f"line {n}\n" for n in range(1, 11)),
+                "README.md": "hi\n",
+            },
         )
 
     def check(self, background, read_at=None, extra=None, spec_text=None):
@@ -533,13 +582,19 @@ class Citations(unittest.TestCase):
 
     def test_lines_added_after_read_at_fail(self):
         # The file grew after read-at; the spec describes it as it was.
-        git_repo(self.repo, {"src/app.py": "".join(f"line {n}\n" for n in range(1, 21))}, "grow")
+        git_repo(
+            self.repo,
+            {"src/app.py": "".join(f"line {n}\n" for n in range(1, 21))},
+            "grow",
+        )
         out, result = self.check("See src/app.py:15.")
         self.assertEqual(result, "RESULT: FAIL", out)
         self.assertIn("had only 10 lines at read-at", out)
 
     def test_uncommitted_lines_warn(self):
-        (self.repo / "src" / "app.py").write_text("".join(f"line {n}\n" for n in range(1, 21)))
+        (self.repo / "src" / "app.py").write_text(
+            "".join(f"line {n}\n" for n in range(1, 21))
+        )
         out, result = self.check("See src/app.py:15.")
         self.assertEqual(result, "RESULT: PASS", out)
         self.assertIn("uncommitted when the spec was read", out)
@@ -581,17 +636,25 @@ class Citations(unittest.TestCase):
     def test_citation_in_code_is_not_checked(self):
         for fence in ("```", "~~~"):
             with self.subTest(fence=fence):
-                out, result = self.check(f"See src/app.py:1.\n\n{fence}\nsrc/gone.py:99\n{fence}")
+                out, result = self.check(
+                    f"See src/app.py:1.\n\n{fence}\nsrc/gone.py:99\n{fence}"
+                )
                 self.assertEqual(result, "RESULT: PASS", out)
 
     def test_host_port_is_not_a_citation(self):
-        out, result = self.check("src/app.py:1 listens on svc/name:9090 and example.com:443.")
+        out, result = self.check(
+            "src/app.py:1 listens on svc/name:9090 and example.com:443."
+        )
         self.assertEqual(result, "RESULT: PASS", out)
         self.assertIn("1 citations to 1 files", out)
 
     def test_read_at_line_is_used_with_frontmatter_lacking_read_at(self):
         # The file had 10 lines at read-at and 20 now; line 15 only exists now.
-        git_repo(self.repo, {"src/app.py": "".join(f"line {n}\n" for n in range(1, 21))}, "grow")
+        git_repo(
+            self.repo,
+            {"src/app.py": "".join(f"line {n}\n" for n in range(1, 21))},
+            "grow",
+        )
         text = f"---\ntitle: x\n---\n# House spec\n\nRead at `{self.read_at}`. See src/app.py:15.\n"
         out, result = self.check("", spec_text=text)
         self.assertEqual(result, "RESULT: FAIL", out)
@@ -600,13 +663,114 @@ class Citations(unittest.TestCase):
     def test_cite_repo(self):
         other = self.repo.parent / "other"
         other_at = git_repo(other, {"lib/x.py": "one\ntwo\n"})
-        text = FIXTURE.read_text().replace("read-at: none", f"read-at: {other_at}").replace(
-            "cite-repo: none", f"cite-repo: {other}"
-        ).replace("Nothing to cite, because read-at is none.", "See lib/x.py:2 and lib/x.py:3.")
+        text = (
+            FIXTURE.read_text()
+            .replace("read-at: none", f"read-at: {other_at}")
+            .replace("cite-repo: none", f"cite-repo: {other}")
+            .replace(
+                "Nothing to cite, because read-at is none.",
+                "See lib/x.py:2 and lib/x.py:3.",
+            )
+        )
         out, result = self.check("", spec_text=text)
         self.assertEqual(result, "RESULT: FAIL", out)
         self.assertIn("lib/x.py:3: the file had only 2 lines", out)
         self.assertIn("in other", out)
+
+
+def numbered(lines, **changed):
+    """A file of `lines` lines, 'line <n>', with line n replaced where changed has `l<n>`."""
+    return "".join(
+        changed.get(f"l{n}", f"line {n}") + "\n" for n in range(1, lines + 1)
+    )
+
+
+class Drift(unittest.TestCase):
+    """--drift and --drift-at: which cited ranges changed since read-at, not only which files."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.repo = Path(tmp.name) / "repo"
+        self.read_at = git_repo(self.repo, {"src/fix.py": numbered(12)})
+        # The second commit changes only line 3.
+        git_repo(
+            self.repo, {"src/fix.py": numbered(12, l3="line three")}, "edit line 3"
+        )
+
+    def check(self, background, *extra, read_at=None):
+        text = (
+            FIXTURE.read_text()
+            .replace("read-at: none", f"read-at: {read_at or self.read_at}")
+            .replace("Nothing to cite, because read-at is none.", background)
+        )
+        spec = self.repo / "docs" / "specs" / "spec.md"
+        spec.parent.mkdir(parents=True, exist_ok=True)
+        spec.write_text(text)
+        run = subprocess.run(
+            [sys.executable, str(CHECKER), str(spec), "--repo", str(self.repo), *extra],
+            capture_output=True, text=True, check=False,
+        )  # fmt: skip
+        drift = [l for l in run.stdout.splitlines() if l.startswith("DRIFT:")]
+        return run.stdout, drift
+
+    TWO = "See src/fix.py:2-3 and src/fix.py:10-11."
+
+    def test_names_only_the_changed_range_and_keeps_the_file_warn(self):
+        out, drift = self.check(self.TWO, "--drift")
+        self.assertEqual(drift, ["DRIFT: src/fix.py:2-3"], out)
+        self.assertIn("WARN: cited files have changed since read-at", out)
+        self.assertIn("RESULT: PASS", out)
+
+    def test_uncommitted_edit_counts_for_drift_but_not_drift_at(self):
+        (self.repo / "src" / "fix.py").write_text(
+            numbered(12, l3="line three", l10="ten")
+        )
+        out, drift = self.check(self.TWO, "--drift")
+        self.assertEqual(
+            drift, ["DRIFT: src/fix.py:2-3", "DRIFT: src/fix.py:10-11"], out
+        )
+        out, drift = self.check(self.TWO, "--drift-at", "HEAD")
+        self.assertEqual(drift, ["DRIFT: src/fix.py:2-3"], out)
+
+    def test_without_a_flag_output_is_unchanged(self):
+        out, drift = self.check(self.TWO)
+        self.assertEqual(drift, [], out)
+        self.assertIn("WARN: cited files have changed since read-at", out)
+
+    def test_read_at_none_prints_nothing(self):
+        spec_text = FIXTURE.read_text()  # read-at: none, nothing cited
+        spec = self.repo / "docs" / "specs" / "spec.md"
+        spec.parent.mkdir(parents=True, exist_ok=True)
+        spec.write_text(spec_text)
+        for extra in (["--drift"], ["--drift-at", "HEAD"]):
+            run = subprocess.run(
+                [sys.executable, str(CHECKER), str(spec), "--repo", str(self.repo), *extra],
+                capture_output=True, text=True, check=False,
+            )  # fmt: skip
+            self.assertNotIn("DRIFT:", run.stdout)
+
+    def test_lines_inserted_inside_a_range_count(self):
+        # Two lines inserted after line 6: inside 5-7, not inside 7-8 or 1-6's end.
+        git_repo(
+            self.repo,
+            {
+                "src/fix.py": numbered(6, l3="line three")
+                + "new\nnew\n"
+                + "".join(f"line {n}\n" for n in range(7, 13))
+            },
+            "insert",
+        )
+        out, drift = self.check(
+            "See src/fix.py:5-7, src/fix.py:7-8 and src/fix.py:4-6.",
+            "--drift-at",
+            "HEAD",
+        )
+        self.assertEqual(drift, ["DRIFT: src/fix.py:5-7"], out)
+
+    def test_drift_at_a_bad_rev_fails(self):
+        out, _ = self.check(self.TWO, "--drift-at", "no-such-rev")
+        self.assertIn("FAIL: --drift-at no-such-rev is not a commit", out)
 
 
 class WorkItems(unittest.TestCase):
@@ -632,7 +796,8 @@ class WorkItems(unittest.TestCase):
 
     def test_house_spec_with_acceptance_section_passes(self):
         text = HOUSE.format(status="\nStatus: draft\n").replace(
-            "- **W1**: a thing.", "- **W1**: a thing.\n\n## Acceptance criteria\n\n- It runs."
+            "- **W1**: a thing.",
+            "- **W1**: a thing.\n\n## Acceptance criteria\n\n- It runs.",
         )
         out, result = check(text)
         self.assertEqual(result, "RESULT: PASS", out)
@@ -667,7 +832,11 @@ class CitationEdgeCases(unittest.TestCase):
         (self.repo / "latin.txt").write_bytes(b"caf\xe9\n")
         self.read_at = git_repo(
             self.repo,
-            {"Makefile": "all:\n\techo hi\n", "ff.c": "a\fb\fc\nd\ne\n", "docs/café.md": "one\n"},
+            {
+                "Makefile": "all:\n\techo hi\n",
+                "ff.c": "a\fb\fc\nd\ne\n",
+                "docs/café.md": "one\n",
+            },
         )
 
     def test_extensionless_file_is_checked(self):
@@ -705,7 +874,10 @@ class GateLoopholes(unittest.TestCase):
     def test_comment_in_a_code_block_does_not_end_the_record_review(self):
         # A `# comment` in a shell block read as a heading and cut the delta review off.
         review = RECORD + "\n```bash\n# re-run the checker\n```\n" + DELTA
-        record = review + "\n## Changes since the review\n\n- Not reviewed: W1 changed, on 2026-09-24.\n"
+        record = (
+            review
+            + "\n## Changes since the review\n\n- Not reviewed: W1 changed, on 2026-09-24.\n"
+        )
         out, result = check(self.reviewed, record=record)
         self.assertEqual(result, "RESULT: PASS", out)
 
@@ -714,12 +886,17 @@ class GateLoopholes(unittest.TestCase):
         out, result = check(self.reviewed, record=record)
         self.assertEqual(result, "RESULT: FAIL", out)
         self.assertIn("have had no delta review", out)
-        out, result = check(self.reviewed, record=record + DELTA.replace("Delta review", "Delta Review"))
-        self.assertIn("have had no delta review", out)  # the delta must sit in the review section
+        out, result = check(
+            self.reviewed, record=record + DELTA.replace("Delta review", "Delta Review")
+        )
+        self.assertIn(
+            "have had no delta review", out
+        )  # the delta must sit in the review section
 
     def test_unclosed_code_block_fails(self):
         text = FIXTURE.read_text().replace(
-            "Nothing to cite, because read-at is none.", "Nothing to cite.\n\n```bash\nmake"
+            "Nothing to cite, because read-at is none.",
+            "Nothing to cite.\n\n```bash\nmake",
         )
         out, result = check(text)
         self.assertEqual(result, "RESULT: FAIL", out)
@@ -727,7 +904,9 @@ class GateLoopholes(unittest.TestCase):
 
     def test_done_when_must_be_the_field_line(self):
         base = FIXTURE.read_text()
-        prose = base.replace("- **Done when:** the tests pass.\n", "This step is done when W2 lands.\n")
+        prose = base.replace(
+            "- **Done when:** the tests pass.\n", "This step is done when W2 lands.\n"
+        )
         out, result = check(prose)
         self.assertEqual(result, "RESULT: FAIL", out)
         self.assertIn("W1 has no 'Done when'", out)
@@ -735,7 +914,11 @@ class GateLoopholes(unittest.TestCase):
             with self.subTest(placeholder=placeholder):
                 out, result = check(base.replace("the tests pass.", placeholder))
                 self.assertIn("W1 has an empty 'Done when'", out)
-        out, result = check(base.replace("- **Done when:** the tests pass.", "- **Done when**, on k3s: it runs."))
+        out, result = check(
+            base.replace(
+                "- **Done when:** the tests pass.", "- **Done when**, on k3s: it runs."
+            )
+        )
         self.assertEqual(result, "RESULT: PASS", out)
 
 
@@ -762,7 +945,9 @@ class CitationLoopholes(unittest.TestCase):
         out, result = self.check("", spec_text=text)
         self.assertEqual(result, "RESULT: FAIL", out)
         self.assertIn("docs/howto.md:999", out)
-        out, result = self.check("", spec_text="---\ntitle: x\n# House spec\n\nSee docs/howto.md:999.\n")
+        out, result = self.check(
+            "", spec_text="---\ntitle: x\n# House spec\n\nSee docs/howto.md:999.\n"
+        )
         self.assertEqual(result, "RESULT: FAIL", out)  # unclosed frontmatter
 
     def test_bare_filename_range_is_checked(self):

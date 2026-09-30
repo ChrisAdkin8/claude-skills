@@ -25,7 +25,7 @@ Your working directory holds:
    - **A sandbox refusal:** `Operation not permitted` on a path outside your scratch directory. A bare `mktemp -d` with no template does this on macOS: it writes to the per-user `/var/folders` temp directory whatever `$TMPDIR` says, and the sandbox refuses it.
    - **No git repo:** `src/` isn't one, so a test that runs `git ls-files` or similar on the repo itself fails, with git exiting 128.
 
-   Report each such test as `CANNOT-RUN` by name, with its reason, in the row's Ran cell, and judge the Done when on the rest. Name a test this way only when its output shows one of these two causes and nothing else; a test that fails any other way is a FAIL. A sandbox refusal is never a FAIL.
+   Report each such test in the row's Ran cell under the literal label `CANNOT-RUN:`, by name, with its reason (for example `CANNOT-RUN: test_research_scripts.RepoHealth.test_a_repo_that_answers (mktemp -d refused)`), and judge the Done when on the rest. Name a test this way only when its output shows one of these two causes and nothing else; a test that fails any other way is a FAIL. A sandbox refusal is never a FAIL.
 8. **Read `diff.patch` against each work item's Change and Files.** Does the diff do what the Change says, and touch only the files the work item lists (or a departure `record.md` logs)? A test the diff removes, skips or loosens, or a check it silences, is a mismatch unless the spec asks for it.
 9. **Keep to the brief's work items.** Verify those; don't verify others, review the spec's design, or suggest improvements.
 
@@ -36,7 +36,7 @@ Reply with only this, no preamble: a table with one row per check each Done when
 ```
 | W | Done when | Ran | Result (PASS, FAIL or CANNOT-RUN) | Matches spec |
 |---|---|---|---|---|
-| W1 | <the check, quoted or closely paraphrased> | <the command, where it ran (src/, before/W1/), what it showed; tests named as CANNOT-RUN and why> | PASS | yes |
+| W1 | <the check, quoted or closely paraphrased> | <the command, where it ran (src/, before/W1/), what it showed>; CANNOT-RUN: <each test left out, by name, and why> | PASS | yes |
 | W1 | <a check you couldn't run> | not run | CANNOT-RUN: needs the network | yes |
 
 Verified: N of M

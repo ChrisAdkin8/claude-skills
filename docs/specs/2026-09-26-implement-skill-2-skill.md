@@ -1,7 +1,7 @@
 ---
 title: "/implement, part 2: the skill that implements a reviewed spec test first, its evals and docs"
 created: 2026-09-26
-status: in-progress # draft | reviewed | in-progress | done | superseded
+status: done # draft | reviewed | in-progress | done | superseded
 research: none
 idea: none
 read-at: 1c7ea6e

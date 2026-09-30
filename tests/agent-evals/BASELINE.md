@@ -1031,3 +1031,53 @@ That is 1 of 5 against 2 of 4, too few runs to tell the branch from `main`. It i
 caused by the change, and it is not shown to be free of it either.
 
 Spend: $6.76 on the four runs, and $0.66 on the six single-case runs, so $7.42.
+
+## Plugin marketplace part 1, W2: scripts, agents, guard and sandbox find their own root (2026-09-30)
+
+W2 changed all four agent files, `run-agent.sh`, `agent-def.py`, the guard (its script lists, the
+`~/.claude/plugins/` rule and the symlink-spelling check), both settings files (now rendered per run
+by the new `agent-settings.py`) and both eval runners. Both sets ran once per model on the branch
+tip after the last W2 commit, one set after the other, with `~/notes` unchanged after each.
+
+| Case | Sonnet | Opus |
+|---|---|---|
+| absence-claim | PASS (8, $0.20) | PASS (14, $0.40) |
+| cold-review-skip | PASS (7, $0.07) | PASS (5, $0.19) |
+| delta-review | FAIL (6, $0.10) | PASS (9, $0.31) |
+| delta-review-record | PASS (6, $0.09) | PASS (7, $0.23) |
+| guard-applies | SKIP (opus only) | PASS (2, $0.09) |
+| record-skip | PASS (5, $0.06) | PASS (6, $0.22) |
+| research-ideas | PASS (24, $0.38) | PASS (57, $2.23) |
+| research-quick | PASS (8, $0.18) | PASS (10, $0.31) |
+| spec-miscite | PASS (7, $0.11) | PASS (7, $0.21) |
+| spike-inherited | PASS (4, $0.08) | PASS (5, $0.21) |
+| wrong-figure | PASS (7, $0.13) | PASS (7, $0.14) |
+
+Skill evals:
+
+| Case | Sonnet | Opus |
+|---|---|---|
+| cold-review-delta | PASS (5, $0.11) | PASS (6, $0.22) |
+| research-quick-flow | PASS (14, $0.21) | PASS (22, $0.46) |
+| spec-done | PASS (6, $0.13) | PASS (9, $0.27) |
+| spec-quick | PASS (17, $0.25) | PASS (12, $0.35) |
+
+Totals: Sonnet $1.41 (agent evals, 9 of 10) and $0.70 (skill evals, 4 of 4); Opus $4.54 (11 of 11)
+and $1.29 (4 of 4). Spend $7.94 in all, under the $10-$12 the spec estimated.
+
+**Sonnet's one failure is the known one.** `delta-review` fails the decoy-row check
+`!(?im)^\|[^\n]*\b2,?000\b`, as it did on `main` and in the section above; Opus passes it. Nothing
+in W2 touches that case's inputs. `delta-review-record` and `cold-review-delta`, which failed on
+Sonnet in the last section, passed this time; those two were already known to vary between runs.
+
+**The agents reach their scripts and files through the rendered settings.** Every case that runs a
+research script (`research-ideas`, `research-quick`, `wrong-figure`) or reads the plugin's own files
+passed on both models, so the absolute `${CLAUDE_PLUGIN_ROOT}` spelling in the agent prompts, the
+guard's `OUTSIDE_SPELLINGS` and the rendered `excludedCommands` agree in a real run. This ran on the
+symlink install with the checkout as the root, so it does not cover a plugin cache path: spike 3
+still needs that.
+
+**`tests/replay_guard.py`** reports 0 recorded reads refused and 8 headless commands with a
+different verdict than the one recorded. The same 8 appear at `edca724`, before W2, so they come
+from PR #27's `check_outside_only`, not from this change. Zero refused reads is the count spike
+question 4 asks for.

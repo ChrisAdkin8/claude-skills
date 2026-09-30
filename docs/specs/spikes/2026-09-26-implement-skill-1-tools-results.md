@@ -73,3 +73,64 @@ DIFFERENT: 165/175 tests pass; 10 fail, all from writes under `~/.cache/spec-spi
 - The one `~/.claude` read failure in the suite (`test_needs_a_brief`) is incidental: `run-agent.sh` checks for the agent file at `~/.claude/agents/<agent>.md` before checking for `brief.md`, so the assertion fails on the wrong message, not on a bare crash — it still exits 2, just with different text than the test expects.
 
 total_cost_usd: 0.55; num_turns: 22
+
+## S2
+
+### Does spike S1's answer still hold at `1c7ea6e`? Since it ran, both tests it named use a temporary home (`tests/test_prepare_spike.py:40-44`, `tests/test_run_agent.py:43-51`), `check-spec.py` reads its template from beside itself (`skills/spec/scripts/check-spec.py:45`), and the suite has grown. So W3's live run may see no sandbox refusals, or new ones. Experiment: S1's, at `1c7ea6e`: run `python3 -m unittest discover -s tests` in a spike export under `spike-settings.json` and list each test that fails and why.
+
+Expect: nearly all tests pass; `test_prepare_spike` and `test_run_agent` now pass under their temporary home; a few tests still fail with `Operation not permitted`, most likely ones that write under a real `~/.cache` path or read `~/.claude`, and none fail for a reason other than the sandbox.
+Runs: 1
+
+#### Commands
+
+The session itself ran under the sandbox settings (`settings.json` in the working dir, the spike settings).
+
+```
+(cd src && python3 -m unittest discover -s tests)
+# diagnosis of the eval_runners failure: re-ran its script directly; and
+/usr/bin/mktemp -d                      # with TMPDIR=/tmp/claude-501 set
+env -u TMPDIR /usr/bin/mktemp -d
+# no_stale_paths: make src a git repo (src-git beside it), rerun that file only
+(cd src && GIT_DIR=../src-git GIT_WORK_TREE=$PWD git init --template= && git add . && git commit -qm spike \
+   && python3 -m unittest discover -s tests -p test_no_stale_paths.py)
+```
+
+#### Output
+
+```
+Ran 374 tests in 36.753s
+FAILED (failures=3, errors=3)
+ERROR: test_eval_runners.Runners.test_fixtures_are_cleaned_up
+ERROR: test_no_stale_paths.NoStalePaths.test_exempt_files_exist
+ERROR: test_no_stale_paths.NoStalePaths.test_no_tracked_file_names_an_old_install_path
+FAIL: test_research_scripts.RepoHealth.test_a_repo_that_answers
+FAIL: test_research_scripts.RepoHealth.test_api_error_is_not_reported_as_not_found
+FAIL: test_research_scripts.RepoHealth.test_missing_repo_is_not_found
+```
+
+Why, per test:
+
+```
+test_research_scripts (3 tests): repo-health.sh:181 `tmp=$(mktemp -d) || exit 1` ->
+  "mktemp: mkdtemp failed on /var/folders/.../T/tmp.XXXX: Operation not permitted"; script exits, table has header only.
+test_eval_runners.test_fixtures_are_cleaned_up: tests/skill-evals/run.sh:45 bare `mktemp -d` ->
+  same "Operation not permitted" on /var/folders/...; setup.sh never ran, so the `works` file is empty -> ValueError on unpack.
+mktemp probe: /usr/bin/mktemp -d fails the same way with TMPDIR=/tmp/claude-501 set and unset;
+  macOS mktemp -d without a template ignores $TMPDIR and uses the per-user /var/folders dir, which the sandbox doesn't allow writing.
+test_no_stale_paths (2 tests): `git -C src ls-files` exits 128 - the export has no .git. Not a sandbox refusal.
+  With a git repo made per the instructions: "Ran 4 tests ... OK".
+```
+
+test_prepare_spike, test_run_agent and test_check_spec: all pass (no failures listed).
+
+#### Verdict
+
+DIFFERENT: The "few tests fail with `Operation not permitted`" part holds, but for a different cause than Expect: 4 tests (3 in `test_research_scripts.RepoHealth`, 1 in `test_eval_runners.Runners`) fail because bare `mktemp -d` in `repo-health.sh` and `skill-evals/run.sh` writes to `/var/folders/.../T`, not from writes under `~/.cache` or reads of `~/.claude`. 2 further tests (`test_no_stale_paths`) fail for a non-sandbox reason: the spike export has no `.git`, and pass once one is made.
+
+#### Notes
+
+- For W3: a live run in a real checkout would have `.git`, so `test_no_stale_paths` should pass there; only the export lacks it. The `verifier.md` example should name `mktemp` writes to the per-user temp dir (`/var/folders`), not `~/.cache` writes or `~/.claude` reads, as the refusals to expect.
+- The mktemp refusals happen although `$TMPDIR` points at a writable dir, because the scripts call `mktemp -d` with no template or `-t`; `mktemp -d "${TMPDIR:-/tmp}/x.XXXXXX"` would avoid them (not chased).
+- The run's cwd briefly moved into `src/` through `cd src && ...` in one compound command; all results were unaffected.
+
+total_cost_usd: 0.23; num_turns: 11

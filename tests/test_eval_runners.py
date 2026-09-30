@@ -17,6 +17,7 @@ import unittest
 from pathlib import Path
 
 TESTS = Path(__file__).resolve().parent
+REPO = TESTS.parent
 AGENT_RUN = TESTS / "agent-evals" / "run.sh"
 SKILL_RUN = TESTS / "skill-evals" / "run.sh"
 STUB = """#!/usr/bin/env python3
@@ -84,6 +85,21 @@ class Runners(unittest.TestCase):
 
     def flag(self, argv, name):
         return argv[argv.index(name) + 1] if name in argv else None
+
+    def assertRendered(self, path, source):
+        """`path` is the file agent-settings.py makes from `source` with the checkout as its
+        root, written under this run's results: no runner passes a placeholder through."""
+        self.assertTrue(path.startswith(str(self.tmp / "out")), path)
+        text = Path(path).read_text()
+        self.assertNotIn("${", text)
+        rendered = subprocess.run(
+            [str(REPO / "hooks" / "agent-settings.py"), str(source), str(REPO)],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        self.assertEqual(json.loads(text), json.loads(rendered))
+        self.assertIn(f"{REPO}/skills/research/scripts/repo-health.sh *", text)
 
     def agent_case(self, name, expect):
         case = self.cases / name
@@ -183,14 +199,37 @@ class Runners(unittest.TestCase):
         self.assertEqual(caps, [("10", "70"), ("5", "40")])
         for argv in calls:
             self.assertEqual(self.flag(argv, "--setting-sources"), "user")
-            self.assertTrue(
-                self.flag(argv, "--settings").endswith("hooks/agent-sandbox.json")
+            self.assertRendered(
+                self.flag(argv, "--settings"), REPO / "hooks" / "agent-sandbox.json"
             )
             self.assertIn("--strict-mcp-config", argv)
             self.assertEqual(self.flag(argv, "--agent"), "cold-reviewer")
             defs = json.loads(Path(self.flag(argv, "--agents")).read_text())
             self.assertEqual(list(defs), ["cold-reviewer"])
             self.assertEqual(self.flag(argv, "--allowedTools"), "Read,Grep,Glob,Bash")
+
+    def test_agent_evals_agents_name_the_checkout_as_their_root(self):
+        self.agent_case("plain", "says yes\n")
+        self.run_script(AGENT_RUN)
+        (argv,) = self.argv()
+        text = Path(self.flag(argv, "--agents")).read_text()
+        self.assertIn(f'python3 \\"{REPO}/hooks/agent-guard.py\\" bash', text)
+        self.assertNotIn("${", text)
+        self.assertIn(str(REPO), argv[argv.index("--add-dir") :])
+
+    def test_agent_evals_settings_override(self):
+        custom = self.tmp / "custom.json"
+        custom.write_text('{"sandbox": {"excludedCommands": ["${CLAUDE_PLUGIN_ROOT}/x *"]}}')
+        self.agent_case("plain", "says yes\n")
+        self.env["EVAL_SETTINGS"] = str(custom)
+        self.run_script(AGENT_RUN)
+        (argv,) = self.argv()
+        rendered = json.loads(Path(self.flag(argv, "--settings")).read_text())
+        self.assertEqual(rendered, {"sandbox": {"excludedCommands": [f"{REPO}/x *"]}})
+        # Set empty, it still passes no --settings.
+        self.env["EVAL_SETTINGS"] = ""
+        self.run_script(AGENT_RUN)
+        self.assertNotIn("--settings", self.argv()[-1])
 
     def test_agent_eval_cap_override(self):
         self.agent_case("plain", "says yes\n")
@@ -208,8 +247,8 @@ class Runners(unittest.TestCase):
         self.assertEqual(self.flag(first, "--max-budget-usd"), "3")
         self.assertEqual(self.flag(second, "--max-budget-usd"), "1")
         self.assertEqual(self.flag(first, "--max-turns"), "60")
-        self.assertTrue(
-            self.flag(first, "--settings").endswith("hooks/agent-sandbox.json")
+        self.assertRendered(
+            self.flag(first, "--settings"), REPO / "hooks" / "agent-sandbox.json"
         )
         self.assertIn("--strict-mcp-config", first)
 
@@ -280,10 +319,13 @@ class Runners(unittest.TestCase):
         (self.cases / "agents" / "settings.txt").write_text("agent-case-settings.json\n")
         self.run_script(SKILL_RUN)
         settings = sorted(self.flag(a, "--settings") for a in self.argv())
-        self.assertTrue(settings[0].endswith("hooks/agent-sandbox.json"), settings)
-        self.assertTrue(
-            settings[1].endswith("tests/skill-evals/agent-case-settings.json"), settings
-        )
+        self.assertNotEqual(settings[0], settings[1])
+        for path in settings:
+            text = Path(path).read_text()
+            self.assertNotIn("${", text)
+            # Only the agent case's settings exclude run-agent.sh from the sandbox.
+            has_runner = f"{REPO}/hooks/run-agent.sh *" in text
+            self.assertEqual(has_runner, "agents" in path, path)
 
     def test_skill_evals_note_snapshot_and_clean_up(self):
         home = self.home()

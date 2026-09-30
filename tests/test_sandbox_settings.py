@@ -132,7 +132,11 @@ class SandboxSettings(unittest.TestCase):
         # a Sonnet run rewrote it by hand when build-index.py was refused. Nothing else.
         expected = json.loads(json.dumps(AGENT))
         sandbox = expected["sandbox"]
-        sandbox["excludedCommands"].append("~/.claude/hooks/run-agent.sh *")
+        # Both spellings of run-agent.sh, since the skills still call the `~` one until part 2's W3.
+        sandbox["excludedCommands"] += [
+            "${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.sh *",
+            "~/.claude/hooks/run-agent.sh *",
+        ]
         sandbox["filesystem"]["denyRead"].remove("~/.cache/agent-runs")
         deny = expected["permissions"]["deny"]
         deny.remove("Read(~/.cache/agent-runs/**)")

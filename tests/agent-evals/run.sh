@@ -47,6 +47,7 @@ out=${EVAL_OUT:-$here/results/$stamp}
 today=$(date +%Y-%m-%d)
 max_usd=${AGENT_EVAL_MAX_USD:-5}
 settings=${EVAL_SETTINGS-$repo/hooks/agent-sandbox.json}
+# Every runner renders ${CLAUDE_PLUGIN_ROOT} in the settings to this checkout (hooks/agent-settings.py).
 cases_dir=${EVAL_CASES:-$here/cases}
 mkdir -p "$out"
 
@@ -65,7 +66,7 @@ run_case() {
   local c=$1 dir="$cases_dir/$1" agent tools brief work
   agent=$(cat "$dir/agent.txt")
   # The agent's definition as --agents takes it, and its own tools pre-approved.
-  "$repo/hooks/agent-def.py" "$agents/$agent.md" > "$out/$c.agents.json" 2> "$out/$c.err" || return
+  "$repo/hooks/agent-def.py" --root "$repo" "$agents/$agent.md" > "$out/$c.agents.json" 2> "$out/$c.err" || return
   tools=$(python3 -c 'import json,sys;(a,)=json.load(open(sys.argv[1])).values();print(",".join(a["tools"]))' "$out/$c.agents.json")
   note="$HOME/notes/research/.eval-$c-$stamp.md"
   brief=$(sed -e "s#{{CASE}}#$dir#g" -e "s#{{HOME}}#$HOME#g" -e "s#{{REPO}}#$repo#g" \
@@ -74,12 +75,17 @@ run_case() {
   usd=$(cat "$dir/usd.txt" 2>/dev/null || echo "$max_usd")
   work=$(mktemp -d "$tmp_root/work.XXXXXX")
   "$repo/hooks/sandbox-prompt.py" > "$out/$c.sandbox.md"
+  case_settings=
+  if [ -n "$settings" ]; then
+    "$repo/hooks/agent-settings.py" "$settings" "$repo" > "$out/$c.settings.json" 2> "$out/$c.settings.err" || return
+    case_settings="$out/$c.settings.json"
+  fi
   (cd "$work" && claude -p --agents "$out/$c.agents.json" --agent "$agent" --output-format json --max-turns "$turns" \
     --allowedTools "$tools" --add-dir "$HOME/.claude" "$HOME/notes" "$repo" \
     --append-system-prompt-file "$out/$c.sandbox.md" \
     --strict-mcp-config --no-session-persistence --setting-sources user \
     --max-budget-usd "$usd" ${EVAL_MODEL:+--model "$EVAL_MODEL"} \
-    ${settings:+--settings "$settings"} "$brief") \
+    ${case_settings:+--settings "$case_settings"} "$brief") \
     > "$out/$c.json" 2> "$out/$c.err"
   rm -rf "$work"
   if [ -f "$note" ]; then

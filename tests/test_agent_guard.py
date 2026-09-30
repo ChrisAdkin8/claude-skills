@@ -943,6 +943,45 @@ class Secrets(unittest.TestCase):
         self.assertEqual(self.tool("Glob", pattern="**/*.py", path=f"{home}/code"), 0)
 
 
+class HomeBehindALink(unittest.TestCase):
+    """A home directory that is itself reached through a symlink (macOS's /var is /private/var):
+    a path written either way is private, and a search from a link to the home is refused."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        real = Path(os.path.realpath(tmp.name))
+        (real / "home").mkdir()
+        (real / "cwd").mkdir()
+        (real / "via").symlink_to(real / "home")
+        self.home = str(real / "via")  # HOME as the guard sees it: the link
+        self.real_home = str(real / "home")
+        self.cwd = str(real / "cwd")
+
+    def tool(self, name, **tool_input):
+        run = subprocess.run(
+            [sys.executable, str(GUARD), "read"],
+            input=json.dumps({"tool_name": name, "tool_input": tool_input, "cwd": self.cwd}),
+            capture_output=True,
+            text=True,
+            check=False,
+            env={**os.environ, "HOME": self.home},
+        )
+        return run.returncode
+
+    def test_paths_are_private_however_the_home_is_spelled(self):
+        for home in (self.home, self.real_home):
+            for rel in (".aws/credentials", ".claude/projects/x.jsonl", ".claude/plugins/p/x"):
+                with self.subTest(path=f"{home}/{rel}"):
+                    self.assertEqual(self.tool("Read", file_path=f"{home}/{rel}"), 2)
+
+    def test_searching_a_link_to_the_home_is_refused(self):
+        Path(self.cwd, "h").symlink_to(self.real_home)
+        self.assertEqual(self.tool("Grep", pattern="x", path=f"{self.cwd}/h"), 2)
+        self.assertEqual(self.tool("Grep", pattern="x", path=self.real_home), 2)
+        self.assertEqual(self.tool("Grep", pattern="x", path=self.home), 2)
+
+
 class SessionHistory(unittest.TestCase):
     """Transcripts and the agents' run dirs stay out of reach: a verifier or cold reviewer that
     could read the session that wrote a document would no longer be checking it cold. An agent

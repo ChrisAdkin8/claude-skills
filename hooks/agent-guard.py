@@ -1064,17 +1064,23 @@ def under(path, parent):
     return path == parent or path.startswith(parent.rstrip("/") + "/")
 
 
+def spellings(private):
+    """A private path as written and with symlinks resolved: when the home itself is reached
+    through a link (macOS's /var is /private/var), a path may name it either way."""
+    return {str(private), os.path.realpath(private)}
+
+
 def secret_path(path):
     """Why an absolute path is a secret, or None."""
     for secret in SECRET_HOME:
-        if under(path, str(secret)):
+        if any(under(path, form) for form in spellings(secret)):
             return f"{secret} holds credentials"
     if SESSION_RESULTS and under(path, SESSION_RESULTS):
         return None
     for history in HISTORY_HOME:
         if history == PLUGINS_HOME and OWN_ROOT and under(os.path.realpath(path), OWN_ROOT):
             continue
-        if under(path, str(history)):
+        if any(under(path, form) for form in spellings(history)):
             return f"{history} holds session history, which would show how a document was written"
     if hidden := next((p for p in Path(path).parts if p in SECRET_NAMES), None):
         return f"`{hidden}` holds credentials"
@@ -1114,7 +1120,7 @@ def secret_word(word):
             # `~/.a*/credentials` reaches a secret if the part before the glob could.
             stem = absolute(text[:glob_at]) if glob_at else CWD
             stem += "/" if text[glob_at - 1 : glob_at] in ("/", "") else ""
-            if any(str(s).startswith(stem) for s in PRIVATE_HOME):
+            if any(form.startswith(stem) for s in PRIVATE_HOME for form in spellings(s)):
                 return f"`{text}` can expand to a credentials or session history directory"
             text = text[:glob_at]
         path = absolute(text)
@@ -1130,7 +1136,10 @@ def ancestor_of_secret(path):
     reaches it."""
     paths = {path, os.path.realpath(path)}
     return any(
-        under(str(secret), p) and str(secret) != p for secret in PRIVATE_HOME for p in paths
+        under(form, p) and form != p
+        for secret in PRIVATE_HOME
+        for form in spellings(secret)
+        for p in paths
     )
 
 

@@ -694,5 +694,153 @@ class Runners(unittest.TestCase):
         self.assertFalse(Path(work).parent.exists())  # the temp root too
 
 
+SKILL_CASES = TESTS / "skill-evals" / "cases"
+GIT = ["git", "-c", "user.email=t@t", "-c", "user.name=t"]
+
+
+class Graders(unittest.TestCase):
+    """The skill-eval graders, run on fixtures their own setup.sh builds, with what a skill run
+    would leave added by hand: a broken run must fail and a sound one pass. HOME is a temporary
+    one, so the run dirs the graders read under ~/.cache are this test's."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.home = Path(tmp.name).resolve() / "home"
+        (self.home / "code").mkdir(parents=True)
+        self.env = {**os.environ, "HOME": str(self.home)}
+
+    def setup_case(self, case):
+        repo = self.home / "code" / f"eval-{case}-20261001-000000"
+        repo.mkdir()
+        subprocess.run(
+            [str(SKILL_CASES / case / "setup.sh"), str(repo)],
+            check=True,
+            capture_output=True,
+            env=self.env,
+        )
+        return repo
+
+    def grade(self, case, repo, reply="", **env):
+        """grade.py's exit code and its check lines."""
+        result = self.home / "result.json"
+        result.write_text(json.dumps({"subtype": "success", "result": reply}))
+        run = subprocess.run(
+            ["python3", str(SKILL_CASES / case / "grade.py"), str(repo), str(result)],
+            capture_output=True,
+            text=True,
+            env={**self.env, **env},
+            check=False,
+        )
+        return run.returncode, run.stdout + run.stderr
+
+    def run_json(self, path, subtype):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"subtype": subtype, "result": "a reply"}))
+
+    def commit(self, cwd, message):
+        subprocess.run([*GIT, "-C", str(cwd), "add", "-A"], check=True)
+        subprocess.run([*GIT, "-C", str(cwd), "commit", "-qm", message], check=True)
+
+    def implement_double(
+        self,
+        repo,
+        body="2 * x",
+        test="double(3), 6",
+        holds="yes",
+        implementer="success",
+        verifier="success",
+    ):
+        """What /implement leaves for implement-basic: W1 committed on implement/<spec> in a
+        worktree beside the repo, the record's evidence with the verifier's table, and the run
+        dirs of the implementer and of verifier V1, each with its run.json."""
+        base = "2026-09-28-double"
+        wt = repo.parent / f"{repo.name}-worktrees" / base
+        subprocess.run(
+            [
+                *GIT,
+                "-C",
+                str(repo),
+                "worktree",
+                "add",
+                "-q",
+                str(wt),
+                "-b",
+                f"implement/{base}",
+            ],
+            check=True,
+        )
+        with open(wt / "calc.py", "a") as f:
+            f.write(
+                f'\n\ndef double(x: float) -> float:\n    """Return 2 * x."""\n    return {body}\n'
+            )
+        tests = wt / "tests/test_calc.py"
+        tests.write_text(
+            tests.read_text()
+            .replace("from calc import add", "from calc import add, double")
+            .replace(
+                "\n\nif __name__",
+                f"\n\nclass Double(unittest.TestCase):\n    def test_double(self):\n"
+                f"        self.assertEqual({test})\n\n\nif __name__",
+            )
+        )
+        self.commit(wt, "calc: double (W1)")
+        result = "PASS" if holds == "yes" else "FAIL"
+        with open(wt / f"docs/specs/records/{base}-record.md", "a") as f:
+            f.write(
+                "\n## Evidence\n\n- W1 (abc1234): Done when -> exit 0\n- Verifier V1 (abc1234):\n\n"
+                "| W | Done when | Ran | Result (PASS, FAIL or CANNOT-RUN) | Matches spec |\n"
+                "|---|---|---|---|---|\n"
+                f"| W1 | double(3) == 6 | in src/ | {result} | {holds} |\n\n"
+                f"Verified: {int(holds == 'yes')} of 1\nImplementation holds: {holds}\n"
+            )
+        self.commit(wt, "spec: implementation evidence")
+        runs = self.home / ".cache/implement-runs" / f"{repo.name}--{base}"
+        self.run_json(runs / "implementer/run.json", implementer)
+        verify = self.home / ".cache/implement-verify" / repo.name / base
+        self.run_json(verify / "V1/run.json", verifier)
+
+    def test_implement_basic_passes_a_sound_implementation(self):
+        repo = self.setup_case("implement-basic")
+        self.implement_double(repo)
+        code, out = self.grade("implement-basic", repo)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("FAIL", out)
+
+    def test_implement_basic_fails_a_broken_implementation(self):
+        # The review's run: a wrong double() whose own test passes, the verifier's FAIL row and
+        # "holds: no", and an implementer stopped by its budget. Every one is a failure alone.
+        broken = {
+            "a wrong double()": {"body": "x + 2", "test": "double(2), 4"},
+            "Implementation holds: no": {"holds": "no"},
+            "a capped implementer": {"implementer": "error_max_budget_usd"},
+            "a capped verifier": {"verifier": "error_max_budget_usd"},
+        }
+        for name, how in [
+            ("all of them", {k: v for d in broken.values() for k, v in d.items()}),
+            *broken.items(),
+        ]:
+            with self.subTest(name), tempfile.TemporaryDirectory() as tmp:
+                self.home = Path(tmp).resolve() / "home"
+                (self.home / "code").mkdir(parents=True)
+                self.env["HOME"] = str(self.home)
+                repo = self.setup_case("implement-basic")
+                self.implement_double(repo, **how)
+                code, out = self.grade("implement-basic", repo)
+                self.assertEqual(code, 1, out)
+
+    def test_implement_basic_runs_the_done_when_on_the_branch_head(self):
+        # W1's Done when, as setup.sh writes it, runs on what the branch committed, not on the
+        # worktree's files: here only the uncommitted copy is right.
+        repo = self.setup_case("implement-basic")
+        self.implement_double(repo, body="x + 2", test="double(2), 4")
+        wt = repo.parent / f"{repo.name}-worktrees" / "2026-09-28-double"
+        calc = wt / "calc.py"
+        calc.write_text(calc.read_text().replace("return x + 2", "return 2 * x"))
+        code, out = self.grade("implement-basic", repo)
+        self.assertEqual(code, 1, out)
+        self.assertRegex(out, r"(?m)^FAIL W1's Done when")
+
+
 if __name__ == "__main__":
     unittest.main()

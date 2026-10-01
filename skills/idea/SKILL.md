@@ -2,7 +2,7 @@
 name: idea
 description: Captures a new idea as a markdown note in ~/notes/ideas, from the idea template. Use when the user runs /idea, or asks to capture, save or jot down an idea for later.
 argument-hint: <short description of the idea>
-allowed-tools: Read(~/notes/**), Edit(~/notes/**), Bash(git rev-parse *), Bash(git -C ~/notes add *), Bash(git -C ~/notes commit *)
+allowed-tools: Read(~/notes/**), Edit(~/notes/ideas/*.md), Bash(git rev-parse *), Bash(git -C ~/notes add *), Bash(git -C ~/notes commit *)
 ---
 
 # Capture an idea
@@ -11,7 +11,7 @@ The idea: $ARGUMENTS
 
 Capture should be fast. File the note, don't interrogate the user or start developing the idea unless they ask.
 
-`~/notes` must be set up first: if `~/notes/templates/idea.md` doesn't exist, say so, point to the README's "Set up `~/notes`" section (`~/code/github.com/claude-skills/README.md`), and stop. Don't create it.
+`~/notes` must be set up first: if `~/notes/templates/idea.md` doesn't exist, say so, point to "Set up `~/notes`" in `${CLAUDE_PLUGIN_ROOT}/README.md`, and stop. Don't create it.
 
 1. **Get the idea.** If nothing was passed above, use the idea just discussed in the conversation. If there is none, ask for it in one line.
 2. **Check for duplicates.** Search `~/notes/ideas/` with the Grep tool for notes with similar titles or key terms. If there is a close match, ask whether to add to that note instead of creating a new one. If the user says yes, add their words under that note's "The idea", dated, and commit it as step 5 says, with the message `idea: <title> (added to)`; skip steps 3 and 4.

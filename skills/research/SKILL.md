@@ -29,7 +29,7 @@ The research rules are in `${CLAUDE_PLUGIN_ROOT}/hooks/agents/researcher.md` and
 
 ## Agent runs
 
-Each agent runs as a headless, sandboxed session: read `${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.md` and follow it. The work dir is `~/notes`; the run dir is `~/.cache/agent-runs/<note basename>/<agent>`; `finish` mode uses `research-verifier-finish`.
+Each agent runs as a headless, sandboxed session: read `${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.md` and follow it. The work dir is `~/notes`; the run dir is `~/.cache/agent-runs/<note basename>/<agent>`.
 
 ## Modes
 
@@ -40,7 +40,7 @@ Each agent runs as a headless, sandboxed session: read `${CLAUDE_PLUGIN_ROOT}/ho
 
 ## 1. Frame
 
-If `git -C ~/notes status` fails or `~/notes/templates/research.md` is missing, point to the README's "Set up `~/notes`" section (`~/code/github.com/claude-skills/README.md`), and stop. Don't create either.
+If `git -C ~/notes status` fails or `~/notes` lacks `CLAUDE.md`, `templates/research.md` or, at ideas depth, `templates/research-ideas.md`, `templates/idea.md` or `projects/mindshare/attention-evidence.md`, name what's missing, point to "Set up `~/notes`" in `${CLAUDE_PLUGIN_ROOT}/README.md`, and stop. Don't create any.
 
 1. **Resolve the question.**
    - An idea note's path: read it, and research the idea as a whole. No request: the question just discussed, or ask in one line and stop.
@@ -71,7 +71,7 @@ If `git -C ~/notes status` fails or `~/notes/templates/research.md` is missing, 
 
 1. Run `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/check-note.py --headroom <note>`. If the agent failed, or the note is missing or has no Sources, tell the user and stop; don't commit.
    - Run `git -C ~/notes status --porcelain --untracked-files=all`: it lists every new file, where plain `--porcelain` shows a new directory as one line. The researcher may write only its note: flag any other changed file under `~/notes/research` not in the output kept at launch, and any change to `~/notes/projects/mindshare/attention-evidence.md` or `~/notes/ideas/`.
-   - A flagged note another run's brief names (`grep -l 'Output file: <its absolute path>' ~/.cache/agent-runs/*/researcher*/brief.md`, in another run dir) is that run's; leave it. For any other, show the user the diff and ask. Commit neither.
+   - Leave a flagged note only if a brief in another run dir with no `reply.md` yet names it (`grep -l 'Output file: <its absolute path>' ~/.cache/agent-runs/*/researcher*/brief.md`): that run is still going. Show the user the diff of any other as this run's change, and ask. Commit neither.
 2. On FAIL, send the FAIL lines to the researcher as a follow-up (`${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.md`, Follow-ups) to fix. After two rounds, carry on and report what still fails.
 3. Run the `research-verifier` agent (Agent runs) with the brief `Note: <absolute path>. Today's date: <YYYY-MM-DD>.`, adding `Depth: ideas: run the prior-art hunt first.` at ideas depth. Tell the user in one line that it's being verified. End your turn.
 
@@ -116,7 +116,7 @@ If it's still missing, say in the report that novelty wasn't independently check
    - If the section exists, update the rows checked again, add new ones, drop rows for claims the note no longer makes, and update the date line. A Claim quotes the note's current wording.
 3. **If the conclusion changed**, the rewritten text gets one more check:
    - That is `Bottom line holds: no`, missed evidence that weakens the recommendation, or at ideas depth a `same` hit on #1: re-rank the Shortlist, and a new #1 gets its prior-art hunt in round 2.
-   - Revise the Bottom line and Recommendation to match the evidence, set `status: draft`, and commit with the message `research: <title> (conclusion revised, re-verifying)`.
+   - Revise the Bottom line and Recommendation to match the evidence, set `status: draft`, then `git -C ~/notes add <note>` and commit with the message `research: <title> (conclusion revised, re-verifying)`.
    - Run `research-verifier` in the run dir `research-verifier-2`, with `Note: <absolute path>. Today's date: <YYYY-MM-DD>. Round 2.` Tell the user in one line that the conclusion changed and is being re-checked. End your turn.
    - When it returns, apply its fixes, update Verification and carry on from step 4. If it also says `Bottom line holds: no`, leave the note as draft and say so, unless round 3 applies.
    - **Round 3**, only when round 2's `no` rests on an absence claim it narrowed again: apply the narrowing and run `research-verifier` in `research-verifier-3`, with `Note: <absolute path>. Today's date: <YYYY-MM-DD>. Round 3: check only "<the narrowed sentence>".`

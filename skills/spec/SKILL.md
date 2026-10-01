@@ -3,7 +3,7 @@ name: spec
 description: Turns a research note or a described change into an implementation spec in the repo it changes, grounded in file:line citations, then verifies it and gives it a cold review. Runs when the user types /spec.
 disable-model-invocation: true
 argument-hint: '[quick] <research note path> [direction] | [quick] <description of the change> | finish <spec path> | spike <spec path> | done <spec path>'
-allowed-tools: Read Grep Glob Edit(~/code/**/*.md) Edit(~/notes/**) Edit(~/.cache/spec-spikes/**) Bash(grep *) Bash(git rev-parse *) Bash(git status *) Bash(git ls-files *)
+allowed-tools: Read Grep Glob Edit(~/code/**/docs/specs/**) Edit(~/notes/**) Edit(~/.cache/spec-spikes/**) Bash(grep *) Bash(git rev-parse *) Bash(git status *) Bash(git ls-files *)
   Bash(git -C ~/notes status *) Bash(${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py *) Bash(git -C ~/notes add *) Bash(git -C ~/notes commit *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/check-spec.py *)
   Bash(${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/check-note.py *) Bash(${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.sh *) Edit(~/.cache/agent-runs/**)
   Bash(${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/prepare-spike.sh ~/.cache/spec-spikes/*) Bash(${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/run-spike.sh ~/.cache/spec-spikes/*)

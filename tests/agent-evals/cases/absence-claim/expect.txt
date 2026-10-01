@@ -2,5 +2,12 @@
 (?im)^\|.*(no tool turns|into pull requests against helm values).*\|\s*\**WRONG\**(\s*\([^|)]*\))?\s*\|
 # A tool that does it is named: one of these, or a repo it found itself, in the WRONG row.
 (?im)\b(rere|infrafit-action|kubecost-rightsizing-cronjob|K8sResourceResizer)\b|^\|[^\n]*\bWRONG\b[^\n]*(github\.com/|`)[A-Za-z0-9-]+/[A-Za-z0-9_.-]+
-# The reply is complete.
-(?m)Bottom line holds:
+# The claims that are true are ruled CONFIRMED, so a reply that rules everything wrong fails: the
+# Vertical Pod Autoscaler and KRR do produce recommendations [1][2], in one row or two. A verdict
+# cell may go on after the word.
+(?m)^\|(?=[^\n]*(?i:vertical pod autoscaler|\bVPA\b))[^\n]*\|\s*\**CONFIRMED\b[^|\n]*\|
+(?m)^\|(?=[^\n]*\bKRR\b)[^\n]*\|\s*\**CONFIRMED\b[^|\n]*\|
+# The reply is complete: the closing lines hooks/run-agent.sh's REPLY_SHAPES reads for the
+# research-verifier, copied here.
+Confirmed: \d+ of \d+
+Bottom line holds: (yes|no)

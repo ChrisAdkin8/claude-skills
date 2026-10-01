@@ -989,10 +989,14 @@ class OneReviewParser(unittest.TestCase):
         bare = "\n### Delta review, 2026-09-16\n\n| # | Kind |\n|---|---|\n"
         out, result = check(with_review(text, REVIEW + bare))
         self.assertEqual(result, "RESULT: FAIL", out)
-        self.assertRegex(out, r"FAIL: 1 changes .*no delta review, but the spec is reviewed")
+        self.assertRegex(
+            out, r"FAIL: 1 changes .*no delta review, but the spec is reviewed"
+        )
 
     def test_not_reviewed_line_quoted_in_the_reply_does_not_count(self):
-        record = RECORD + "| 2 | GAP | W1 | log it as `- Not reviewed: W1` | x | y | z |\n"
+        record = (
+            RECORD + "| 2 | GAP | W1 | log it as `- Not reviewed: W1` | x | y | z |\n"
+        )
         record += "\n- Not reviewed: W1, as the reviewer wrote it.\n"
         out, result = check(self.reviewed, record=record)
         self.assertEqual(result, "RESULT: PASS", out)
@@ -1007,8 +1011,19 @@ class OneReviewParser(unittest.TestCase):
         self.assertEqual(result, "RESULT: PASS", out)
         self.assertNotIn("999", out)
 
+    def test_inline_review_is_split_off_when_the_record_has_one_too(self):
+        out, result = check(with_review(self.base), record=RECORD)
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertNotIn("does-not-exist", out)
+        self.assertIn(
+            "review history kept in the spec: the '## Cold review' section", out
+        )
+
     def test_record_template_placeholder_fails_unless_quoted_in_the_reply(self):
-        left = RECORD + "\n## Changes since the review\n\n- Not reviewed: {{what changed}}.\n"
+        left = (
+            RECORD
+            + "\n## Changes since the review\n\n- Not reviewed: {{what changed}}.\n"
+        )
         out, result = check(self.base, record=left)
         self.assertEqual(result, "RESULT: FAIL", out)
         self.assertRegex(out, r"FAIL: its record spec-record.md .*\{\{what changed\}\}")

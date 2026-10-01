@@ -151,11 +151,13 @@ def git(repo, *args, strip=True):
     return out.rstrip("\n") if strip else out
 
 
-def split_cold_review(lines, review, warns):
-    """Split off a spec's saved '## Cold review' section, as mdcheck.read_review placed it. It
+def split_cold_review(lines, warns):
+    """Split off a spec's saved '## Cold review' section, as mdcheck.read_review places it. It
     records the reviewer's reply unchanged, so it's left out of the word count and the citation,
     link and template checks, which the author couldn't fix without editing the reviewer's
-    words. The secrets check still reads it."""
+    words. The secrets check still reads it. Read from the spec alone: a review in the record
+    as well doesn't make the spec's own copy part of the plan."""
+    review = read_review(lines, [])
     if review.where != "document":
         return lines, []
     if review.misplaced:
@@ -510,7 +512,7 @@ def main():
     record = found or record_path(spec)
     record_lines, implemented = read_record(found)
     parsed = read_review(lines, record_lines)
-    lines, legacy_review = split_cold_review(lines, parsed, warns)
+    lines, legacy_review = split_cold_review(lines, warns)
     review = parsed.where is not None
     if found and found != record_path(spec):
         warns.append(

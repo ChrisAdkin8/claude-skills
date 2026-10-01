@@ -74,3 +74,8 @@ Needs a run: 1, 3
 - Baseline: claude plugin validate .claude-plugin/plugin.json -> pass
 - Baseline: python3 skills/spec/scripts/check-spec.py <each of docs/specs/*.md> -> pass (all 10 PASS)
 - Baseline: tests/agent-evals/run.sh and tests/skill-evals/run.sh -> not run: paid, by hand (CLAUDE.md)
+- W1 (bf62db1): Done when `python3 -m unittest tests.test_mdcheck tests.test_check_note` -> the new tests (`test_section_needs_the_whole_heading`, `test_heading_is`, `HeadingRule.test_heading_index_skips_a_longer_heading`) failed first (2 failures, 1 error), pass after; `python3 -m unittest discover -s tests` -> pass; `check-note.py` over the 35 `~/notes/research/*.md` -> output identical before and after; `check-spec.py` over the 9 specs in Background's table -> output identical before and after; suite pass; scan clean
+
+## Implementation
+
+- 2026-10-01, W2 (pending): `mdcheck.py` also has `earlier_paths(git, rel)`, which reads the two git commands the Design names (`git diff --cached -M --name-status`, then `git log --follow --name-only --format=` from the staged old name or the document) and returns the earlier names, so `review-state.py` and `check-spec.py` share one copy of it rather than each parsing them; each script still runs git itself, through the callable it passes. `read_review` returns a small `Review` dataclass.

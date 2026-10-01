@@ -116,7 +116,7 @@ If it's still missing, say in the report that novelty wasn't independently check
    - If the section exists, update the rows checked again, add new ones, drop rows for claims the note no longer makes, and update the date line. A Claim quotes the note's current wording.
 3. **If the conclusion changed**, the rewritten text gets one more check:
    - That is `Bottom line holds: no`, missed evidence that weakens the recommendation, or at ideas depth a `same` hit on #1: re-rank the Shortlist, and a new #1 gets its prior-art hunt in round 2.
-   - Revise the Bottom line and Recommendation to match the evidence, set `status: draft`, and commit with the message `research: <title> (conclusion revised, re-verifying)`.
+   - Revise the Bottom line and Recommendation to match the evidence, set `status: draft`, then `git -C ~/notes add <note>` and commit with the message `research: <title> (conclusion revised, re-verifying)`.
    - Run `research-verifier` in the run dir `research-verifier-2`, with `Note: <absolute path>. Today's date: <YYYY-MM-DD>. Round 2.` Tell the user in one line that the conclusion changed and is being re-checked. End your turn.
    - When it returns, apply its fixes, update Verification and carry on from step 4. If it also says `Bottom line holds: no`, leave the note as draft and say so, unless round 3 applies.
    - **Round 3**, only when round 2's `no` rests on an absence claim it narrowed again: apply the narrowing and run `research-verifier` in `research-verifier-3`, with `Note: <absolute path>. Today's date: <YYYY-MM-DD>. Round 3: check only "<the narrowed sentence>".`

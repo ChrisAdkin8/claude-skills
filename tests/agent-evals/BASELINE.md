@@ -1333,3 +1333,82 @@ $7.78, agents included. $21.18 in all.
   changed `tests/test_calc.py` (a test `/code-review --fix` added in clean-up), the spec's status
   and the record, none in W1's Files. After the implementer's fix round, V2 said `yes`. The verifier reads
   the whole branch, clean-up and record commits included, against one work item's Files.
+
+## Review fixes, Wave 1: eval round 1, with skills' own permissions and the answer keys hidden (2026-10-01)
+
+The first round after the fixes from the 2026-10-01 review (#35 to #44), and the first with honest
+evals (#43). The skill evals pre-approve only the Skill tool, so a call outside a skill's
+`allowed-tools` is refused and fails its case. The agents review a clone with `tests/*-evals`
+removed and the answer keys blanked from its history, and the verifier cases need their true
+claims CONFIRMED. Claude Code 2.1.286, `EVAL_MODEL=sonnet` and `opus`, one set at a time. The first
+Sonnet agent set was cut short by an account usage limit: four cases ended without a verdict, and
+it was discarded and rerun. Two fix-ups landed during the round, #45 (`6d80a9e`) and #46
+(`86364e6`), and the cases they affect were rerun after each on both models.
+
+Agent evals, at `6d80a9e`:
+
+| Case | Sonnet | Opus |
+|---|---|---|
+| absence-claim | PASS (8, $0.14) | PASS (14, $0.29) |
+| cold-review-skip | PASS (5, $0.09) | PASS (7, $0.20) |
+| delta-review | FAIL (5, $0.09) | PASS (6, $0.22) |
+| delta-review-record | PASS (6, $0.10) | PASS (6, $0.27) |
+| guard-applies | SKIP (opus only) | PASS (2, $0.07) |
+| record-skip | PASS (6, $0.10) | PASS (7, $0.20) |
+| research-ideas | PASS (36, $0.88) | PASS (43, $2.08) |
+| research-quick | PASS (9, $0.18) | PASS (11, $0.39) |
+| spec-miscite | PASS (6, $0.11) | PASS (7, $0.19) |
+| spike-inherited | PASS (5, $0.10) | PASS (7, $0.14) |
+| wrong-figure | PASS (6, $0.09) | PASS (7, $0.16) |
+
+Skill evals on Sonnet (skill session; then the agents it launched; then why it failed):
+
+| Case | `ba885bf` | after #45 (`6d80a9e`) | after #46 (`86364e6`) |
+|---|---|---|---|
+| cold-review-delta | PASS (5, $0.14) | not rerun | not rerun |
+| implement-basic | FAIL (24, $0.25); implementer $0.24: the verifier's scratch writes refused (#45) | FAIL (32, $0.33); implementer $0.22, verifier $0.11: a refused `grep` in the cost report | PASS (35, $0.35); implementer $0.23, verifier $0.10 |
+| implement-trap | FAIL (18, $0.21); implementer $0.08: a refused `ls -R … \| grep` | PASS (18, $0.21); implementer $0.09 | PASS (23, $0.24); implementer $0.09 |
+| research-quick-flow | FAIL (23, $0.33); researcher $0.28, verifier $0.20: a refused `mkdir … && mv` of a misnamed brief | FAIL (21, $0.27); researcher $0.23, verifier $0.20: a refused `cd … && git …; ls …` | PASS (22, $0.27); researcher $0.21, verifier $0.28 |
+| spec-done | PASS (10, $0.17) | not rerun | PASS (12, $0.19) |
+| spec-done-branch | PASS (6, $0.14) | not rerun | not rerun |
+| spec-done-implement | FAIL (12, $0.21): a refused `cat >> <record> <<EOF` | FAIL (14, $0.20): a refused `H=…/git-read.py; ls …; $H …` | PASS (13, $0.20) |
+| spec-quick | PASS (16, $0.27); spec-verifier $0.08 | not rerun | not rerun |
+
+Skill evals on Opus:
+
+| Case | after #45 (`6d80a9e`) | after #46 (`86364e6`) |
+|---|---|---|
+| cold-review-delta | PASS (3, $0.26) | not rerun |
+| implement-basic | FAIL (35, $0.56); implementer $0.47, verifier $0.23: a refused `ls` of the run dir | FAIL (35, $0.58); implementer $0.46, verifier $0.21: a refused `find` of the run files |
+| implement-trap | FAIL (21, $0.40); implementer $0.17: a refused `ls` of the run dir | PASS (20, $0.38); implementer $0.17 |
+| research-quick-flow | PASS (21, $0.52); researcher $0.54, verifier $0.34 | PASS (25, $0.53); researcher $0.42, verifier $0.24 |
+| spec-done | FAIL (14, $0.37): a refused `H=…/git-read.py; R=…; $H -C $R log …` | PASS (12, $0.34) |
+| spec-done-branch | PASS (5, $0.25) | not rerun |
+| spec-done-implement | FAIL (11, $0.37): a refused `cd …; ls …; G=…` | PASS (14, $0.36) |
+| spec-quick | PASS (13, $0.44); spec-verifier $0.16 | not rerun |
+
+Totals, agents included: agent evals Sonnet $1.89 (9 of 10) and Opus $4.22 (11 of 11), plus $1.28
+for the Sonnet set the usage limit cut short; skill evals Sonnet $2.62, $1.87 and $2.16 for the
+three runs above, and Opus $5.05 and $3.69. $22.78 in all.
+
+- **The honest graders found one real bug.** `/implement` pre-approved the verifier's scratch writes
+  with `Write(~/.cache/implement-verify/**)`, a rule Claude Code accepts and never consults: it
+  checks the Write tool against `Edit(path)` rules only. Earlier rounds pre-approved every tool, so
+  none saw it; a user would have been asked three times per verification. #45 makes it an `Edit`
+  rule, and `tests/test_skill_frontmatter.py` now fails on any such rule. After it, every real
+  check in `implement-basic` passes on both models: the verifier ran, said `holds: yes`, and W1's
+  Done when fails at the setup's commit and passes on the branch.
+- **Every other skill-eval failure was a refused improvised command, on both models,** with the
+  case's content checks all passing: a shell variable holding `git-read.py`'s long path, a `cd`,
+  `ls`, `echo` or `grep` joined to an allowed command, and `ls` or `find` to locate run files. In a
+  real session each is a permission prompt. #46 told `/implement`, `/spec` and `/research` to run
+  one command per Bash call, with full paths, and to find files with Glob. After it, Sonnet passed
+  all 5 reruns and Opus 4 of 5. Opus's one failure is a `find` for `implement-basic`'s cost
+  report, which the spend ledger planned for the implementer (stream S2) replaces.
+- **Sonnet's `delta-review` failed the decoy-row check** (`!(?im)^\|[^\n]*\b2,?000\b`), as in most
+  sections since 2026-09-29; `delta-review-record` passed this time.
+- **The agent evals hold with the answer keys out of reach** and the true claims required to be
+  CONFIRMED: Sonnet 9 of 10, Opus 11 of 11.
+- The 2026-09-30 section's conclusion that `/spec`'s `allowed-tools` was complete wasn't shown then,
+  since those runs pre-approved every tool. This round's passes are the first that show it, for the
+  paths these cases exercise.

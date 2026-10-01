@@ -3,6 +3,73 @@
 What changed, by day, drawn from the commit history. The repo has no releases or tags, so each
 section is a date. Within a day, changes are grouped by area.
 
+## 2026-10-01
+
+Fixes from a full review of the repo on 2026-10-01, PRs #35 to #46.
+
+### Security
+
+- The agents no longer get Claude Code's auto memory. Every checker, the cold reviewer and the
+  verifiers included, had been given the project's `MEMORY.md`, which no tool call the guard sees
+  delivers. Each launcher now sets `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`. (#35)
+- `git-read.py`, the read-only git the skills run without asking, no longer runs a program the
+  repo's own git config names. It turns off fsmonitor and hooks, allows no network transport,
+  drops `GIT_*` variables, and refuses a repo whose own config, or a checked-out submodule's, sets
+  a filter, diff or merge driver, `diff.external`, a gpg program or a config hook. The guard drops
+  `git whatchanged`, which git 2.54 replaces with a repo's alias; `git log --raw` does the same.
+  (#39)
+- Spikes and the implement-verifier hide the same eight secret environment variables as the
+  agents. A spike or verifier run that leaves `results.md`, `reply.md`, `run.json` or `run.err`
+  as a link, or as anything but a plain file, is refused (exit 4) before anything reads it, and
+  the verifier's run is refused if it changed its inputs. (#36, #40)
+- `/spec` pre-approves edits only under a repo's `docs/specs/`, `/implement` only under its
+  worktree's, and `/idea` only to idea notes. Before, `/spec` and `/implement` could change any
+  markdown file under `~/code` without asking, every `CLAUDE.md`, `SKILL.md` and agent prompt
+  included, and `/idea`, which Claude may start by itself, could change `~/notes/CLAUDE.md` and
+  the templates. (#40, #42)
+- `scan-diff.py` refuses a `--base` that git would read as an option: `--base=--output=FILE`
+  wrote over FILE and passed as clean. (#38)
+
+### Fixed
+
+- Installed users get updates. `plugin.json` no longer pins a version, which kept every install
+  on the copy it first fetched; each commit is now its own version, and the README has an Update
+  section. CI's manifest check allows that one warning and fails on any other. (#44)
+- Following the README's advice to copy the agents' deny rules into your own settings no longer
+  stops `/research`, `/spec` and `/cold-review` reading their agents' replies: the new
+  `hooks/user-deny.json` leaves that rule out. (#44)
+- `/implement`'s writes to the verifier's scratch folder are pre-approved. Its `Write(path)` rule
+  was one Claude Code never consults, so every verification asked, or was refused unattended. (#45)
+- The implement-verifier judges each work item on its own commits, so the spec's status edit, the
+  record and clean-up commits no longer give a false "holds: no". Every work item is briefed,
+  "holds: yes" needs each one verified, and `/spec done` keeps the implementer's own checks apart
+  from the verifier's. The verifier's and the spikes' copies of the code are the committed files
+  exactly: `.gitattributes` no longer drops tests or rewrites files, and no filter runs. (#40)
+- `scan-diff.py` sees more ways of weakening a test: Swift, Ruby, Go, Rust, Django and JS test
+  files and test definitions, and more skip and lint-silencing markers. A `.gitattributes` can no
+  longer hide a change from it, and it never crashes into exit 1, which means "flags found". (#38)
+- `/spec done` can list worktrees, so it finds `/implement`'s. `check-spec.py` fails a
+  placeholder Done when with a full stop after it, such as `TBD.`. (#37, #39)
+- `/research` shows you a change its researcher made to an older note, adds a new note before its
+  "conclusion revised" commit, and checks for every `~/notes` file a run needs before any agent
+  starts. `/research` and `/idea` point at the installed plugin's README. (#42)
+- `/implement`, `/spec` and `/research` run one command per Bash call, with each script's full
+  path, so their calls match what they pre-approve instead of asking. (#46)
+
+### Changed
+
+- The Python files are formatted once with ruff, as the editing hook does. (#35)
+- `tests/replay_guard.py` exits 0 when every difference is accepted in
+  `tests/replay-accepted.txt`, by fingerprint, never by command, and judges each recorded run as if
+  it had run from the checkout replaying it. (#37, #41)
+- The evals can't pass broken work. The agents review a clone with the answer keys removed and
+  blanked from its history. The skill evals pre-approve only the Skill tool, so a call outside a
+  skill's allowed-tools fails the case. Graders need true claims CONFIRMED, agents that finished,
+  and `implement-basic`'s Done when to pass on the branch. Agents a skill eval launches are capped
+  at $2. (#43)
+- The README names all five commands, gives `/implement`'s caps, and asks for Claude Code 2.1.277
+  or later and repos under `~/code`. (#44)
+
 ## 2026-09-30
 
 ### Security
@@ -36,6 +103,21 @@ section is a date. Within a day, changes are grouped by area.
   reference outside the dated documents.
 - CI checks the plugin with `claude plugin validate`: the marketplace manifest, and the plugin's
   skills, so frontmatter that doesn't parse fails the build.
+
+### Added
+
+- `/implement <spec>` builds a reviewed, committed spec. It checks the spec first: `reviewed`,
+  passing `check-spec.py`, and no cited code changed since it was read. Then it makes a worktree on
+  the branch `implement/<spec>` and hands the work items to an implementer, an agent in a headless
+  session of its own, which does each test first in its own commit, then runs `/simplify` and
+  `/code-review`. A sandboxed implement-verifier with no network re-runs each work item's Done
+  when, and the evidence goes in the spec's record on the branch. The implementer runs without the
+  sandbox or the guard, capped at $20 a run; each verifier run is capped at $5. Nothing is pushed
+  or merged. (#33, #34)
+- Behind it: `check-spec.py --drift` and `--drift-at` name the cited ranges that changed since
+  read-at, and `scan-diff.py` flags out-of-scope files and weakened tests in a staged diff. `/spec`
+  hands over to `/implement`, `/spec finish` moves read-at, and `/spec done` reads the evidence,
+  run from the worktree. (#33, #34)
 
 ## 2026-09-29
 

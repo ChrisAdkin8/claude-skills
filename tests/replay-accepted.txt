@@ -1,0 +1,49 @@
+# Differences tests/replay_guard.py found that someone looked at and the guard means, such as a
+# rule tightened on purpose. The replay leaves these out before it decides its exit code, so it
+# fails only on a new difference.
+#
+# One per line:  <fingerprint> <half> <then>-><now>  # <why it's accepted>
+#
+# The fingerprint is the first 16 hex characters of the SHA-256 of the recorded command, or for a
+# read, of json.dumps([tool, input, cwd], sort_keys=True). Never the command itself: it comes from
+# the user's private transcripts, and this repo is public. The half is `base` (blocked at --base,
+# allowed now), `read` (a recorded Read, Grep or Glob call refused now) or `headless` (a headless
+# run's command, judged differently now from then). The replay prints each difference it finds
+# with its first three fields, ready to copy here.
+#
+# An entry that no longer occurs is reported as stale but doesn't fail the run, since old
+# transcripts age out. Delete it then.
+
+# Since 50d1390 (2026-09-29) the guard refuses a call that holds `gh` or a network script
+# (repo-health.sh, gcp-skus.sh, reddit-search.sh) and any other command: with anything else in
+# the call, the whole call runs inside the sandbox, where gh and the scripts can't read their
+# login. The runs before it made these calls; they're refused now on purpose.
+09d6bc66f712ca4a headless allowed->blocked  # `gh` in a call with other commands: refused since 50d1390 (2026-09-29)
+1667197a7123dcd9 headless allowed->blocked  # `gh` in a call with other commands: refused since 50d1390 (2026-09-29)
+177ddd77c1d93ee7 headless allowed->blocked  # `reddit-search.sh` in a call with other commands: refused since 50d1390 (2026-09-29)
+21ddb86e2c88e999 headless allowed->blocked  # `gh` in a call with other commands: refused since 50d1390 (2026-09-29)
+224423e73ec1cfb7 headless allowed->blocked  # `gh` in a call with other commands: refused since 50d1390 (2026-09-29)
+244b681a6a029610 headless allowed->blocked  # `gh` in a call with other commands: refused since 50d1390 (2026-09-29)
+2e8e4d1569589044 headless allowed->blocked  # `gh` in a call with other commands: refused since 50d1390 (2026-09-29)
+3d56906654652729 headless allowed->blocked  # `gh` in a call with other commands: refused since 50d1390 (2026-09-29)
+444ad913fa54857c headless allowed->blocked  # `gh` in a call with other commands: refused since 50d1390 (2026-09-29)
+4a8ae427eb0e3a9f headless allowed->blocked  # `gh` in a call with other commands: refused since 50d1390 (2026-09-29)
+51691dc32713d004 headless allowed->blocked  # `gh` in a call with other commands: refused since 50d1390 (2026-09-29)
+516ed1cecd728c01 headless allowed->blocked  # `gh` in a call with other commands: refused since 50d1390 (2026-09-29)
+52ea71dcd3b5d9a0 headless allowed->blocked  # `repo-health.sh` in a call with other commands: refused since 50d1390 (2026-09-29)
+5c4cc6542f2f6c9c headless allowed->blocked  # `gh` in a call with other commands: refused since 50d1390 (2026-09-29)
+68b7199cd7b9290a headless allowed->blocked  # `gh` in a call with other commands: refused since 50d1390 (2026-09-29)
+72bea76fe3094102 headless allowed->blocked  # `reddit-search.sh` in a call with other commands: refused since 50d1390 (2026-09-29)
+7b1db1c5d04bdfeb headless allowed->blocked  # `gh` in a call with other commands: refused since 50d1390 (2026-09-29)
+83a87b2860b2ed1c headless allowed->blocked  # `gh` in a call with other commands: refused since 50d1390 (2026-09-29)
+92df09d96191b1c7 headless allowed->blocked  # `gh` in a call with other commands: refused since 50d1390 (2026-09-29)
+94490d7c9871d22f headless allowed->blocked  # `gh` in a call with other commands: refused since 50d1390 (2026-09-29)
+b01d51bbff62ca64 headless allowed->blocked  # `gh` in a call with other commands: refused since 50d1390 (2026-09-29)
+b051b6f2882b0fca headless allowed->blocked  # `gh` in a call with other commands: refused since 50d1390 (2026-09-29)
+dcc767990849589f headless allowed->blocked  # `gh` in a call with other commands: refused since 50d1390 (2026-09-29)
+dd109bfaf9e4a88a headless allowed->blocked  # `gh` in a call with other commands: refused since 50d1390 (2026-09-29)
+e2fbb577565d446b headless allowed->blocked  # `gh` in a call with other commands: refused since 50d1390 (2026-09-29)
+e7bc289ea2261aab headless allowed->blocked  # `gh` in a call with other commands: refused since 50d1390 (2026-09-29)
+ef347396cb8ddfd4 headless allowed->blocked  # `gh` in a call with other commands: refused since 50d1390 (2026-09-29)
+f1d7755b51b6b064 headless allowed->blocked  # `gh` in a call with other commands: refused since 50d1390 (2026-09-29)
+f2c969b1ce7e7c78 headless allowed->blocked  # `gh` in a call with other commands: refused since 50d1390 (2026-09-29)

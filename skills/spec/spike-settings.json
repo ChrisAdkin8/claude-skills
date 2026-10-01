@@ -12,6 +12,18 @@
         "~/Library/Application Support/Google/Chrome", "~/.cache/agent-runs"
       ],
       "allowWrite": ["~/.cache/spec-spikes/.uv-cache"]
+    },
+    "credentials": {
+      "envVars": [
+        {"name": "CLAUDE_CODE_MESSAGING_TOKEN", "mode": "deny"},
+        {"name": "ANTHROPIC_API_KEY", "mode": "deny"},
+        {"name": "GH_TOKEN", "mode": "deny"},
+        {"name": "GITHUB_TOKEN", "mode": "deny"},
+        {"name": "TFE_TOKEN", "mode": "deny"},
+        {"name": "AWS_ACCESS_KEY_ID", "mode": "deny"},
+        {"name": "AWS_SECRET_ACCESS_KEY", "mode": "deny"},
+        {"name": "AWS_SESSION_TOKEN", "mode": "deny"}
+      ]
     }
   },
   "permissions": {

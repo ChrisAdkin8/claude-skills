@@ -40,7 +40,7 @@ Each agent runs as a headless, sandboxed session: read `${CLAUDE_PLUGIN_ROOT}/ho
 
 ## 1. Frame
 
-If `git -C ~/notes status` fails or `~/notes` lacks `CLAUDE.md`, `templates/research.md` or, at ideas depth, `templates/research-ideas.md`, `templates/idea.md` or `projects/mindshare/attention-evidence.md`, name what's missing, point to the README's "Set up `~/notes`" section (`~/code/github.com/claude-skills/README.md`), and stop. Don't create any.
+If `git -C ~/notes status` fails or `~/notes` lacks `CLAUDE.md`, `templates/research.md` or, at ideas depth, `templates/research-ideas.md`, `templates/idea.md` or `projects/mindshare/attention-evidence.md`, name what's missing, point to "Set up `~/notes`" in `${CLAUDE_PLUGIN_ROOT}/README.md`, and stop. Don't create any.
 
 1. **Resolve the question.**
    - An idea note's path: read it, and research the idea as a whole. No request: the question just discussed, or ask in one line and stop.

@@ -5,8 +5,9 @@ Usage: scan-diff.py --base REV [--files PATH...] [--diff-file PATH]
 
 Reads `git diff --cached REV` in the current repo: the staged change against the work item's
 starting commit (stage new files first, or they aren't seen). REV must name a commit, and git diff
-gets its SHA; one that starts with `-` is refused, since git would read it as an option.
---diff-file reads a saved unified diff instead, and then --base isn't needed. --files is the
+gets its SHA; one that starts with `-` is refused, since git would read it as an option. Every
+file is diffed as text with no textconv program, so a .gitattributes can't hide or rewrite its
+hunks. --diff-file reads a saved unified diff instead, and then --base isn't needed. --files is the
 caller's whole allowed list: the work item's Files plus any file a logged departure added. Without
 --files, scope isn't checked.
 
@@ -239,9 +240,12 @@ def main():
             sys.stderr.write(run.stderr.decode(errors="replace"))  # e.g. not a git repo
             return 2
         base = run.stdout.decode().strip()
+        # --text and --no-textconv: a -diff or binary attribute would leave a file's hunks out as
+        # "Binary files ... differ", and a textconv program would rewrite them, and run.
         run = subprocess.run(
             ["git", "-c", "core.quotePath=off", "diff", "--cached", "--no-color", "--no-ext-diff",
-             "--no-renames", "--src-prefix=a/", "--dst-prefix=b/", base, "--"],
+             "--text", "--no-textconv", "--no-renames", "--src-prefix=a/", "--dst-prefix=b/",
+             base, "--"],
             capture_output=True, check=False,
         )  # fmt: skip
         if run.returncode != 0:

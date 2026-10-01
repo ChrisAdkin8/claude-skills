@@ -4,6 +4,7 @@ staged diff.
 Run with: python3 -m unittest discover -s tests
 """
 
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -312,6 +313,26 @@ function check(value) {
   it(value);
   test(value);
 }
+"""
+PY_TESTS = """\
+import unittest
+
+
+class CalcTest(unittest.TestCase):
+    def test_add(self):
+        self.assertEqual(1 + 2, 3)
+
+    def test_sub(self):
+        self.assertEqual(3 - 1, 2)
+"""
+PY_WEAKENED = """\
+import unittest
+
+
+class CalcTest(unittest.TestCase):
+    @unittest.skip("flaky")
+    def test_add(self):
+        self.assertEqual(1 + 2, 3)
 """
 XCTEST_ASSERT = """\
 import XCTest
@@ -637,6 +658,33 @@ class StagedChanges(unittest.TestCase):
             (1, ["FLAG loosened: tests/LooseTests.swift:6: XCTAssertEqual(x, 3)"]),
             err,
         )
+
+    def test_attributes_cant_hide_a_test_files_changes(self):
+        # A -diff or binary attribute made git print "Binary files ... differ" and no hunks, and
+        # a textconv program could rewrite them. This one prints nothing, so both sides look empty.
+        marker = self.tmp / "textconv-ran"
+        textconv = f"touch {shlex.quote(str(marker))}; true"
+        expected = [
+            'FLAG skip: tests/test_calc.py:5: @unittest.skip("flaky")',
+            "FLAG deleted-test: tests/test_calc.py:8: def test_sub(self):",
+            "FLAG loosened: tests/test_calc.py:9: self.assertEqual(3 - 1, 2)",
+        ]
+        for attribute in ("-diff", "binary", "diff=hide"):
+            with self.subTest(attribute=attribute):
+                repo, base = self.commit(
+                    {
+                        ".gitattributes": f"tests/*.py {attribute}\n",
+                        "tests/test_calc.py": PY_TESTS,
+                    }
+                )
+                git(repo, "config", "diff.hide.textconv", textconv)
+                write(repo, {"tests/test_calc.py": PY_WEAKENED})
+                git(repo, "add", "-A")
+                code, out, err = scan(
+                    ["--base", base, "--files", "tests/test_calc.py"], cwd=repo
+                )
+                self.assertEqual((code, out.splitlines()), (1, expected), err)
+        self.assertFalse(marker.exists(), "the scan ran a textconv program")
 
     def test_base_reads_staged_changes_including_a_new_file(self):
         with tempfile.TemporaryDirectory() as tmp:

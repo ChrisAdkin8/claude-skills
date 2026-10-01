@@ -23,7 +23,7 @@ Request: $ARGUMENTS
 
 Every commit in `~/notes` names its files after `--`: `git -C ~/notes commit -m '<message>' -- <files>`. If git says `index.lock` exists, retry once.
 
-Run `git log`, `git diff` and every other read-only git command except `git -C ~/notes status` through `${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py`.
+Run `git log`, `git diff` and every other read-only git command except `git -C ~/notes status` through `${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py`. Run one command per Bash call, with each script's full path written out: a shell variable, a `cd` or a second command in the call isn't pre-approved, so it asks the user.
 
 The research rules are in `${CLAUDE_PLUGIN_ROOT}/hooks/agents/researcher.md` and the checking rules in `${CLAUDE_PLUGIN_ROOT}/hooks/agents/research-verifier.md`. Don't restate them in briefs.
 

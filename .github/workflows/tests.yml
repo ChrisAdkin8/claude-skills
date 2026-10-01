@@ -31,10 +31,42 @@ jobs:
       # docs/specs/2026-09-29-plugin-marketplace-1-plumbing.md, W1.
       - name: Install the claude CLI, pinned
         run: npm install -g @anthropic-ai/claude-code@2.1.285
+      # `validate .` checks marketplace.json and, through its entry, plugin.json. It fails here on
+      # any error, and on any warning but one: plugin.json has no version on purpose, so each
+      # commit is a new version for installed users (README, Update). --strict can't allow one
+      # warning, so the JSON report is checked instead.
       - name: Validate the plugin and marketplace manifests
-        run: claude plugin validate . --strict
-      # `validate .` reads only marketplace.json. This walks the plugin's skills, and fails on an
-      # error such as frontmatter that does not parse, which loads a skill with empty metadata.
-      # It is not --strict: a CLAUDE.md at the plugin root draws a warning that is expected here.
+        run: |
+          report="$RUNNER_TEMP/validate.json"
+          claude plugin validate . --json > "$report" || { cat "$report"; exit 1; }
+          python3 - "$report" <<'PY'
+          import json, sys
+
+          report = json.load(open(sys.argv[1]))
+          found = {"errors": [], "warnings": []}
+
+          def walk(node):
+              if isinstance(node, dict):
+                  for key, value in node.items():
+                      if key in found and isinstance(value, list):
+                          found[key] += value
+                      else:
+                          walk(value)
+              elif isinstance(node, list):
+                  for item in node:
+                      walk(item)
+
+          walk(report)
+          other = [
+              w for w in found["warnings"]
+              if not ("plugin.json" in w.get("path", "") and w.get("path", "").endswith("version"))
+          ]
+          if not report.get("success") or found["errors"] or other:
+              print(json.dumps(report, indent=2))
+              sys.exit(1)
+          PY
+      # This walks the plugin's skills, and fails on an error such as frontmatter that does not
+      # parse, which loads a skill with empty metadata. It is not --strict: a CLAUDE.md at the
+      # plugin root and the missing version draw warnings that are expected here.
       - name: Validate the plugin's skills
         run: claude plugin validate .claude-plugin/plugin.json

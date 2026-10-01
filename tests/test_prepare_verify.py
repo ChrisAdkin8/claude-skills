@@ -25,6 +25,10 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parents[1] / "skills" / "implement" / "scripts"
 PREPARE = SCRIPTS / "prepare-verify.sh"
 RUN = SCRIPTS / "run-verify.sh"
+# What the verifier reads, as prepare-verify.sh and /implement leave them.
+INPUTS = (
+    "brief.md", "spec.md", "record.md", "diff.patch", "diff-W1.patch", "diff-other.patch",
+)  # fmt: skip
 STUB = """#!/usr/bin/env python3
 import json, os, subprocess, sys
 with open(os.environ["STUB_CALLS"], "a") as f:
@@ -415,10 +419,10 @@ class RunVerify(Home):
             return []
         return [json.loads(line) for line in self.calls.read_text().splitlines()]
 
-    def verify_that_does(self, n, does, status=0, reply=None):
-        """Runs V<n>, a scratch dir of its own, whose stub verifier runs `does` there and exits
-        `status`. Returns the scratch dir, the exit code and the output."""
-        scratch = self.make_scratch(scratch=self.scratch.parent / f"V{n}")
+    def verify_that_does(self, n, does, status=0, reply=None, files=INPUTS):
+        """Runs V<n>, a scratch dir of its own holding `files`, whose stub verifier runs `does`
+        there and exits `status`. Returns the scratch dir, the exit code and the output."""
+        scratch = self.make_scratch(files, scratch=self.scratch.parent / f"V{n}")
         env = {**self.env, "STUB_DOES": does, "STUB_EXIT": str(status)}
         if reply is not None:
             env["STUB_REPLY"] = reply
@@ -467,6 +471,7 @@ class RunVerify(Home):
             with self.subTest(does=does):
                 scratch, code, out = self.verify_that_does(n, does)
                 self.assertEqual(code, 4, out)
+                self.assertNotIn("Traceback", out)
                 for name in names:
                     self.assertFalse(os.path.lexists(scratch / name), name)
                     self.assertIn(f"{name} was a symlink", out)
@@ -492,6 +497,7 @@ class RunVerify(Home):
             with self.subTest(does=does):
                 scratch, code, out = self.verify_that_does(n, does)
                 self.assertEqual(code, 4, out)
+                self.assertNotIn("Traceback", out)
                 self.assertFalse(os.path.lexists(scratch / name), name)
                 self.assertIn(f"{name} was not a regular file", out)
         self.assertEqual(secret.read_text(), "a secret\n")
@@ -505,6 +511,7 @@ class RunVerify(Home):
             with self.subTest(status=status, reply=reply):
                 scratch, code, out = self.verify_that_does(n, does, status, reply)
                 self.assertEqual(code, 4, out)
+                self.assertNotIn("Traceback", out)
                 self.assertFalse(os.path.lexists(scratch / "reply.md"))
 
     @unittest.skipIf(os.geteuid() == 0, "root can remove it anyway")
@@ -518,9 +525,73 @@ class RunVerify(Home):
             1, f"ln -s {shlex.quote(str(secret))} reply.md && chmod a-w ."
         )
         self.assertEqual(code, 4, out)
+        self.assertNotIn("Traceback", out)
         self.assertIn("reply.md was a symlink", out)
         self.assertIn("couldn't remove it", out)
         self.assertEqual(secret.read_text(), "a secret\n")
+
+    def test_refuses_a_run_that_changed_its_inputs(self):
+        # The code a Done when runs can write anywhere in the scratch dir, so it could rewrite
+        # what the verifier reads, to change the verdict.
+        s = shlex.quote(str(self.secret()))
+        cases = (
+            ("diff.patch", "echo '+a change no work item made' >> diff.patch", 0),
+            ("spec.md", "echo 'Done when: true' > spec.md", 0),
+            ("record.md", "rm record.md", 0),
+            ("brief.md", "echo 'Work items: none' > brief.md", 0),
+            ("diff-W1.patch", "echo > diff-W1.patch", 0),
+            (
+                "diff-other.patch",
+                f"rm diff-other.patch && ln -s {s} diff-other.patch",
+                0,
+            ),
+            ("spec.md", "rm spec.md && mkdir spec.md", 0),
+            ("diff.patch", "chmod a-r diff.patch", 0),
+            ("diff.patch", "echo >> diff.patch", 1),  # whatever claude's status
+        )
+        for n, (name, does, status) in enumerate(cases, start=1):
+            with self.subTest(does=does):
+                scratch, code, out = self.verify_that_does(n, does, status)
+                self.assertEqual(code, 4, out)
+                self.assertNotIn("Traceback", out)
+                self.assertIn(f"run-verify: {name} changed during the run", out)
+                self.assertFalse((scratch / "reply.md").exists())
+
+    def test_refuses_a_diff_the_run_made_for_a_work_item(self):
+        # W2 had no commit, so no diff-W2.patch: one made during the run would give it one.
+        for n, name in enumerate(("diff-W2.patch", "diff-other.patch"), start=1):
+            with self.subTest(name=name):
+                files = tuple(f for f in INPUTS if f != "diff-other.patch")
+                scratch, code, out = self.verify_that_does(
+                    n, f"echo x > {name}", files=files
+                )
+                self.assertEqual(code, 4, out)
+                self.assertNotIn("Traceback", out)
+                self.assertIn(f"run-verify: {name} changed during the run", out)
+
+    def test_the_verifier_may_write_in_src_before_and_its_own_files(self):
+        does = (
+            "mkdir -p before/W1 && echo x > before/W1/test_new.py && echo y > src/out.txt"
+            " && echo z > notes.md && echo w > diff-notes.patch"
+        )
+        for n, files in enumerate(
+            (INPUTS, ("brief.md", "spec.md", "diff.patch")), start=1
+        ):
+            with self.subTest(files=files):
+                scratch, code, out = self.verify_that_does(n, does, files=files)
+                self.assertEqual(code, 0, out)
+                self.assertIn(
+                    "Implementation holds: yes", (scratch / "reply.md").read_text()
+                )
+
+    def test_refuses_an_input_thats_a_link_before_the_run(self):
+        # brief.md becomes claude's prompt, read outside the sandbox.
+        scratch = self.make_scratch(INPUTS)
+        (scratch / "brief.md").unlink()
+        (scratch / "brief.md").symlink_to(self.secret())
+        code, out = self.run_script(RUN, scratch)
+        self.assertEqual(code, 2, out)
+        self.assertEqual(self.calls_made(), [])
 
     def test_a_link_left_from_an_earlier_run_is_cleared_first(self):
         # The script writes run.json and run.err through a shell redirect, which would follow a

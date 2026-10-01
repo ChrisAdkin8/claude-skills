@@ -13,9 +13,11 @@
 # `Implementation holds: yes|no`). Exit 2: the run couldn't start. Exit 3: the run finished, but
 # reply.md lacks them (an API error, a budget stop, a verifier that ignored its format): don't
 # read it as a verdict. Exit 4: the run left reply.md, run.json or run.err as a symlink, or as
-# anything else but a regular file. The script removes the entry unread, and the caller reads
-# none of the run's files. 4 comes before 3 and before claude's own status, and stays 4 even if
-# the removal fails. Any other non-zero exit is claude's own, with run.err saying why.
+# anything else but a regular file, which the script removes unread; or it changed an input the
+# verifier reads (brief.md, spec.md, record.md, diff.patch, a diff-W<n>.patch, diff-other.patch).
+# Either way the caller reads none of the run's files. 4 comes before 3 and before claude's own
+# status, and stays 4 even if the removal fails. Any other non-zero exit is claude's own, with
+# run.err saying why.
 #
 # Capped at $5 and 100 turns. On the user's default model, or on $RUN_AGENT_MODEL if it's set, as
 # hooks/run-agent.sh does, so the evals' per-model runs reach it. The sandbox is
@@ -52,9 +54,55 @@ case "$scratch" in
   *) die "$1 resolves to $scratch, not under ~/.cache/implement-verify/" ;;
 esac
 for f in brief.md spec.md diff.patch; do
-  [ -f "$scratch/$f" ] || die "missing $scratch/$f"
+  [ -f "$scratch/$f" ] && [ ! -L "$scratch/$f" ] || die "missing, or not a plain file: $scratch/$f"
 done
 [ -d "$scratch/src" ] || die "missing $scratch/src"
+
+# What the verifier reads: the brief, the spec, the record and the diffs. The code a Done when
+# runs can write anywhere in the scratch dir, so it could rewrite them to change the verdict. With
+# no argument, this prints each one's state as JSON: its sha256, or `missing`, or what it is
+# instead of a regular file, which it never reads. With that listing as $1, taken before the run
+# and kept in this script's memory, it prints a line for each input that differs. Not before/ or
+# src/: the verifier writes there. The names are fixed or `diff-W<n>.patch`, so printing them
+# shows nothing the run chose.
+inputs() {
+  python3 - "$@" <<'PY'
+import errno, hashlib, json, os, re, stat, sys
+
+def state(name):
+    try:
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError:
+        return "missing"
+    except OSError as e:
+        return "a symlink" if e.errno == errno.ELOOP else f"unreadable ({e.strerror})"
+    if not stat.S_ISREG(os.fstat(fd).st_mode):
+        os.close(fd)
+        return "not a regular file"
+    with open(fd, "rb") as f:
+        digest = hashlib.sha256()
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            digest.update(chunk)
+        return digest.hexdigest()
+
+names = {"brief.md", "spec.md", "record.md", "diff.patch", "diff-other.patch"}
+problems = []
+try:
+    names |= {n for n in os.listdir(".") if re.fullmatch(r"diff-W[0-9]+\.patch", n, re.I)}
+except OSError as e:
+    problems.append(f"run-verify: couldn't list the scratch dir ({e.strerror})")
+if len(sys.argv) == 1:
+    if problems:
+        sys.exit(problems[0])
+    print(json.dumps({name: state(name) for name in names}))
+else:
+    before = json.loads(sys.argv[1])
+    for name in sorted(names | set(before)):
+        if state(name) != before.get(name, "missing"):
+            problems.append(f"run-verify: {name} changed during the run")
+    print("\n".join(problems))
+PY
+}
 
 # The spikes' uv cache, not the user's ~/.cache/uv, for the reason run-spike.sh gives; the
 # settings let a run write there and nowhere else outside its scratch dir.
@@ -75,6 +123,8 @@ rm -rf -- reply.md run.json run.err 2>/dev/null || true
 for f in reply.md run.json run.err; do
   [ ! -e "$f" ] && [ ! -L "$f" ] || die "couldn't clear $scratch/$f from an earlier run"
 done
+
+hashes=$(inputs) || die "couldn't hash the inputs in $scratch"
 
 # --setting-sources user, as in run-spike.sh and hooks/run-agent.sh: no project settings or
 # CLAUDE.md above or beside the scratch dir load.
@@ -110,6 +160,12 @@ for f in reply.md run.json run.err; do
     echo "run-verify: $scratch/$f was $what; couldn't remove it, so don't read it" >&2
   fi
 done
+# And the inputs must be as they were: what the verifier read may not be what the caller wrote.
+changed=$(inputs "$hashes") || changed="run-verify: couldn't check the inputs after the run"
+if [ -n "$changed" ]; then
+  refused=1
+  echo "$changed" >&2
+fi
 [ "$refused" -eq 0 ] || refuse
 
 # Neither the read nor the write follows a link, in case a process the run left running makes
@@ -124,9 +180,10 @@ def refuse(name):
 
 reply = "run-verify: no result; see run.err"
 try:
-    with open(os.open("run.json", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK), "rb") as f:
-        if not stat.S_ISREG(os.fstat(f.fileno()).st_mode):
-            refuse("run.json")
+    fd = os.open("run.json", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    if not stat.S_ISREG(os.fstat(fd).st_mode):
+        refuse("run.json")
+    with open(fd, "rb") as f:
         d = json.loads(f.read())
     reply = d.get("result") or f"run-verify: the run ended with subtype {d.get('subtype')!r} and no reply"
 except OSError as e:

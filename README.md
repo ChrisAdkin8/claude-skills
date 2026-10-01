@@ -93,8 +93,10 @@ This README writes the short ones.
 - **Deny rules for your own sessions.** A plugin can't ship permission settings. What keeps the
   agents away from your credentials and session history, the sandbox settings and the guard,
   travels with the plugin. Your own sessions get none of it. To give them the same denies, copy
-  the `permissions.deny` list in [`hooks/agent-sandbox.json`](hooks/agent-sandbox.json) into
-  `permissions.deny` in your user settings file, `~/.claude/settings.json`.
+  the `permissions.deny` list in [`hooks/user-deny.json`](hooks/user-deny.json) into
+  `permissions.deny` in your user settings file, `~/.claude/settings.json`. It's the agents' list
+  without the rule that hides `~/.cache/agent-runs`, because `/research`, `/spec` and
+  `/cold-review` read each agent's reply there, and a deny rule would stop them.
 
 **To work on the repo** rather than use it, clone it anywhere and run Claude Code from the clone
 with the plugin loaded from that directory:

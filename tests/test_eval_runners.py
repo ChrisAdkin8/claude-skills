@@ -537,7 +537,7 @@ class Runners(unittest.TestCase):
         for prompt in sorted(
             (REPO / "tests" / "skill-evals" / "cases").glob("*/prompt.txt")
         ):
-            if re.match(r"/claude-skills:(spec|implement) ", prompt.read_text()):
+            if re.match(r"/checked-plans:(spec|implement) ", prompt.read_text()):
                 with self.subTest(case=prompt.parent.name):
                     location = prompt.parent / "location.txt"
                     self.assertTrue(location.exists())
@@ -551,7 +551,7 @@ class Runners(unittest.TestCase):
             with self.subTest(case=prompt.parent.name):
                 self.assertRegex(
                     prompt.read_text(),
-                    r"\A/claude-skills:(spec|research|idea|cold-review|implement) ",
+                    r"\A/checked-plans:(spec|research|idea|cold-review|implement) ",
                 )
 
     def test_skill_evals_pass_the_model_to_the_skill_and_its_agents(self):

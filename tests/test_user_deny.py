@@ -86,7 +86,7 @@ class ReadmeIndexCommand(unittest.TestCase):
         self.home = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.home)
         (self.home / "notes" / "research").mkdir(parents=True)
-        versions = self.home / ".claude/plugins/cache/claude-skills/claude-skills"
+        versions = self.home / ".claude/plugins/cache/checked-plans/checked-plans"
         # The installed version, with the real scripts.
         self.installed = versions / "4e1b2c3d4f5a"
         shutil.copytree(
@@ -110,7 +110,7 @@ class ReadmeIndexCommand(unittest.TestCase):
             "lastUpdated": "2026-10-01T09:00:00.000Z",
             "gitCommitSha": self.installed.name + "0" * 28,
         }
-        record = {"version": 2, "plugins": {"claude-skills@claude-skills": [install]}}
+        record = {"version": 2, "plugins": {"checked-plans@checked-plans": [install]}}
         (self.home / ".claude/plugins/installed_plugins.json").write_text(
             json.dumps(record, indent=2)
         )

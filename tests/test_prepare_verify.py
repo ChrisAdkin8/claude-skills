@@ -220,6 +220,60 @@ class PrepareVerify(Home):
         self.assertEqual(exported(before / "W1"), committed(self.repo, self.base))
         self.assertEqual(exported(before / "W2"), committed(self.repo, self.other))
 
+    def section(self, sha):
+        """One commit's part of a per-item diff: a line naming it, then its diff."""
+        subject = git(self.repo, "log", "-1", "--format=%s", sha).strip()
+        return f"commit {sha} {subject}\n" + git(self.repo, "diff", f"{sha}^", sha)
+
+    def test_writes_each_work_items_own_diff_and_the_rest_apart(self):
+        # The verifier judges each work item's scope on its own commits, so the spec's status
+        # edit, the record and the clean-up never count against one. The whole diff stays too.
+        code, out = self.prepare()
+        self.assertEqual(code, 0, out)
+        patches = sorted(p.name for p in self.scratch.glob("*.patch"))
+        self.assertEqual(
+            patches,
+            ["diff-W1.patch", "diff-W2.patch", "diff-other.patch", "diff.patch"],
+        )
+        self.assertEqual(
+            (self.scratch / "diff-W1.patch").read_text(), self.section(self.w1)
+        )
+        self.assertEqual(
+            (self.scratch / "diff-W2.patch").read_text(), self.section(self.w2)
+        )
+        self.assertEqual(
+            (self.scratch / "diff-other.patch").read_text(), self.section(self.other)
+        )
+
+    def test_a_work_items_later_commit_joins_its_diff(self):
+        (self.repo / "a.txt").write_text("w1\n")  # setUp's uncommitted edit stays out
+        fix = commit(
+            self.repo, {"a.txt": "w1, fixed\n"}, "spec: fix after verification"
+        )
+        again = commit(
+            self.repo, {"d.txt": "d\n"}, "spec: the rest of the first thing (W1)"
+        )
+        revert = commit(
+            self.repo, {"b.txt": "b\n"}, 'Revert "repo: do the second thing (W2)"'
+        )
+        code, out = self.prepare(head=revert)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(
+            (self.scratch / "diff-W1.patch").read_text(),
+            self.section(self.w1) + self.section(again),
+        )
+        self.assertEqual(
+            (self.scratch / "diff-W2.patch").read_text(), self.section(self.w2)
+        )
+        self.assertEqual(
+            (self.scratch / "diff-other.patch").read_text(),
+            self.section(self.other) + self.section(fix) + self.section(revert),
+        )
+        # Still the parent of W1's first commit.
+        self.assertEqual(
+            exported(self.scratch / "before" / "W1"), committed(self.repo, self.base)
+        )
+
     def test_exports_the_committed_bytes_whatever_the_attributes_say(self):
         # `git archive` would leave tests/ out, rewrite VERSION, eol.md and ident.c, and run the
         # filter; its diff would run the textconv and show hidden.py as binary.

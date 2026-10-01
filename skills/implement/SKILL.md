@@ -84,11 +84,11 @@ On resume, run the Gate in the worktree instead, where the status must be `in-pr
 ## 5. Verify
 
 1. `${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/prepare-verify.sh <scratch V1> <worktree> <Started at> <the branch's HEAD>`.
-2. With Read and Write, copy the worktree's spec to `<scratch V1>/spec.md` and its record to `<scratch V1>/record.md`, and write `<scratch V1>/brief.md`: `Spec: spec.md`, `Work items: <each Wn with a commit ending (Wn)>`, `Today's date: <YYYY-MM-DD>`. Nothing about how the work went: this brief comes from a session that didn't write the code.
+2. With Read and Write, copy the worktree's spec to `<scratch V1>/spec.md` and its record to `<scratch V1>/record.md`, and write `<scratch V1>/brief.md`: `Spec: spec.md, a copy of <spec, from the repo root>`, `Record: record.md, a copy of <record, from the repo root>`, `Work items: <each Wn with a commit ending (Wn)>`, `Today's date: <YYYY-MM-DD>`. The two paths let the verifier tell the spec's status edit and the record's evidence in the diffs, which it expects. Nothing about how the work went: this brief comes from a session that didn't write the code.
 3. Run `${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/run-verify.sh <scratch V1>` with `run_in_background: true`, and end your turn. When it returns, read `<scratch V1>/reply.md`; on exit 3 or 2, stop and tell the user, as step 4 does.
-4. **Copy its table** and closing lines under the record's `## Evidence` in the worktree, headed `- Verifier V1 (<head commit>):`.
+4. **Copy its reply**, the table, the `Other commits:` line and the closing lines, under the record's `## Evidence` in the worktree, headed `- Verifier V1 (<head commit>):`.
 5. **CANNOT-RUN rows.** If any, write a follow-up listing each (its Done when and the verifier's reason) to `<run dir>/followup.md`, and resume the implementer. It runs them in the worktree and adds `implementer-run:` lines, apart from the table.
-6. **`Implementation holds: no`.** Send the implementer a follow-up naming the rows that failed or don't match the spec, resume it, then verify once more in `<scratch V2>`, steps 1 to 5 again. There is no third round: if V2 also says `no`, say so in the report.
+6. **`Implementation holds: no`.** Send the implementer a follow-up naming the rows that failed or don't match the spec, and any weakened test the `Other commits:` line names, resume it, then verify once more in `<scratch V2>`, steps 1 to 5 again. There is no third round: if V2 also says `no`, say so in the report.
 
 ## 6. Evidence and report
 

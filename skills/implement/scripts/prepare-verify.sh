@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # Prepares one implement-verifier run's scratch directory: clears it, exports the implementation
-# at <head> into src/, writes diff.patch (git diff <base> <head>), and, for each commit in
-# <base>..<head> whose subject ends `(W<n>)`, exports that commit's parent into before/W<n>/: the
-# code as it stood before that work item, for a Done when's "fails before" half. The caller then
-# copies in spec.md, record.md and brief.md, and launches run-verify.sh.
+# at <head> into src/, and writes diff.patch (git diff <base> <head>). Then, for each commit in
+# <base>..<head>, oldest first: if its subject ends `(W<n>)`, it adds the commit's diff to
+# diff-W<n>.patch, and exports its parent into before/W<n>/ (the code as it stood before that
+# work item, for a Done when's "fails before" half); any other commit's diff goes to
+# diff-other.patch (the spec's status edit, the clean-up, a fix after verification, a revert).
+# Each commit's diff there starts with a `commit <hash> <subject>` line. The caller then copies in
+# spec.md, record.md and brief.md, and launches run-verify.sh.
 #
 # Usage: prepare-verify.sh <scratch dir> <repo> <base> <head>
 #
@@ -109,12 +112,23 @@ export_tree "$head" "$target/src"
 diff_of "$base" "$head" > "$target/diff.patch"
 echo "exported $top at $head to $target/src, and git diff $base $head to $target/diff.patch"
 
-# Oldest first, so a work item's first commit decides its starting state.
-git -C "$top" log --reverse --format='%H %s' "$base..$head" | while read -r sha subject; do
-  [[ $subject =~ \(W([0-9]+)\)$ ]] || continue
-  item="W${BASH_REMATCH[1]}"
-  [ ! -e "$target/before/$item" ] || continue
-  mkdir -p "$target/before/$item"
-  export_tree "$sha^" "$target/before/$item"
-  echo "exported $item's starting state ($sha^) to $target/before/$item"
-done
+# Oldest first, so a work item's first commit decides its starting state. The verifier judges a
+# work item's scope on its own diff: the whole diff also holds the spec's status edit, the record
+# and the clean-up, which no work item's Files list. --no-show-signature, so a user's
+# log.showSignature adds no lines to read here.
+git -C "$top" log --no-show-signature --reverse --format='%H %s' "$base..$head" |
+  while read -r sha subject; do
+    if [[ $subject =~ \(W([0-9]+)\)$ ]]; then
+      item="W${BASH_REMATCH[1]}"
+      patch="$target/diff-$item.patch"
+      if [ ! -e "$target/before/$item" ]; then
+        mkdir -p "$target/before/$item"
+        export_tree "$sha^" "$target/before/$item"
+        echo "exported $item's starting state ($sha^) to $target/before/$item"
+      fi
+    else
+      patch="$target/diff-other.patch"
+    fi
+    { printf 'commit %s %s\n' "$sha" "$subject"; diff_of "$sha^" "$sha"; } >> "$patch"
+  done
+echo "wrote each work item's own commits to diff-W<n>.patch, and the rest to diff-other.patch"

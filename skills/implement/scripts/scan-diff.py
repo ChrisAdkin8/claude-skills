@@ -17,16 +17,18 @@ file.
 
 Kinds:
   scope         a changed file not in --files
-  deleted-test  a removed test file, or a removed `def test_`, `it(` or `test(` line whose test
-                isn't added back in the same file (a changed signature isn't a deletion)
+  deleted-test  a removed test file, or a removed line that defines a test that isn't added back
+                in the same file (a changed signature isn't a deletion): Python's `def test_`,
+                Go's `func TestX(`, Swift's `func testX()`, a `#[test]` or `@Test` (the test is
+                the function it marks), or, in a test file only, `describe(`, `it(` or `test(`
   skip          an added @skip, skipIf, skipUnless, skipTest, xfail, .only(, .skip( or t.Skip(
   silenced      an added noqa, type: ignore, eslint-disable, pragma: no cover or shellcheck disable
   loosened      in a test file, a hunk that removes an assert or expect( line and adds none
   mocked        in a test file, an added mock.patch, MagicMock or jest.mock
 
-A test file is one under tests/, test/ or __tests__/, or named test_*, *_test.*, *.test.* or
-*.spec.*. False positives (a test deleted on purpose) are expected: the caller asks, which is the
-safe failure.
+A test file is one under tests/, test/, __tests__/ or spec/, in any case (Swift's Tests/), or
+named test_*, *_test.*, *.test.*, *.spec.*, *_spec.*, tests.py or conftest.py. False positives (a
+test deleted on purpose) are expected: the caller asks, which is the safe failure.
 """
 
 import argparse
@@ -37,13 +39,22 @@ from fnmatch import fnmatch
 from pathlib import Path, PurePosixPath
 
 HUNK = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@")
-TEST_DIRS = {"tests", "test", "__tests__"}
-TEST_NAMES = ("test_*", "*_test.*", "*.test.*", "*.spec.*")
+# Folder names match in any case: Swift's is Tests/.
+TEST_DIRS = {"tests", "test", "__tests__", "spec"}
+TEST_NAMES = (
+    "test_*", "*_test.*", "*.test.*", "*.spec.*", "*_spec.*", "tests.py", "conftest.py",
+)  # fmt: skip
 TEST_DEF = re.compile(
-    r"""^\s*(?:async\s+)?def\s+(test_\w+)"""  # Python
-    r"""|^\s*(?:it|test)\s*\(\s*(['"`])(.*?)\2"""  # JS: it('name', ...) / test("name", ...)
-    r"""|^\s*(?:it|test)\s*\("""  # JS, a name this can't read
+    r"^\s*(?:async\s+)?def\s+(test_\w+)"  # Python
+    r"|^\s*func\s+(?:\([^)]*\)\s*)?(Test\w*)\s*\("  # Go: func TestX(, or a suite's method
+    r"|^\s*(?:[@\w]+\s+)*func\s+(test\w*)\s*\(\s*\)"  # Swift: XCTest runs no-argument testX()
 )
+# describe('name', ...), it('name', ...) or test('name', ...); one whose name this can't read is
+# keyed by its whole line. Only in a test file: elsewhere these are ordinary calls.
+JS_TEST_DEF = re.compile(r"""^\s*(?:describe|it|test)\s*\(\s*(?:(['"`])(.*?)\1)?""")
+# #[test] (Rust) or @Test (JUnit, Swift Testing): the test is the function on its line or below.
+TEST_ATTR = re.compile(r"^\s*(?:#\[test\]|@Test\b)")
+FUNC_NAME = re.compile(r"\b(?:fn|func|fun|void)\s+(`[^`]+`|\w+)")
 SKIP = re.compile(r"@skip|skipIf|skipUnless|skipTest|xfail|\.only\(|\.skip\b|t\.Skip\(")
 SILENCED = re.compile(
     r"noqa|type:\s*ignore|eslint-disable|pragma:\s*no cover|shellcheck disable"
@@ -54,17 +65,37 @@ MOCKED = re.compile(r"mock\.patch|MagicMock|jest\.mock")
 
 def is_test_file(path):
     p = PurePosixPath(path)
-    return bool(TEST_DIRS & set(p.parts[:-1])) or any(
+    return bool(TEST_DIRS & {part.lower() for part in p.parts[:-1]}) or any(
         fnmatch(p.name, n) for n in TEST_NAMES
     )
 
 
-def test_key(line):
-    """The test a `def test_` / `it(` / `test(` line defines, or None if it defines none."""
-    m = TEST_DEF.match(line)
-    if not m:
-        return None
-    return m.group(1) or m.group(3) or line.strip()
+def test_key(lines, i, in_test_file):
+    """The test that lines[i] defines, or None if it defines none. `lines` is one side of a hunk,
+    so an attribute's test can be named by the function below it."""
+    line = lines[i]
+    if m := TEST_DEF.match(line):
+        return m.group(1) or m.group(2) or m.group(3)
+    if in_test_file and (m := JS_TEST_DEF.match(line)):
+        return m.group(2) or line.strip()
+    if m := TEST_ATTR.match(line):
+        for text in (line[m.end() :], *lines[i + 1 : i + 4]):
+            if name := FUNC_NAME.search(text):
+                return name.group(1)
+        return line.strip()
+    return None
+
+
+def tests_defined(hunk, sign, in_test_file):
+    """{line number: test} for each test a hunk's `sign` lines define, read on that side: the old
+    file's lines for "-", the new file's for "+"."""
+    side = [(o if sign == "-" else n, s, t) for s, o, n, t in hunk if s in (sign, " ")]
+    texts = [t for _, _, t in side]
+    return {
+        no: key
+        for i, (no, s, _) in enumerate(side)
+        if s == sign and (key := test_key(texts, i, in_test_file))
+    }
 
 
 class File:
@@ -131,15 +162,13 @@ def scan(files, allowed):
             flags += [(path, *hit) for hit in found]
             continue
         added_tests = {
-            test_key(text)
-            for hunk in f.hunks
-            for sign, _, _, text in hunk
-            if sign == "+"
+            key for hunk in f.hunks for key in tests_defined(hunk, "+", test).values()
         }
         for hunk in f.hunks:
+            removed_tests = tests_defined(hunk, "-", test)
             for sign, old_no, new_no, text in hunk:
                 if sign == "-":
-                    key = test_key(text)
+                    key = removed_tests.get(old_no)
                     if key and key not in added_tests:
                         found.append((old_no, "deleted-test", text.strip()))
                 elif sign == "+":

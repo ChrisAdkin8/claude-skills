@@ -154,6 +154,167 @@ class Kinds(unittest.TestCase):
         self.assertEqual((code, out), (0, ""))
 
 
+# Test definitions in other languages. Each fills its %s with more tests, or with nothing.
+GO_TESTS = """\
+package calc
+
+import "testing"
+
+func TestAdd(t *testing.T) {
+    Add(1, 2)
+}
+%s"""
+GO_SUB = """
+func TestSub(t *testing.T) {
+    Sub(3, 1)
+}
+
+func (s *CalcSuite) TestDiv() {
+    Div(6, 3)
+}
+"""
+GO_MUL = """
+func TestMul(t *testing.T) {
+    Mul(2, 3)
+}
+"""
+
+XCTESTS = """\
+import XCTest
+
+final class CalcTests: XCTestCase {
+    func testAdd() {
+        _ = Calc().add(1, 2)
+    }
+%s}
+"""
+XCTEST_SUB = """
+    func testSub() throws {
+        _ = Calc().sub(3, 1)
+    }
+"""
+XCTEST_HELPER = """
+    func testValue(_ x: Int) -> Int {
+        x
+    }
+"""
+XCTEST_DIV = """
+    func testDiv() {
+        _ = Calc().div(6, 3)
+    }
+"""
+
+JUNIT = """\
+import org.junit.jupiter.api.Test;
+
+class CalcTest {
+    @Test
+    void adds() {
+        new Calc().add(1, 2);
+    }
+%s}
+"""
+JUNIT_SUB = """
+    @Test
+    void subtracts() {
+        new Calc().sub(3, 1);
+    }
+"""
+SWIFT_TESTING = """\
+import Testing
+
+@Test func adds() {
+    _ = Calc().add(1, 2)
+}
+
+@Test
+func subtracts() {
+    _ = Calc().sub(3, 1)
+}
+"""
+SWIFT_TESTING_CHANGED = """\
+import Testing
+
+@Test("Adds two numbers") func adds() {
+    _ = Calc().add(1, 2)
+}
+
+@Test(.tags(.fast))
+func subtracts() {
+    _ = Calc().sub(3, 1)
+}
+
+@Test func multiplies() {
+    _ = Calc().mul(2, 3)
+}
+"""
+
+RUST_LIB = """\
+pub fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn adds() {
+        add(1, 2);
+    }
+%s}
+"""
+RUST_AGAIN = """
+    #[test]
+    fn adds_again() {
+        add(2, 2);
+    }
+"""
+RUST_FLAKY = """\
+#[test]
+fn flaky() {
+    run();
+}
+"""
+RUST_NEW = """\
+#[test]
+fn adds_three() {
+    add(1, 2);
+}
+"""
+
+JS_TESTS = """\
+const { add, sub } = require('./calc');
+
+describe('add', () => {
+  it('adds', () => {
+    add(1, 2);
+  });
+});
+%s"""
+JS_SUB = """
+describe('sub', () => {
+  test('subtracts', () => {
+    sub(3, 1);
+  });
+});
+"""
+JS_DIV = """
+describe('div', () => {
+  it('divides', () => {
+    div(6, 3);
+  });
+});
+"""
+JS_NOT_TESTS = """\
+function check(value) {
+  describe(value);
+  it(value);
+  test(value);
+}
+"""
+
+
 def git(repo, *args):
     return subprocess.run(
         ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t", *args],
@@ -226,6 +387,138 @@ class StagedChanges(unittest.TestCase):
                 self.assertEqual(
                     (code, out), (1, "FLAG silenced: app.py:1: x = 2  # noqa\n"), err
                 )
+
+    def test_more_test_file_layouts(self):
+        # Swift's Tests/ (a folder name matches in any case), Ruby's spec/ and *_spec.rb, Django's
+        # tests.py and pytest's conftest.py; and names that only look like them.
+        tests = [
+            "Tests/CalcTests/CalcTests.swift",
+            "spec/calc_spec.rb",
+            "lib/calc_spec.rb",
+            "app/tests.py",
+            "conftest.py",
+        ]
+        others = [
+            "Sources/Latest/Calc.swift",
+            "docs/specs/plan.md",
+            "lib/inspect.rb",
+            "app/contests.py",
+            "src/conftest_data.py",
+        ]
+        code, out, err = self.scan_staged(
+            {path: "x\n" for path in tests + others},
+            {path: None for path in tests + others},
+        )
+        self.assertEqual(
+            sorted(out.splitlines()),
+            sorted(f"FLAG deleted-test: {path}:0: test file deleted" for path in tests),
+            err,
+        )
+        self.assertEqual(code, 1)
+
+    def test_go_tests(self):
+        # A suite's method counts too. A new test, or a changed body, isn't a deletion.
+        code, out, err = self.scan_staged(
+            {"sub_test.go": GO_TESTS % GO_SUB, "add_test.go": GO_TESTS % ""},
+            {
+                "sub_test.go": GO_TESTS % "",
+                "add_test.go": (GO_TESTS % GO_MUL).replace("Add(1, 2)", "Add(2, 2)"),
+            },
+        )
+        self.assertEqual(
+            (code, out.splitlines()),
+            (1, [
+                "FLAG deleted-test: sub_test.go:9: func TestSub(t *testing.T) {",
+                "FLAG deleted-test: sub_test.go:13: func (s *CalcSuite) TestDiv() {",
+            ]),
+            err,
+        )  # fmt: skip
+
+    def test_swift_xctest_tests(self):
+        # XCTest only runs a testX() with no arguments, so a helper that takes one isn't a test.
+        # A test made async isn't a deletion.
+        code, out, err = self.scan_staged(
+            {
+                "Tests/CalcTests/CalcTests.swift": XCTESTS % XCTEST_SUB,
+                "Tests/CalcTests/MoreTests.swift": XCTESTS % XCTEST_HELPER,
+            },
+            {
+                "Tests/CalcTests/CalcTests.swift": XCTESTS % "",
+                "Tests/CalcTests/MoreTests.swift": (XCTESTS % XCTEST_DIV).replace(
+                    "func testAdd() {", "func testAdd() async throws {"
+                ),
+            },
+        )
+        self.assertEqual(
+            (code, out.splitlines()),
+            (1, ["FLAG deleted-test: Tests/CalcTests/CalcTests.swift:8: func testSub() throws {"]),
+            err,
+        )  # fmt: skip
+
+    def test_test_attributes(self):
+        # @Test (JUnit, Swift Testing) marks the function on its line or below, so giving a test a
+        # display name or a trait isn't a deletion.
+        code, out, err = self.scan_staged(
+            {
+                "src/test/java/CalcTest.java": JUNIT % JUNIT_SUB,
+                "Tests/CalcTests/CalcTesting.swift": SWIFT_TESTING,
+            },
+            {
+                "src/test/java/CalcTest.java": JUNIT % "",
+                "Tests/CalcTests/CalcTesting.swift": SWIFT_TESTING_CHANGED,
+            },
+        )
+        self.assertEqual(
+            (code, out.splitlines()),
+            (1, ["FLAG deleted-test: src/test/java/CalcTest.java:9: @Test"]),
+            err,
+        )
+
+    def test_rust_tests(self):
+        # Rust's unit tests live in its source files. Taking #[test] off a function stops it being
+        # a test; adding a new one isn't a deletion.
+        code, out, err = self.scan_staged(
+            {"src/lib.rs": RUST_LIB % RUST_AGAIN, "src/flaky.rs": RUST_FLAKY},
+            {
+                "src/lib.rs": RUST_LIB % "",
+                "src/flaky.rs": RUST_FLAKY.replace("#[test]\n", ""),
+                "src/more.rs": RUST_NEW,
+            },
+        )
+        self.assertEqual(
+            (code, out.splitlines()),
+            (1, [
+                "FLAG deleted-test: src/flaky.rs:1: #[test]",
+                "FLAG deleted-test: src/lib.rs:14: #[test]",
+            ]),
+            err,
+        )  # fmt: skip
+
+    def test_js_describe_it_and_test_blocks(self):
+        # Only in a test file: elsewhere describe(, it( and test( are ordinary calls. A new block
+        # isn't a deletion.
+        code, out, err = self.scan_staged(
+            {
+                "src/calc.test.js": JS_TESTS % JS_SUB,
+                "src/more.test.js": JS_TESTS % "",
+                "src/rules.js": JS_NOT_TESTS,
+            },
+            {
+                "src/calc.test.js": JS_TESTS % "",
+                "src/more.test.js": (JS_TESTS % JS_DIV).replace(
+                    "add(1, 2)", "add(2, 1)"
+                ),
+                "src/rules.js": "function check(value) {\n  return value;\n}\n",
+            },
+        )
+        self.assertEqual(
+            (code, out.splitlines()),
+            (1, [
+                "FLAG deleted-test: src/calc.test.js:9: describe('sub', () => {",
+                "FLAG deleted-test: src/calc.test.js:10: test('subtracts', () => {",
+            ]),
+            err,
+        )  # fmt: skip
 
     def test_base_reads_staged_changes_including_a_new_file(self):
         with tempfile.TemporaryDirectory() as tmp:

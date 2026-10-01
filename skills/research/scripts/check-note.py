@@ -29,7 +29,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from mdcheck import (  # noqa: E402  shared with check-spec.py
+import mdcheck  # shared with check-spec.py
+from mdcheck import (
     CITE,
     INLINE_CODE,
     SEPARATOR,
@@ -44,7 +45,6 @@ from mdcheck import (  # noqa: E402  shared with check-spec.py
     strip_code,
     unclosed_fence,
 )
-import mdcheck  # noqa: E402
 
 TEMPLATES = Path.home() / "notes" / "templates"
 TEMPLATE = {"ideas": TEMPLATES / "research-ideas.md"}  # any other depth: research.md

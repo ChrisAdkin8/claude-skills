@@ -36,12 +36,13 @@ line says what the spec claims is the spec-verifier agent's job.
 import argparse
 import collections
 import re
-import sys
 import subprocess
+import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "research" / "scripts"))
-from mdcheck import (  # noqa: E402  shared with check-note.py
+import mdcheck  # shared with check-note.py
+from mdcheck import (
     CITE,
     DELTA_REVIEW,
     INLINE_CODE,
@@ -59,7 +60,6 @@ from mdcheck import (  # noqa: E402  shared with check-note.py
     strip_code,
     unclosed_fence,
 )
-import mdcheck  # noqa: E402
 
 TEMPLATE = Path(__file__).resolve().parents[1] / "template.md"
 REQUIRED = [
@@ -121,7 +121,7 @@ WORK_ITEM = re.compile(r"^#{2,3}\s+W(\d+)\b")
 # The field line itself, `- **Done when:** ...` or `**Done when**, on k3s:`, not prose that says
 # "this step is done when W2 lands".
 DONE_WHEN = re.compile(
-    r"\s*(?:[-*+]\s+|\d+[.)]\s+)?(?:\*\*|__)?done when\b(?:\*\*|__)?", re.I
+    r"\s*(?:[-*+]\s+|\d+[.)]\s+)?(?:\*\*|__)?done when\b(?:\*\*|__)?", re.IGNORECASE
 )
 PLACEHOLDER = re.compile(r"(?:tbd|tbc|todo|n/a|\?+|\.\.\.|…)", re.IGNORECASE)
 ACCEPTANCE = "## Acceptance criteria"
@@ -184,7 +184,7 @@ def body_status(body):
         if m := re.match(
             r"[>\s]*(?:[-*]\s+)?(?:\*\*)?status(?:\*\*)?\s*:\s*(?:\*\*)?\s*([a-z-]+)",
             line,
-            re.I,
+            re.IGNORECASE,
         ):
             return m.group(1).lower()
         if banner := re.match(r"[>\s#*_]*(?:[^\w\s]\s*)?(SHIPPED|SUPERSEDED)\b", line):

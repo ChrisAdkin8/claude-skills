@@ -87,7 +87,7 @@ class RunSpike(unittest.TestCase):
         # The caps and containment the README promises: $2, 60 turns, no project settings,
         # writes only inside the scratch dir, no MCP servers.
         argv = call["argv"]
-        flag = lambda name: argv[argv.index(name) + 1]  # noqa: E731
+        flag = lambda name: argv[argv.index(name) + 1]
         self.assertEqual(flag("--max-budget-usd"), "2")
         self.assertEqual(flag("--max-turns"), "60")
         self.assertEqual(flag("--setting-sources"), "user")

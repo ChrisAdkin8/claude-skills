@@ -69,8 +69,8 @@ import re
 import shlex
 import sys
 from pathlib import Path
-from urllib.parse import urlsplit
 from typing import NoReturn
+from urllib.parse import urlsplit
 
 HOME = Path.home()
 # How deep $(...) and `bash -c '...'` may nest. Every recursion stops here and check_command

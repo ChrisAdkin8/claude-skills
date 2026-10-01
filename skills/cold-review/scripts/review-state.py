@@ -35,7 +35,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "research" / "scripts"))
-from mdcheck import (  # noqa: E402  shared with the checkers
+from mdcheck import (  # shared with the checkers
     DELTA_REVIEW,
     NOT_REVIEWED,
     in_code,

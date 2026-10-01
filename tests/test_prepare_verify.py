@@ -3,15 +3,17 @@ scratch export, and its launcher.
 
 prepare-verify.sh deletes and fills only a verification's own scratch directory under
 ~/.cache/implement-verify: the head in src/, diff.patch, and each work item's starting state in
-before/W<n>/. run-verify.sh launches claude only there; a stub `claude` first on PATH records its
-arguments and prints a result, so nothing is sent to a model. Both run under a home of their own.
+before/W<n>/, all as git stores them, whatever the repo's attributes say. run-verify.sh launches
+claude only there; a stub `claude` first on PATH records its arguments and prints a result, so
+nothing is sent to a model. Both run under a home of their own.
 
 Run with: python3 -m unittest discover -s tests
 """
 
-import filecmp
 import json
 import os
+import shlex
+import stat
 import subprocess
 import tempfile
 import unittest
@@ -48,15 +50,41 @@ def commit(repo, files, message):
     return git(repo, "rev-parse", "HEAD").strip()
 
 
-def same_tree(a, b):
-    """True if directories a and b hold the same files with the same contents."""
-    cmp = filecmp.dircmp(a, b)
-    if cmp.left_only or cmp.right_only or cmp.funny_files:
-        return False
-    _, mismatch, errors = filecmp.cmpfiles(a, b, cmp.common_files, shallow=False)
-    if mismatch or errors:
-        return False
-    return all(same_tree(Path(a) / d, Path(b) / d) for d in cmp.common_dirs)
+def committed(repo, rev):
+    """{path: (mode, bytes)} for each file in rev's tree, as git stores it, before any attribute
+    or filter: a link's bytes are its target. A submodule has no files here."""
+    tree = subprocess.run(
+        ["git", "-C", str(repo), "ls-tree", "-r", "-z", rev],
+        capture_output=True,
+        check=True,
+    ).stdout
+    files = {}
+    for entry in filter(None, tree.split(b"\0")):
+        meta, path = entry.split(b"\t", 1)
+        mode, kind, oid = meta.decode().split()
+        if kind == "blob":
+            blob = subprocess.run(
+                ["git", "-C", str(repo), "cat-file", "blob", oid],
+                capture_output=True, check=True,
+            ).stdout  # fmt: skip
+            files[path.decode()] = (mode, blob)
+    return files
+
+
+def exported(root):
+    """The same map for a directory, in git's modes: a link is 120000 and its target, an
+    executable file 100755, any other file 100644. A directory, empty or not, isn't an entry."""
+    files = {}
+    for top, dirs, names in os.walk(root):
+        for name in dirs + names:
+            path = Path(top) / name
+            rel = path.relative_to(root).as_posix()
+            if path.is_symlink():
+                files[rel] = ("120000", os.fsencode(os.readlink(path)))
+            elif path.is_file():
+                executable = path.stat().st_mode & stat.S_IXUSR
+                files[rel] = ("100755" if executable else "100644", path.read_bytes())
+    return files
 
 
 class Home(unittest.TestCase):
@@ -116,22 +144,66 @@ class PrepareVerify(Home):
             head or self.w2,
         )
 
-    def archive(self, rev):
-        out = self.tmp / f"archive-{rev[:8]}"
-        out.mkdir()
-        subprocess.run(
-            f"git -C '{self.repo}' archive {rev} | tar -x -C '{out}'",
-            shell=True,
-            check=True,
+    def commit_what_archive_would_change(self):
+        """Commits, on top of W2, files `git archive` doesn't export as committed: tests/ marked
+        export-ignore, VERSION marked export-subst, a file marked eol=crlf and one marked ident,
+        files under a filter driver and a diff driver, one whose diff `-diff` hides, an
+        executable, a link and a submodule. Then W3 changes two of them. The drivers, set up after
+        the commits as a repo's own .git/config could hold them, append to self.ran whenever git
+        runs one. Returns the first commit and W3's."""
+        repo = self.repo
+        (repo / ".gitattributes").write_text(
+            "tests/** export-ignore\nVERSION export-subst\neol.md text eol=crlf\n"
+            "ident.c ident\n*.txt filter=probe diff=probe\nhidden.py -diff\n"
         )
-        return out
+        (repo / "VERSION").write_text("$Format:%H$\n")
+        (repo / "tests").mkdir()
+        (repo / "tests" / "test_b.py").write_text("assert True\n")
+        (repo / "eol.md").write_text("one\ntwo\n")
+        (repo / "ident.c").write_text("/* $Id$ */\n")
+        (repo / "hidden.py").write_text("before\n")
+        (repo / "run.sh").write_text("#!/bin/sh\necho run\n")
+        (repo / "run.sh").chmod(0o755)
+        (repo / "link").symlink_to("b.txt")
+        names = [
+            ".gitattributes",
+            "VERSION",
+            "tests",
+            "eol.md",
+            "ident.c",
+            "hidden.py",
+            "run.sh",
+            "link",
+        ]
+        git(repo, "add", *names)
+        git(repo, "update-index", "--add", "--cacheinfo", f"160000,{self.base},sub")
+        git(repo, "commit", "-qm", "repo: files git archive would change")
+        first = git(repo, "rev-parse", "HEAD").strip()
+        (repo / "hidden.py").write_text("after\n")
+        (repo / "b.txt").write_text("w3\n")
+        git(repo, "add", "hidden.py", "b.txt")
+        git(repo, "commit", "-qm", "repo: change what attributes hide (W3)")
+        w3 = git(repo, "rev-parse", "HEAD").strip()
+        self.ran = self.tmp / "ran"
+        log = shlex.quote(str(self.ran))
+        for key, command in (
+            ("filter.probe.smudge", f"echo smudge >> {log}; cat"),
+            ("filter.probe.clean", f"echo clean >> {log}; cat"),
+            ("diff.probe.textconv", f"echo textconv >> {log}; cat"),
+            ("diff.probe.command", f"echo external diff >> {log}"),
+        ):
+            git(repo, "config", key, command)
+        # Attributes outside the tree too, which `--attr-source` wouldn't hide.
+        (repo / ".git" / "info").mkdir(exist_ok=True)
+        (repo / ".git" / "info" / "attributes").write_text("*.py filter=probe\n")
+        return first, w3
 
     def test_exports_head_and_its_diff(self):
         (self.scratch / "src").mkdir(parents=True)
         (self.scratch / "old.txt").write_text("from an earlier run\n")
         code, out = self.prepare()
         self.assertEqual(code, 0, out)
-        self.assertTrue(same_tree(self.scratch / "src", self.archive(self.w2)))
+        self.assertEqual(exported(self.scratch / "src"), committed(self.repo, self.w2))
         self.assertEqual((self.scratch / "src" / "a.txt").read_text(), "w1\n")
         self.assertFalse((self.scratch / "src" / ".git").exists())
         self.assertFalse((self.scratch / "old.txt").exists())
@@ -145,8 +217,71 @@ class PrepareVerify(Home):
         self.assertEqual(code, 0, out)
         before = self.scratch / "before"
         self.assertEqual(sorted(p.name for p in before.iterdir()), ["W1", "W2"])
-        self.assertTrue(same_tree(before / "W1", self.archive(self.base)))
-        self.assertTrue(same_tree(before / "W2", self.archive(self.other)))
+        self.assertEqual(exported(before / "W1"), committed(self.repo, self.base))
+        self.assertEqual(exported(before / "W2"), committed(self.repo, self.other))
+
+    def test_exports_the_committed_bytes_whatever_the_attributes_say(self):
+        # `git archive` would leave tests/ out, rewrite VERSION, eol.md and ident.c, and run the
+        # filter; its diff would run the textconv and show hidden.py as binary.
+        first, w3 = self.commit_what_archive_would_change()
+        code, out = self.prepare(head=w3)
+        self.assertEqual(code, 0, out)
+        src = self.scratch / "src"
+        self.assertTrue((src / "tests" / "test_b.py").is_file())
+        self.assertEqual((src / "VERSION").read_bytes(), b"$Format:%H$\n")
+        self.assertEqual((src / "eol.md").read_bytes(), b"one\ntwo\n")
+        self.assertEqual((src / "ident.c").read_bytes(), b"/* $Id$ */\n")
+        self.assertTrue(os.access(src / "run.sh", os.X_OK))
+        self.assertEqual(os.readlink(src / "link"), "b.txt")
+        self.assertEqual(
+            list((src / "sub").iterdir()), []
+        )  # a submodule, as in a clone
+        self.assertEqual(exported(src), committed(self.repo, w3))
+        self.assertEqual(
+            exported(self.scratch / "before" / "W3"), committed(self.repo, first)
+        )
+        patch = (self.scratch / "diff.patch").read_text()
+        self.assertIn("+after", patch)  # not "Binary files differ"
+        self.assertIn("+w3", patch)
+        self.assertFalse(self.ran.exists(), self.ran.exists() and self.ran.read_text())
+
+    def test_its_export_is_prepare_spikes(self):
+        # One function in two scripts, so a fix to one reaches the other.
+        def export_tree(script):
+            text = script.read_text()
+            start = text.index("\nexport_tree() {")
+            return text[start : text.index("\n}\n", start)]
+
+        spike = SCRIPTS.parents[1] / "spec" / "scripts" / "prepare-spike.sh"
+        self.assertEqual(export_tree(PREPARE), export_tree(spike))
+
+    def test_refuses_a_tree_that_would_write_outside_the_export(self):
+        # Trees git's own commands never make, but `git mktree` will: tar refused these paths,
+        # and the export must too.
+        def run(*args, stdin=""):
+            return subprocess.run(
+                ["git", "-C", str(self.repo), "-c", "user.email=t@local", "-c", "user.name=t",
+                 *args],
+                input=stdin, capture_output=True, text=True, check=True,
+            ).stdout.strip()  # fmt: skip
+
+        outside = self.tmp / "outside"
+        outside.mkdir()
+        blob = run("hash-object", "-w", "--stdin", stdin="x\n")
+        link = run("hash-object", "-w", "--stdin", stdin=str(outside))
+        sub = run("mktree", stdin=f"100644 blob {blob}\tb\n")
+        for listing in (
+            f"040000 tree {sub}\t..\n",  # ../b
+            f"040000 tree {sub}\t.git\n",  # .git/b
+            f"120000 blob {link}\ta\n040000 tree {sub}\ta\n",  # a, a link out, and a/b
+        ):
+            with self.subTest(listing=listing):
+                tree = run("mktree", stdin=listing)
+                head = run("commit-tree", tree, "-p", self.w2, "-m", "crafted")
+                code, out = self.prepare(head=head)
+                self.assertEqual(code, 2, out)
+                self.assertEqual(list(outside.iterdir()), [])
+                self.assertFalse((self.scratch / "b").exists())
 
     def test_refuses_paths_outside_its_scratch_layout(self):
         victim = self.tmp / "victim"

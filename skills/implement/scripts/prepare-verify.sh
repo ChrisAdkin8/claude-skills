@@ -12,11 +12,69 @@
 #   <head>         the implementation's last commit
 #
 # A work item with more than one `(W<n>)` commit gets the parent of its first. A script, not
-# pre-approved `rm -rf`, `git archive` and `tar` shapes, for the reason prepare-spike.sh gives: the
-# paths are checked before anything is deleted, and the revisions before git sees them.
+# pre-approved `rm -rf` and `git` shapes, for the reason prepare-spike.sh gives: the paths are
+# checked before anything is deleted, and the revisions before git sees them.
 set -euo pipefail
 
 die() { echo "prepare-verify: $*" >&2; exit 2; }
+
+# Writes the files of commit $1 into the new directory $2, byte for byte as git stores them. Not
+# `git archive`: it applies .gitattributes, so export-ignore leaves paths out (often tests/),
+# export-subst, eol and ident rewrite files, and the repo's filter drivers run as it goes. Not a
+# checkout from a temporary index either: even with --attr-source, that still reads
+# .git/info/attributes and runs the filters it names. `git ls-tree` and `git cat-file --batch`
+# read no attributes and run no filter, so nothing of the repo's runs here. An executable stays
+# one and a link stays a link. A submodule's files aren't in this repo, so it gets an empty
+# directory, as in a clone. Every directory is made before any link, so nothing is written
+# through one, and a path with an empty, `.`, `..` or `.git` part is refused. GIT_NO_LAZY_FETCH:
+# a missing object fails the export rather than being fetched. prepare-spike.sh has the same
+# function; change both.
+export_tree() {
+  GIT_NO_LAZY_FETCH=1 python3 - "$top" "$1" "$2" <<'PY' || die "couldn't export $1 to $2"
+import os
+import subprocess
+import sys
+
+top, rev, dest = sys.argv[1:]
+git = ["git", "-C", top]
+tree = subprocess.run([*git, "ls-tree", "-r", "-z", rev], stdout=subprocess.PIPE, check=True).stdout
+cat = subprocess.Popen([*git, "cat-file", "--batch"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+links = []
+for entry in filter(None, tree.split(b"\0")):
+    meta, path = entry.split(b"\t", 1)
+    mode, kind, oid = meta.split()
+    if any(part in (b"", b".", b"..") or part.lower() == b".git" for part in path.split(b"/")):
+        sys.exit(f"refusing {path!r}: a path git itself wouldn't check out")
+    out = os.path.join(os.fsencode(dest), path)
+    if kind == b"commit":
+        os.makedirs(out, exist_ok=True)
+        continue
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    cat.stdin.write(oid + b"\n")
+    cat.stdin.flush()
+    header = cat.stdout.readline().split()
+    if header[1:2] != [b"blob"]:
+        sys.exit(f"{path!r}: no blob {oid.decode()} in this repo")
+    data = cat.stdout.read(int(header[2]) + 1)[:-1]
+    if mode == b"120000":
+        links.append((path, data, out))
+        continue
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW
+    with open(os.open(out, flags, 0o755 if mode == b"100755" else 0o644), "wb") as f:
+        f.write(data)
+for path, target, out in links:
+    try:
+        os.symlink(target, out)
+    except FileExistsError:
+        sys.exit(f"refusing {path!r}: a link where the tree also has a file or directory")
+cat.stdin.close()
+sys.exit(cat.wait())
+PY
+}
+
+# Text, whatever the attributes say (`-diff` or `binary` would hide a change), and none of the
+# repo's diff programs: no external diff, no textconv.
+diff_of() { git -C "$top" diff --no-color --no-ext-diff --no-textconv --text "$@"; }
 
 [ $# -eq 4 ] || die "usage: prepare-verify.sh <scratch dir> <repo> <base> <head>"
 scratch=$1 repo=$2 base=$3 head=$4
@@ -47,8 +105,8 @@ esac
 target="$real_parent/$(basename "$scratch")"
 rm -rf "$target"
 mkdir -p "$target/src"
-git -C "$top" archive "$head" | tar -x -C "$target/src"
-git -C "$top" diff --no-color --no-ext-diff "$base" "$head" > "$target/diff.patch"
+export_tree "$head" "$target/src"
+diff_of "$base" "$head" > "$target/diff.patch"
 echo "exported $top at $head to $target/src, and git diff $base $head to $target/diff.patch"
 
 # Oldest first, so a work item's first commit decides its starting state.
@@ -57,6 +115,6 @@ git -C "$top" log --reverse --format='%H %s' "$base..$head" | while read -r sha 
   item="W${BASH_REMATCH[1]}"
   [ ! -e "$target/before/$item" ] || continue
   mkdir -p "$target/before/$item"
-  git -C "$top" archive "$sha^" | tar -x -C "$target/before/$item"
+  export_tree "$sha^" "$target/before/$item"
   echo "exported $item's starting state ($sha^) to $target/before/$item"
 done

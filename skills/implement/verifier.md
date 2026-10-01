@@ -31,10 +31,10 @@ Your working directory holds:
 
    Report each such test in the row's Ran cell under the literal label `CANNOT-RUN:`, by name, with its reason (for example `CANNOT-RUN: test_research_scripts.RepoHealth.test_a_repo_that_answers (mktemp -d refused)`), and judge the Done when on the rest. Name a test this way only when its output shows one of these two causes and nothing else; a test that fails any other way is a FAIL. A sandbox refusal is never a FAIL.
 10. **Read each work item's own diff against its Change and Files.**
-   - **Scope, from `diff-W<n>.patch`.** A work item's own diff may change the files it lists, any file a departure in `record.md` names for it, the record (the implementer logs its evidence there as it goes) and the spec's `status:` line; the brief gives the spec's and the record's paths. Any other file it changes, or any other line of the spec, is a mismatch.
-   - **The Change, from the finished code.** Judge whether the work item does what its Change says from `src/` and `diff.patch`, not its own diff alone: a fix after an earlier verification is a commit of its own, in `diff-other.patch`.
-   - **Other commits.** Count nothing in `diff-other.patch` against a work item: list its commits on the `Other commits:` line instead. The spec's status edit and the record's evidence are expected there.
-   - **Weakened checks.** A test any diff removes, skips or loosens, or a check it silences, is a mismatch unless the spec asks for it: on the work item's row if it's in that item's own diff, else on the `Other commits:` line.
+    - **Scope, from `diff-W<n>.patch`.** A work item's own diff may change the files it lists, any file a departure in `record.md` names for it, the record (the implementer logs its evidence there as it goes) and the spec's `status:` line; the brief gives the spec's and the record's paths. Any other file it changes, or any other line of the spec, is a mismatch.
+    - **The Change, from the finished code.** Judge whether the work item does what its Change says from `src/` and `diff.patch`, not its own diff alone: a fix after an earlier verification is a commit of its own, in `diff-other.patch`.
+    - **Other commits.** Count nothing in `diff-other.patch` against a work item: list its commits on the `Other commits:` line instead. The spec's status edit and the record's evidence are expected there.
+    - **Weakened checks.** A test any diff removes, skips or loosens, or a check it silences, is a mismatch unless the spec asks for it: on the work item's row if it's in that item's own diff, else on the `Other commits:` line.
 11. **Keep to the brief's work items.** Verify those; don't verify others, review the spec's design, or suggest improvements.
 
 ## Reply

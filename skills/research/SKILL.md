@@ -29,7 +29,7 @@ The research rules are in `${CLAUDE_PLUGIN_ROOT}/hooks/agents/researcher.md` and
 
 ## Agent runs
 
-Each agent runs as a headless, sandboxed session: read `${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.md` and follow it. The work dir is `~/notes`; the run dir is `~/.cache/agent-runs/<note basename>/<agent>`; `finish` mode uses `research-verifier-finish`.
+Each agent runs as a headless, sandboxed session: read `${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.md` and follow it. The work dir is `~/notes`; the run dir is `~/.cache/agent-runs/<note basename>/<agent>`.
 
 ## Modes
 
@@ -40,7 +40,7 @@ Each agent runs as a headless, sandboxed session: read `${CLAUDE_PLUGIN_ROOT}/ho
 
 ## 1. Frame
 
-If `git -C ~/notes status` fails or `~/notes/templates/research.md` is missing, point to the README's "Set up `~/notes`" section (`~/code/github.com/claude-skills/README.md`), and stop. Don't create either.
+If `git -C ~/notes status` fails or `~/notes` lacks `CLAUDE.md`, `templates/research.md` or, at ideas depth, `templates/research-ideas.md`, `templates/idea.md` or `projects/mindshare/attention-evidence.md`, name what's missing, point to the README's "Set up `~/notes`" section (`~/code/github.com/claude-skills/README.md`), and stop. Don't create any.
 
 1. **Resolve the question.**
    - An idea note's path: read it, and research the idea as a whole. No request: the question just discussed, or ask in one line and stop.

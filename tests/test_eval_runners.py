@@ -1,7 +1,9 @@
 """Tests for tests/agent-evals/run.sh and tests/skill-evals/run.sh: they exit 1 when a case fails,
 0 only when every case passes, and 2 on a case that doesn't exist or when there are none. They
 pass their caps, model and sandbox settings to claude, clean up their fixtures, and the skill runner
-counts only this run's results.
+counts only this run's results. The agent runner keeps the answer keys out of the agents' reach:
+{{CASE}} is a copy of the fixture alone, {{REPO}} a clone without them, and the settings deny reads
+of the checkout's copies.
 
 A stub `claude` first on PATH prints a canned JSON result, so nothing is sent to a model. The
 runners are pointed at fake cases in a temporary directory (EVAL_CASES), and write their results
@@ -42,9 +44,20 @@ if m and os.environ.get("STUB_SIDE_EFFECTS"):
     run.mkdir(parents=True)
     (run / "reply.md").write_text("a reply")
     (Path.home() / "notes/other.md").write_text("an edit")
+# An agent's view, kept for the test to look at after the runner has cleaned up: a copy of the
+# directories the brief's `Case:` and `Repo:` lines name, as the agent would find them.
+if os.environ.get("STUB_SNAPSHOT"):
+    import shutil
+    snap = Path(os.environ["STUB_SNAPSHOT"])
+    named = dict(re.findall(r"(?m)^(Case|Repo): (\\S+)$", sys.argv[-1]))
+    for key, path in named.items():
+        shutil.copytree(path, snap / key.lower(), symlinks=True)
+    (snap / "paths.json").write_text(json.dumps(named))
 print(json.dumps({"subtype": "success", "is_error": False, "num_turns": 1,
                   "total_cost_usd": 0.01, "result": "the reply says yes"}))
 """
+# The answer key the F7a tests plant, and look for where an agent could reach it.
+KEY = "ANSWER-KEY-7f3a"
 
 
 class Runners(unittest.TestCase):
@@ -65,7 +78,13 @@ class Runners(unittest.TestCase):
             "EVAL_OUT": str(self.tmp / "out"),
             "STUB_ARGV": str(self.tmp / "argv.jsonl"),
         }
-        for var in ("EVAL_MODEL", "RUN_AGENT_MODEL", "CLAUDE_CODE_DISABLE_AUTO_MEMORY"):
+        for var in (
+            "EVAL_MODEL",
+            "EVAL_REPO",
+            "RUN_AGENT_MODEL",
+            "RUN_AGENT_MAX_USD",
+            "CLAUDE_CODE_DISABLE_AUTO_MEMORY",
+        ):
             self.env.pop(var, None)
 
     def run_script(self, script, *cases):
@@ -90,19 +109,92 @@ class Runners(unittest.TestCase):
     def flag(self, argv, name):
         return argv[argv.index(name) + 1] if name in argv else None
 
-    def assertRendered(self, path, source):
+    def add_dirs(self, argv):
+        """The directories after --add-dir, up to the next option."""
+        dirs = []
+        for arg in argv[argv.index("--add-dir") + 1 :]:
+            if arg.startswith("--"):
+                break
+            dirs.append(arg)
+        return dirs
+
+    def git(self, repo, *args):
+        return subprocess.run(
+            ["git", "-C", str(repo), *args], capture_output=True, text=True, check=False
+        ).stdout
+
+    def fixture_repo(self):
+        """A repo for EVAL_REPO with answer keys in its tree and its history: the read-at commit
+        holds an expect.txt, a note-expect.txt and BASELINE.md naming KEY, and the next commit
+        changes the expect.txt and the code. Returns the repo and the read-at commit."""
+        repo = self.tmp / "fixture-repo"
+        files = {
+            "hooks/guard.py": "def unwrap(argv):\n    return argv\n",
+            "tests/test_guard.py": "import unittest\n",
+            "tests/agent-evals/run.sh": "#!/bin/sh\n",
+            "tests/agent-evals/BASELINE.md": f"The decoy is {KEY}-baseline.\n",
+            "tests/agent-evals/cases/old/expect.txt": f"{KEY}-old\n",
+            "tests/agent-evals/cases/old/note-expect.txt": f"{KEY}-note\n",
+            "tests/agent-evals/cases/old/spec.md": "a fixture spec\n",
+            "tests/skill-evals/cases/s/grade.py": "print('graded')\n",
+        }
+        for path, text in files.items():
+            (repo / path).parent.mkdir(parents=True, exist_ok=True)
+            (repo / path).write_text(text)
+        g = ["git", "-C", str(repo), "-c", "user.email=t@t", "-c", "user.name=t"]
+        subprocess.run(["git", "init", "-q", str(repo)], check=True)
+        subprocess.run([*g, "add", "."], check=True)
+        subprocess.run([*g, "commit", "-qm", "read-at"], check=True)
+        read_at = self.git(repo, "rev-parse", "HEAD").strip()
+        (repo / "tests/agent-evals/cases/old/expect.txt").write_text(f"{KEY}-new\n")
+        (repo / "hooks/guard.py").write_text("def unwrap(argv):\n    return argv[1:]\n")
+        subprocess.run([*g, "commit", "-qam", "later"], check=True)
+        return repo, read_at
+
+    def snapshot_case(self, name="look"):
+        """An agent case whose brief names {{CASE}} and {{REPO}}, run with the stub keeping a copy
+        of both. Returns the directory the copies land in, as case/ and repo/, with paths.json
+        holding the paths the brief gave."""
+        case = self.cases / name
+        case.mkdir()
+        (case / "agent.txt").write_text("cold-reviewer\n")
+        (case / "brief.txt").write_text("Case: {{CASE}}\nRepo: {{REPO}}\n")
+        (case / "expect.txt").write_text(f"says yes\n# {KEY}-case\n")
+        snap = self.tmp / "snap"
+        self.env["STUB_SNAPSHOT"] = str(snap)
+        return snap
+
+    def assertRendered(self, path, source, overlay=False):
         """`path` is the file agent-settings.py makes from `source` with the checkout as its
-        root, written under this run's results: no runner passes a placeholder through."""
+        root, written under this run's results: no runner passes a placeholder through. With
+        `overlay`, the agent runner's read denies follow the file's own, which come first and
+        unchanged (test_agent_evals_settings_deny_the_answer_keys checks what they are)."""
         self.assertTrue(path.startswith(str(self.tmp / "out")), path)
         text = Path(path).read_text()
         self.assertNotIn("${", text)
-        rendered = subprocess.run(
-            [str(REPO / "hooks" / "agent-settings.py"), str(source), str(REPO)],
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout
-        self.assertEqual(json.loads(text), json.loads(rendered))
+        rendered = json.loads(
+            subprocess.run(
+                [str(REPO / "hooks" / "agent-settings.py"), str(source), str(REPO)],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout
+        )
+        settings = json.loads(text)
+        if overlay:
+            fs, base_fs = (
+                settings["sandbox"]["filesystem"],
+                rendered["sandbox"]["filesystem"],
+            )
+            deny, base_deny = (
+                settings["permissions"]["deny"],
+                rendered["permissions"]["deny"],
+            )
+            self.assertGreater(len(fs["denyRead"]), len(base_fs["denyRead"]))
+            self.assertGreater(len(deny), len(base_deny))
+            fs["denyRead"] = fs["denyRead"][: len(base_fs["denyRead"])]
+            settings["permissions"]["deny"] = deny[: len(base_deny)]
+        self.assertEqual(settings, rendered)
         self.assertIn(f"{REPO}/skills/research/scripts/repo-health.sh *", text)
 
     def agent_case(self, name, expect):
@@ -204,7 +296,9 @@ class Runners(unittest.TestCase):
         for argv in calls:
             self.assertEqual(self.flag(argv, "--setting-sources"), "user")
             self.assertRendered(
-                self.flag(argv, "--settings"), REPO / "hooks" / "agent-sandbox.json"
+                self.flag(argv, "--settings"),
+                REPO / "hooks" / "agent-sandbox.json",
+                overlay=True,
             )
             self.assertIn("--strict-mcp-config", argv)
             self.assertEqual(self.flag(argv, "--agent"), "cold-reviewer")
@@ -219,7 +313,127 @@ class Runners(unittest.TestCase):
         text = Path(self.flag(argv, "--agents")).read_text()
         self.assertIn(f'python3 \\"{REPO}/hooks/agent-guard.py\\" bash', text)
         self.assertNotIn("${", text)
-        self.assertIn(str(REPO), argv[argv.index("--add-dir") :])
+        # The guard and scripts run from the checkout, but the agent works in a clone of it
+        # (test_agent_evals_repo_is_a_clone_without_the_answer_keys): the checkout, whose
+        # tests/agent-evals holds the answer keys, isn't one of its directories.
+        self.assertNotIn(str(REPO), self.add_dirs(argv))
+        self.assertEqual(
+            self.add_dirs(argv)[:2], [f"{Path.home()}/.claude", f"{Path.home()}/notes"]
+        )
+
+    def test_agent_evals_case_is_a_copy_of_the_fixture_alone(self):
+        # {{CASE}} is a copy of the fixture files the brief needs: never the answer key or the
+        # runner's other files, and under a name that doesn't give the case away.
+        snap = self.snapshot_case("spec-miscite")
+        case = self.cases / "spec-miscite"
+        (case / "note-expect.txt").write_text(f"{KEY}-note\n")
+        (case / "turns.txt").write_text("40\n")
+        (case / "usd.txt").write_text("5\n")
+        (case / "models.txt").write_text("opus\n")
+        (case / "spec.md").write_text("the spec\n")
+        (case / "records").mkdir()
+        (case / "records/spec-record.md").write_text("its record\n")
+        code, out = self.run_script(AGENT_RUN)
+        self.assertEqual(code, 0, out)
+        copy = snap / "case"
+        files = sorted(str(p.relative_to(copy)) for p in copy.rglob("*") if p.is_file())
+        self.assertEqual(files, ["records/spec-record.md", "spec.md"])
+        named = json.loads((snap / "paths.json").read_text())
+        self.assertNotIn("spec-miscite", named["Case"])
+        self.assertNotIn(str(self.cases), named["Case"])
+        (argv,) = self.argv()
+        self.assertIn(named["Case"], self.add_dirs(argv))
+        self.assertFalse(Path(named["Case"]).exists())
+
+    def test_agent_evals_repo_is_a_clone_without_the_answer_keys(self):
+        repo, read_at = self.fixture_repo()
+        self.env["EVAL_REPO"] = str(repo)
+        snap = self.snapshot_case()
+        code, out = self.run_script(AGENT_RUN)
+        self.assertEqual(code, 0, out)
+        clone = snap / "repo"
+        # Neither reading files nor a plain `git grep` finds a key: the eval directories are gone
+        # from the working tree and the index, and the rest of the tree is there.
+        self.assertEqual(
+            sorted(p.name for p in (clone / "tests").iterdir()), ["test_guard.py"]
+        )
+        self.assertEqual(self.git(clone, "grep", "-e", KEY), "")
+        self.assertEqual(self.git(clone, "grep", "--cached", "-e", KEY), "")
+        # Nor does the history: every expect.txt, note-expect.txt and BASELINE.md reads as empty.
+        commits = self.git(clone, "rev-list", "--all").split()
+        self.assertEqual(len(commits), 2)
+        self.assertEqual(self.git(clone, "grep", "-e", KEY, *commits), "")
+        self.assertNotIn(KEY, self.git(clone, "log", "--all", "-p"))
+        self.assertEqual(
+            self.git(
+                clone, "show", f"{read_at}:tests/agent-evals/cases/old/expect.txt"
+            ),
+            "",
+        )
+        # The read-at commit is there, and the code reads as it was then.
+        self.assertEqual(self.git(clone, "cat-file", "-t", read_at).strip(), "commit")
+        self.assertEqual(
+            self.git(clone, "show", f"{read_at}:hooks/guard.py"),
+            "def unwrap(argv):\n    return argv\n",
+        )
+        self.assertEqual(
+            self.git(clone, "show", "HEAD:tests/agent-evals/cases/old/spec.md"),
+            "a fixture spec\n",
+        )
+        # A copy with objects of its own, not linked to the source's; the brief and --add-dir
+        # name it in place of the checkout; and the run removes it.
+        self.assertFalse((clone / ".git/objects/info/alternates").exists())
+        named = json.loads((snap / "paths.json").read_text())
+        (argv,) = self.argv()
+        self.assertIn(named["Repo"], self.add_dirs(argv))
+        self.assertFalse(Path(named["Repo"]).exists())
+
+    def test_agent_evals_clone_hides_this_checkouts_answer_keys(self):
+        # Without EVAL_REPO, {{REPO}} is a clone of this checkout: a line of a real expect.txt is
+        # in neither its files nor its HEAD, and the code is there to review.
+        key = "tests/agent-evals/cases/delta-review/expect.txt"
+        line = max((REPO / key).read_text().splitlines(), key=len)
+        snap = self.snapshot_case()
+        code, out = self.run_script(AGENT_RUN)
+        self.assertEqual(code, 0, out)
+        clone = snap / "repo"
+        self.assertTrue((clone / "hooks/agent-guard.py").is_file())
+        self.assertFalse((clone / "tests/agent-evals").exists())
+        self.assertFalse((clone / "tests/skill-evals").exists())
+        self.assertEqual(self.git(clone, "grep", "-F", "-e", line), "")
+        self.assertEqual(self.git(clone, "grep", "-F", "-e", line, "HEAD"), "")
+        self.assertEqual(self.git(clone, "show", f"HEAD:{key}"), "")
+
+    def test_agent_evals_without_a_clone_is_an_error(self):
+        # No clone, no run: an agent mustn't be pointed at the checkout instead.
+        self.agent_case("plain", "says yes\n")
+        self.env["EVAL_REPO"] = str(self.tmp / "not-a-repo")
+        code, out = self.run_script(AGENT_RUN)
+        self.assertEqual(code, 2, out)
+        self.assertIn("couldn't make {{REPO}}'s clone", out)
+        self.assertEqual(self.argv(), [])
+
+    def test_agent_evals_settings_deny_the_answer_keys(self):
+        # The rendered settings deny reads of the checkout's eval directories and its git dir, to
+        # the sandbox and to the Read tool, so an agent can't go round the clone to the source.
+        self.agent_case("plain", "says yes\n")
+        self.run_script(AGENT_RUN)
+        (argv,) = self.argv()
+        settings = json.loads(Path(self.flag(argv, "--settings")).read_text())
+        common = self.git(
+            REPO, "rev-parse", "--path-format=absolute", "--git-common-dir"
+        )
+        for path in (
+            f"{REPO}/tests/agent-evals",
+            f"{REPO}/tests/skill-evals",
+            f"{REPO}/.git",
+            str(Path(common.strip()).resolve()),
+        ):
+            with self.subTest(path=path):
+                self.assertIn(path, settings["sandbox"]["filesystem"]["denyRead"])
+                self.assertIn(f"Read(/{path}/**)", settings["permissions"]["deny"])
+        # Only the run's copy: the committed settings are what the skills' agents run with.
+        self.assertNotIn("agent-evals", (REPO / "hooks/agent-sandbox.json").read_text())
 
     def test_agent_evals_settings_override(self):
         custom = self.tmp / "custom.json"
@@ -231,7 +445,12 @@ class Runners(unittest.TestCase):
         self.run_script(AGENT_RUN)
         (argv,) = self.argv()
         rendered = json.loads(Path(self.flag(argv, "--settings")).read_text())
-        self.assertEqual(rendered, {"sandbox": {"excludedCommands": [f"{REPO}/x *"]}})
+        self.assertEqual(rendered["sandbox"]["excludedCommands"], [f"{REPO}/x *"])
+        # The read denies for the answer keys are added to another file too.
+        self.assertIn(
+            f"{REPO}/tests/agent-evals", rendered["sandbox"]["filesystem"]["denyRead"]
+        )
+        self.assertEqual(sorted(rendered), ["permissions", "sandbox"])
         # Set empty, it still passes no --settings.
         self.env["EVAL_SETTINGS"] = ""
         self.run_script(AGENT_RUN)

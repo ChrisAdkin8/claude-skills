@@ -12,9 +12,10 @@ caller's whole allowed list: the work item's Files plus any file a logged depart
 --files, scope isn't checked.
 
 Prints one `FLAG <kind>: <file>:<line>: <text>` per hit and exits 1 if there are any; else prints
-nothing and exits 0. Exits 2 if REV isn't a commit or the diff can't be read. The line is the new
-file's line for an added line, the old file's for a removed one, and 0 for a flag about the whole
-file.
+nothing and exits 0. Exits 2 if REV isn't a commit, the diff can't be read or names no file, or the
+scan fails: never 1, which would read as flags. The line is the new file's line for an added line,
+the old file's for a removed one, and 0 for a flag about the whole file. A file whose name git
+quotes (a tab or a `"` in it) is named as it is on disk.
 
 Kinds:
   scope         a changed file not in --files
@@ -41,10 +42,12 @@ import argparse
 import re
 import subprocess
 import sys
+import traceback
 from fnmatch import fnmatch
 from pathlib import Path, PurePosixPath
 
 HUNK = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@")
+QUOTED = re.compile(r'"(?:[^"\\]|\\.)*"')  # a name git quoted, escapes and all
 # Folder names match in any case: Swift's is Tests/.
 TEST_DIRS = {"tests", "test", "__tests__", "spec"}
 TEST_NAMES = (
@@ -113,8 +116,9 @@ def tests_defined(hunk, sign, in_test_file):
 
 
 class File:
-    def __init__(self, old, new):
-        self.old, self.new = old, new
+    def __init__(self, header):
+        self.header = header  # its `diff --git` line
+        self.old, self.new = header_paths(header.removeprefix("diff --git "))
         self.deleted = self.added = False
         self.hunks = []  # each a list of (sign, old line, new line, text)
 
@@ -123,23 +127,51 @@ class File:
         return self.new if self.new else self.old
 
 
+def unquote(name):
+    """A name git quoted, C style, without its quotes: `"a/x\\ty"` is a/x, a tab, then y."""
+    try:
+        return name[1:-1].encode().decode("unicode_escape").encode("latin-1").decode()
+    except UnicodeError:  # not quoted as git quotes: keep it as written
+        return name[1:-1]
+
+
 def path_of(side):
-    """`a/x` or `b/x` from a ---/+++ line, or None for /dev/null. Git adds a tab after a name with
-    a space in it."""
+    """`a/x` or `b/x` from a ---/+++ line or a `diff --git` line, or None for /dev/null. Git adds a
+    tab after a ---/+++ name with a space in it."""
     side = side.rstrip("\n").rstrip("\t")
     if side == "/dev/null":
         return None
     if side.startswith('"'):
-        side = side[1:-1].encode().decode("unicode_escape").encode("latin-1").decode()
+        side = unquote(side)
     return side[2:] if side[:2] in ("a/", "b/") else side
+
+
+def header_paths(names):
+    """The old and new paths from what follows `diff --git `. A mode change (old mode and new mode
+    lines only), a binary change or an empty file has no ---/+++ lines, so these are its only
+    names. Git quotes a name with a tab, a newline, a `"` or a backslash in it. An unquoted name
+    can hold spaces and even ` b/`, so the line is split where its halves name the same file, as
+    they do without renames."""
+    if first := QUOTED.match(names):  # "a/x" "b/x"
+        old, new = names[: first.end()], names[first.end() + 1 :]
+    elif (space := names.find(' "')) > 0:
+        # a/x "b/y", after a rename: an unquoted name has no `"` in it.
+        old, new = names[:space], names[space + 1 :]
+    else:
+        half = len(names) // 2
+        old, new = names[:half], names[half + 1 :]
+        if names[half : half + 1] != " " or path_of(old) != path_of(new):
+            # A rename (from a saved diff): split at the last ` b/`, as good a guess as any.
+            m = re.fullmatch(r"(a/.*) (b/.*)", names)
+            old, new = m.groups() if m else ("", "")
+    return path_of(old) or None, path_of(new) or None
 
 
 def parse(text):
     files, current, old_no, new_no = [], None, 0, 0
     for line in text.splitlines():
         if line.startswith("diff --git "):
-            m = re.match(r"diff --git a/(.*) b/(.*)$", line)
-            current = File(*(m.groups() if m else (None, None)))
+            current = File(line)
             files.append(current)
         elif current is None:
             continue
@@ -147,6 +179,13 @@ def parse(text):
             current.deleted = True
         elif line.startswith("new file mode"):
             current.added = True
+        elif line.startswith("Binary files ") and not current.hunks:
+            # A binary change, without --text, has no ---/+++ lines: this says if a side is
+            # /dev/null.
+            if line.startswith("Binary files /dev/null and "):
+                current.old = None
+            if line.endswith(" and /dev/null differ"):
+                current.new = None
         elif line.startswith("--- ") and not current.hunks:
             current.old = path_of(line[4:])
         elif line.startswith("+++ ") and not current.hunks:
@@ -258,11 +297,21 @@ def main():
     allowed = None
     if args.files is not None:
         allowed = {p.removeprefix("./") for p in args.files}
-    flags = scan(parse(text), allowed)
+    files = parse(text)
+    for f in files:
+        if f.path is None:
+            print(f"scan-diff: no file name in {f.header!r}", file=sys.stderr)
+            return 2
+    flags = scan(files, allowed)
     for path, line, kind, text in flags:
         print(f"FLAG {kind}: {path}:{line}: {text}")
     return 1 if flags else 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        code = main()
+    except Exception:  # a crash would exit 1, which means flags were found
+        traceback.print_exc()
+        code = 2
+    raise SystemExit(code)

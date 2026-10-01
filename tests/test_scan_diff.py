@@ -136,6 +136,37 @@ class Kinds(unittest.TestCase):
         code, out, _ = self.scan_text(text, ["tests/test_app.py"])
         self.assertEqual((code, out), (0, ""))
 
+    def test_binary_and_mode_changes_to_quoted_names(self):
+        # Without --text, git gives a binary change no ---/+++ lines; a mode change has none
+        # either. So these names come from the `diff --git` line, quoted for the tab or `"`.
+        text = (
+            'diff --git "a/img\\t1.png" "b/img\\t1.png"\n'
+            "index 1111111..2222222 100644\n"
+            'Binary files "a/img\\t1.png" and "b/img\\t1.png" differ\n'
+            'diff --git "a/tests/data\\t1.bin" "b/tests/data\\t1.bin"\n'
+            "deleted file mode 100644\n"
+            "index 1111111..0000000\n"
+            'Binary files "a/tests/data\\t1.bin" and /dev/null differ\n'
+            'diff --git "a/run \\"all\\".sh" "b/run \\"all\\".sh"\n'
+            "old mode 100644\n"
+            "new mode 100755\n"
+        )
+        code, out, err = self.scan_text(text, ["tests/data\t1.bin"])
+        self.assertEqual(
+            (code, out.splitlines()),
+            (1, [
+                "FLAG scope: img\t1.png:0: not in --files",
+                "FLAG deleted-test: tests/data\t1.bin:0: test file deleted",
+                'FLAG scope: run "all".sh:0: not in --files',
+            ]),
+            err,
+        )  # fmt: skip
+
+    def test_a_file_with_no_name_exits_2(self):
+        code, out, err = self.scan_text("diff --git nonsense\nold mode 100644\n", [])
+        self.assertEqual((code, out), (2, ""), err)
+        self.assertIn("no file name", err)
+
     def test_test_file_names(self):
         # loosened and mocked only count in a test file.
         hunk = "@@ -1,2 +1,2 @@\n-expect(x).toBe(1)\n+jest.mock('x')\n"
@@ -685,6 +716,41 @@ class StagedChanges(unittest.TestCase):
                 )
                 self.assertEqual((code, out.splitlines()), (1, expected), err)
         self.assertFalse(marker.exists(), "the scan ran a textconv program")
+
+    def test_names_git_quotes(self):
+        # Git quotes a name with a tab or a `"` in it. A mode change or a deleted empty file has
+        # no ---/+++ lines, so its name comes from the `diff --git` line alone, where ` b/` inside
+        # a name is the other way to misread it.
+        modes = ["tests/run\tall.sh", 'tests/say "hi".sh', "x b/y.sh"]
+        repo, base = self.commit(
+            {path: "echo hi\n" for path in modes}
+            | {"tests/test_a\tb.py": "", "img\t1.png": "\x00\x01"}
+        )
+        for path in modes:
+            (repo / path).chmod(0o755)
+        write(repo, {"tests/test_a\tb.py": None, "img\t1.png": "\x00\x02"})
+        git(repo, "add", "-A")
+        code, out, err = scan(
+            ["--base", base, "--files", "tests/test_a\tb.py"], cwd=repo
+        )
+        self.assertEqual(
+            (code, out.splitlines()),
+            (1, [
+                "FLAG scope: img\t1.png:0: not in --files",
+                "FLAG scope: tests/run\tall.sh:0: not in --files",
+                'FLAG scope: tests/say "hi".sh:0: not in --files',
+                "FLAG deleted-test: tests/test_a\tb.py:0: test file deleted",
+                "FLAG scope: x b/y.sh:0: not in --files",
+            ]),
+            err,
+        )  # fmt: skip
+
+    def test_a_crash_exits_2_not_1(self):
+        # Exit 1 means flags were found, so a crash must exit 2. Here git can't be found.
+        code, out, err = scan(
+            ["--base", "HEAD"], cwd=self.tmp, env={"PATH": str(self.tmp)}
+        )
+        self.assertEqual((code, out), (2, ""), err)
 
     def test_base_reads_staged_changes_including_a_new_file(self):
         with tempfile.TemporaryDirectory() as tmp:

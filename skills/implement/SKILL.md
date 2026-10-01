@@ -29,9 +29,9 @@ You frame, relay and verify; you don't write the code. The work items are done b
 
 **Tool calls.** `allowed-tools` pre-approves only the command shapes this file gives, so use them exactly:
 - In every Bash call, write paths under the home directory with `~` (`~/code/…`, `~/.cache/…`), not expanded. The exception is this plugin's own files: `${CLAUDE_PLUGIN_ROOT}` is already expanded to an absolute path where this file gives it, so write that path exactly as you see it.
-- Run scripts directly, not through `python3` or `bash`, and each launcher as the whole command, never joined to another with `;`, `&&`, `||` or a pipe.
+- Run one command per Bash call: a script directly, not through `python3` or `bash`, by the full path this file gives, never through a shell variable or after a `cd`, and never joined to another with `;`, `&&`, `||` or a pipe. Anything else isn't pre-approved, so it asks the user.
 - Read git through `${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py -C <dir> …` (`rev-parse`, `log`, `show`, `branch --list`, `worktree list`). The only git commands that change anything are `git -C <dir> worktree add`, `add`, `commit` and `revert`.
-- Read files with the Read tool; make them with Write or Edit, never `cp` or a redirect.
+- Read files with the Read tool and find them with Glob; make them with Write or Edit, never `ls`, `cp` or a redirect.
 - In `~/code`, edit only the spec's status line and its record, and only in the worktree: `allowed-tools` pre-approves edits under a worktree's `docs/specs/` and nowhere else there, so a spec kept outside `docs/specs/` asks the user for each edit.
 - If a call this skill needs is refused anyway, stop and tell the user which call was refused and why. Don't work around it with another command.
 
@@ -97,4 +97,4 @@ On resume, run the Gate in the worktree instead, where the status must be `in-pr
 ## 6. Evidence and report
 
 1. `git -C <worktree> add <record>`, then `git -C <worktree> commit -m '<area>: implementation evidence'`: the branch's last commit. The verifier ran on the commit before it, which changes only the record. `git -C <worktree> status --porcelain` must then print nothing; if it doesn't, name what's left.
-2. **Report**, one short line each: each work item, its commit and Done when result, and, for one no verifier row passed, that only the implementer checked it (`implementer-run:`) or no one did; the clean-up commits and any revert; the verifier's `Verified` and `Implementation holds` lines, per round, or that a round was refused and why; any departure or question and its answer; the cost of every run, from `total_cost_usd` in each `<run dir>/run-<n>.json` and each `<scratch V<n>>/run.json` but a refused round's, and their total. Then: "run `/spec done <spec>` from `<worktree>`". Don't push, merge or remove the worktree.
+2. **Report**, one short line each: each work item, its commit and Done when result, and, for one no verifier row passed, that only the implementer checked it (`implementer-run:`) or no one did; the clean-up commits and any revert; the verifier's `Verified` and `Implementation holds` lines, per round, or that a round was refused and why; any departure or question and its answer; the cost of every run, from `total_cost_usd` in each `<run dir>/run-<n>.json` and each `<scratch V<n>>/run.json` but a refused round's (find them with Glob, read them with Read), and their total. Then: "run `/spec done <spec>` from `<worktree>`". Don't push, merge or remove the worktree.

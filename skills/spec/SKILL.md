@@ -31,7 +31,7 @@ An older spec keeps it inline (`## Cold review` at its end, `Not reviewed:` line
 
 Write no code in the repo, and don't branch or commit there.
 
-Run `git log`, `git diff` and any `git -C <dir>` read through `${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py`, and `git rev-parse`, `git status` and `git ls-files` too when the repo isn't the working directory.
+Run `git log`, `git diff` and any `git -C <dir>` read through `${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py`, and `git rev-parse`, `git status` and `git ls-files` too when the repo isn't the working directory. Run one command per Bash call, with each script's full path written out: a shell variable, a `cd` or a second command in the call isn't pre-approved, so it asks the user.
 
 The checking rules are in `${CLAUDE_PLUGIN_ROOT}/hooks/agents/spec-verifier.md`, and the cold review's prompt skeleton in `${CLAUDE_PLUGIN_ROOT}/skills/cold-review/SKILL.md`. Don't restate either in a brief.
 

@@ -112,6 +112,9 @@ Implementation holds: no
 - implementer-run: W4: `check-spec.py` over the 9 specs in Background's table -> RESULT: PASS for all 9
 - implementer-run: W4: `check-spec.py docs/specs/2026-10-01-review-parser.md` -> RESULT: PASS
 
+- W5, run by hand by the user on 2026-10-01 and 2026-10-02 at feb52be: `tests/agent-evals/run.sh` and `tests/skill-evals/run.sh` with `EVAL_MODEL=sonnet` then `opus` -> agent evals Sonnet 8 of 10 (the accepted decoy-row check on `delta-review` and `delta-review-record`), Opus 11 of 11; skill evals Sonnet 7 of 8 and Opus 5 of 8, the four failures outside the accepted list rerun once and passing (Sonnet `implement-basic`; Opus `cold-review-delta`, `spec-done-branch`, `implement-basic`); a dated section in `tests/agent-evals/BASELINE.md`; $18.34 with agents and reruns
+
 ## Implementation
 
 - 2026-10-01, W2 (9ad649f): `mdcheck.py` also has `earlier_paths(git, rel)`, which reads the two git commands the Design names (`git diff --cached -M --name-status`, then `git log --follow --name-only --format=` from the staged old name or the document) and returns the earlier names, so `review-state.py` and `check-spec.py` share one copy of it rather than each parsing them; each script still runs git itself, through the callable it passes. `read_review` returns a small `Review` dataclass.
+- 2026-10-02, W5: its Done when runs each eval set once; four skill-eval cases failed outside the accepted list and were rerun once on the model they failed on, and passed. None ran code this branch changed on a failing path (BASELINE.md's 2026-10-01 "One review parser" section says why for each), so they were taken as one-off failures rather than widening the accepted list.

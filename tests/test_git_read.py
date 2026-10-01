@@ -300,19 +300,33 @@ class RepoOwnConfig(unittest.TestCase):
         self.git("config", "--worktree", "diff.external", str(self.payload))
         self.assertNothingRuns(("diff",), refused="diff.external")
 
-    def test_submodule_config_counts(self):
-        # status and diff run git in each checked-out submodule, which reads that one's config.
+    def submodule(self):
+        """A checked-out submodule: status and diff run git in it, which reads its own config."""
         self.init(self.tmp / "sub")
         self.git("-c", "protocol.file.allow=always", "submodule", "add", "-q",
                  str(self.tmp / "sub"), "sub")  # fmt: skip
         self.git("commit", "-qm", "sub")
         inner = self.repo / "sub"
+        self.stale.append(inner / "a.txt")
+        return inner
+
+    def test_submodule_config_counts(self):
+        inner = self.submodule()
         (inner / ".gitattributes").write_text("*.txt filter=x\n")
         self.config(("filter.x.clean", str(self.payload)), repo=inner)
-        self.stale.append(inner / "a.txt")
         self.assertNothingRuns(
             ("status", "--short"), ("diff",), refused=f"submodule {inner}"
         )
+
+    def test_submodule_watcher_and_hooks_are_turned_off(self):
+        # The overrides reach the git that status and diff start in the submodule.
+        inner = self.submodule()
+        self.config(("core.fsmonitor", str(self.payload)), repo=inner)
+        self.assertNothingRuns(("status", "--short"), ("diff",))
+        self.git("config", "--unset", "core.fsmonitor", repo=inner)
+        hooks = inner / self.git("rev-parse", "--git-path", "hooks", repo=inner).strip()
+        self.hook(hooks / "post-index-change")
+        self.assertNothingRuns(("status", "--short"), ("diff",))
 
     def test_no_transport(self):
         # remote show asks the remote, and a partial clone fetches a missing object when it's

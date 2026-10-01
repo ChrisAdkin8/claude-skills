@@ -21,16 +21,22 @@ repo, result = Path(sys.argv[1]), json.loads(Path(sys.argv[2]).read_text())
 reply = result.get("result", "")
 hashes = dict(l.split("=", 1) for l in (repo / ".git/eval-hashes").read_text().split())
 # The diff base the prompt gives: `diff <sha> -- ...docs/runbook.md`.
-bases = re.findall(r"diff\s+(?:-\S+\s+)*([0-9a-f]{7,40}(?:\^|~1)?)\s+--\s+\S*runbook\.md", reply)
+bases = re.findall(
+    r"diff\s+(?:-\S+\s+)*([0-9a-f]{7,40}(?:\^|~1)?)\s+--\s+\S*runbook\.md", reply
+)
 
 
 def git(*args):
-    run = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
+    run = subprocess.run(
+        ["git", "-C", str(repo), *args], capture_output=True, text=True
+    )
     return run.stdout.strip() if run.returncode == 0 else None
 
 
 # Each base as git reads it, suffix and all: `created^` doesn't exist, since created is the root.
-resolved = [git("rev-parse", "--short", "--verify", "--quiet", f"{b}^{{commit}}") for b in bases]
+resolved = [
+    git("rev-parse", "--short", "--verify", "--quiet", f"{b}^{{commit}}") for b in bases
+]
 changed = git("status", "--porcelain")
 checks = {
     "the prompt gives a diff of the runbook": bool(bases),
@@ -44,11 +50,14 @@ checks = {
     "the logged change is quoted": "overwrites `data/`" in reply,
     # Named as unlogged, in one paragraph or bullet: Rollback alone is also a section name.
     "the unlogged Rollback edit is named": any(
-        re.search(r"(?i)rollback", part) and UNLOGGED.search(part) and not NEGATED.search(part)
+        re.search(r"(?i)rollback", part)
+        and UNLOGGED.search(part)
+        and not NEGATED.search(part)
         for part in re.split(r"\n\s*\n|\n\s*[-*] ", reply)
     ),
     "it's a delta review": bool(re.search(r"(?i)delta review", reply)),
-    "no file changed or committed": changed == "" and git("rev-parse", "--short", "HEAD") == hashes["head"],
+    "no file changed or committed": changed == ""
+    and git("rev-parse", "--short", "HEAD") == hashes["head"],
 }
 for name, ok in checks.items():
     print(("ok   " if ok else "FAIL ") + name)

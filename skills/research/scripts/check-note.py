@@ -29,11 +29,22 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from mdcheck import (  # noqa: E402  shared with check-spec.py
-    CITE, INLINE_CODE, SEPARATOR, TOPIC, count_words, flow_list, frontmatter,
-    has_account_id, is_heading, secrets_in, section, strip_code, unclosed_fence,
+import mdcheck  # shared with check-spec.py
+from mdcheck import (
+    CITE,
+    INLINE_CODE,
+    SEPARATOR,
+    TOPIC,
+    count_words,
+    flow_list,
+    frontmatter,
+    has_account_id,
+    is_heading,
+    secrets_in,
+    section,
+    strip_code,
+    unclosed_fence,
 )
-import mdcheck  # noqa: E402
 
 TEMPLATES = Path.home() / "notes" / "templates"
 TEMPLATE = {"ideas": TEMPLATES / "research-ideas.md"}  # any other depth: research.md
@@ -240,7 +251,12 @@ def check_topic(fields, note, fails, warns):
         if other.name.startswith(".") or other.resolve() == note.resolve():
             continue
         try:
-            if frontmatter(other.read_text(errors="replace").splitlines())[0].get("topic") == topic:
+            if (
+                frontmatter(other.read_text(errors="replace").splitlines())[0].get(
+                    "topic"
+                )
+                == topic
+            ):
                 return
         except OSError:
             continue
@@ -375,7 +391,10 @@ def check_verification(body, prose, status, fails, warns, pool=()):
         )
     # Compared paragraph by paragraph, without citation markers, so a claim never matches
     # across a paragraph break.
-    paras = [" ".join(CITE_MARK.sub("", para).split()) for para in paragraphs(prose + list(pool))]
+    paras = [
+        " ".join(CITE_MARK.sub("", para).split())
+        for para in paragraphs(prose + list(pool))
+    ]
     unresolved, stale, unmarked = [], [], []
     for row in rows:
         if len(row) < 3:
@@ -594,7 +613,9 @@ def main():
     check_related(fields.get("related", ""), fails, warns)
 
     if (open_at := unclosed_fence(lines[start:])) is not None:
-        fails.append(f"a code block opened on body line {open_at} is never closed, so the rest reads as code")
+        fails.append(
+            f"a code block opened on body line {open_at} is never closed, so the rest reads as code"
+        )
     body = strip_code(lines[start:])
     for heading in REQUIRED[depth]:
         if section(body, heading) is None:

@@ -25,7 +25,8 @@ STUB = """#!/usr/bin/env python3
 import json, os, sys
 with open(os.environ["STUB_CALLS"], "a") as f:
     f.write(json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd(),
-                        "uv": os.environ.get("UV_CACHE_DIR")}) + "\\n")
+                        "uv": os.environ.get("UV_CACHE_DIR"),
+                        "memory": os.environ.get("CLAUDE_CODE_DISABLE_AUTO_MEMORY")}) + "\\n")
 reply = os.environ.get("STUB_REPLY", "| W | Done when |\\nVerified: 1 of 1\\nImplementation holds: yes")
 print(json.dumps({"result": reply, "subtype": "success", "total_cost_usd": 0.01}))
 """
@@ -80,7 +81,9 @@ class Home(unittest.TestCase):
             "PATH": f"{bin_dir}:{os.environ['PATH']}",
             "STUB_CALLS": str(self.calls),
         }
-        self.env.pop("RUN_AGENT_MODEL", None)
+        # Unset here, so only the script can turn auto memory off.
+        for var in ("RUN_AGENT_MODEL", "CLAUDE_CODE_DISABLE_AUTO_MEMORY"):
+            self.env.pop(var, None)
 
     def run_script(self, script, *args, env=None):
         run = subprocess.run(
@@ -281,6 +284,7 @@ class RunVerify(Home):
         self.assertIn("--strict-mcp-config", argv)
         self.assertEqual(argv[-1], "the brief")
         self.assertTrue(call["uv"].endswith("/.cache/spec-spikes/.uv-cache"))
+        self.assertEqual(call["memory"], "1")  # no auto memory, as in run-agent.sh
         self.assertIn(
             "Implementation holds: yes", (self.scratch / "reply.md").read_text()
         )

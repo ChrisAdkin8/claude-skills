@@ -29,7 +29,10 @@ EXEMPT = {
 def tracked():
     """The tracked files, not a walk: that would also read the untracked tests/*/results/."""
     out = subprocess.run(
-        ["git", "-C", str(REPO), "ls-files", "-z"], capture_output=True, text=True, check=True
+        ["git", "-C", str(REPO), "ls-files", "-z"],
+        capture_output=True,
+        text=True,
+        check=True,
     ).stdout
     return [p for p in out.split("\0") if p]
 
@@ -60,7 +63,11 @@ def read_repo_file(path):
 class NoStalePaths(unittest.TestCase):
     def test_no_tracked_file_names_an_old_install_path(self):
         found = stale_lines(tracked(), read_repo_file)
-        self.assertEqual(found, [], "old install paths; use the plugin root instead:\n" + "\n".join(found))
+        self.assertEqual(
+            found,
+            [],
+            "old install paths; use the plugin root instead:\n" + "\n".join(found),
+        )
 
     def test_exempt_files_exist(self):
         # A renamed or deleted file must leave the list, or the exemption silently covers nothing.

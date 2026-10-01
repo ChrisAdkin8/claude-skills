@@ -53,6 +53,8 @@ done
 # settings let a run write there and nowhere else outside its scratch dir.
 export UV_CACHE_DIR="$HOME/.cache/spec-spikes/.uv-cache"
 mkdir -p "$UV_CACHE_DIR"
+# No auto memory, as in hooks/run-agent.sh: the verifier checks the work against the spec alone.
+export CLAUDE_CODE_DISABLE_AUTO_MEMORY=1
 
 # The prompt and settings sit beside this script's directory, wherever the skill is installed.
 here=$(cd "$(dirname "$0")/.." && pwd -P)

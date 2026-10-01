@@ -69,8 +69,8 @@ import re
 import shlex
 import sys
 from pathlib import Path
-from urllib.parse import urlsplit
 from typing import NoReturn
+from urllib.parse import urlsplit
 
 HOME = Path.home()
 # How deep $(...) and `bash -c '...'` may nest. Every recursion stops here and check_command
@@ -87,7 +87,10 @@ RESEARCH_NAMES = ("repo-health.sh", "check-note.py", "gcp-skus.sh", "reddit-sear
 NET_SCRIPT_NAMES = ("repo-health.sh", "gcp-skus.sh", "reddit-search.sh")
 SCRIPTS = {
     (ROOT / "skills" / path).resolve()
-    for path in (*(f"research/scripts/{n}" for n in RESEARCH_NAMES), "spec/scripts/check-spec.py")
+    for path in (
+        *(f"research/scripts/{n}" for n in RESEARCH_NAMES),
+        "spec/scripts/check-spec.py",
+    )
 }
 NET_SCRIPTS = {
     (ROOT / "skills/research/scripts" / name).resolve() for name in NET_SCRIPT_NAMES
@@ -196,7 +199,17 @@ WRAPPER_FLAGS = {
     "time": {"-p", "-l", "-h"},
     "command": {"-p"},
     "nohup": set(),
-    "xargs": {"-0", "-t", "-r", "-x", "-o", "--null", "--verbose", "--no-run-if-empty", "--exit"},
+    "xargs": {
+        "-0",
+        "-t",
+        "-r",
+        "-x",
+        "-o",
+        "--null",
+        "--verbose",
+        "--no-run-if-empty",
+        "--exit",
+    },
 }
 # gh and the network scripts run outside the OS sandbox (agent-sandbox.json's excludedCommands)
 # because they need the user's login. Claude Code's settings reference says an entry takes a Bash
@@ -214,10 +227,9 @@ WRAPPER_FLAGS = {
 # with something that runs outside the sandbox.
 # The absolute spelling is the one the skills and agents write (the settings list it too: spike Q6
 # found an absolute entry excludes an absolute call).
-OUTSIDE_SPELLINGS = (
-    {"gh"}
-    | {f"{ROOT}/skills/research/scripts/{n}" for n in NET_SCRIPT_NAMES}
-)
+OUTSIDE_SPELLINGS = {"gh"} | {
+    f"{ROOT}/skills/research/scripts/{n}" for n in NET_SCRIPT_NAMES
+}
 # A web search query goes to the search provider unchecked by the sandbox, so it's capped like a
 # request: real queries run to 139 characters, and none holds a 40-character token.
 MAX_QUERY = 200
@@ -449,7 +461,9 @@ def assignment_values(command):
             i += 1
         out.append((m.group(1), command[m.end() : i]))
     for m in re.finditer(
-        r"\b(?:for|select)\s+([A-Za-z_]\w*)\s+in\b(.*?)(?:;|\n|\bdo\b|$)", command, re.DOTALL
+        r"\b(?:for|select)\s+([A-Za-z_]\w*)\s+in\b(.*?)(?:;|\n|\bdo\b|$)",
+        command,
+        re.DOTALL,
     ):
         out.append((m.group(1), m.group(2)))
     return out
@@ -462,7 +476,15 @@ PURE = {"echo", "printf", "tr", "sed", "jq", "grep", "cut", "head", "tail", "sor
         "wc", "base64", "paste", "fold", "curl"}  # fmt: skip
 SCRIPTED = {"sed", "jq", "grep"}
 DATA_OPERANDS = {"echo", "printf", "tr"}  # their operands are text, never files
-FILE_OPTS = ("-f", "--file", "--from-file", "--rawfile", "--slurpfile", "--args", "--jsonargs")
+FILE_OPTS = (
+    "-f",
+    "--file",
+    "--from-file",
+    "--rawfile",
+    "--slurpfile",
+    "--args",
+    "--jsonargs",
+)
 # Options whose values are text, not files: name -> how many words follow.
 VALUE_OPTS = {"--arg": 2, "--argjson": 2, "--indent": 1, "-e": 1, "--expression": 1,
               "--regexp": 1, "-d": 1, "-c": 1, "-n": 0}  # fmt: skip
@@ -471,7 +493,9 @@ VALUE_OPTS = {"--arg": 2, "--argjson": 2, "--indent": 1, "-e": 1, "--expression"
 def simple_commands_or_none(command):
     """simple_commands(tokens(command)), or None where the text doesn't parse on its own."""
     lexer = shlex.shlex(
-        command.replace("\\\n", " ").replace("\n", " ; "), posix=True, punctuation_chars=True
+        command.replace("\\\n", " ").replace("\n", " ; "),
+        posix=True,
+        punctuation_chars=True,
     )
     lexer.whitespace_split = True
     lexer.commenters = ""
@@ -489,7 +513,12 @@ def pure(sub, tainted, depth=0):
     """True if a $(...) can only transform fixed text: every command in it is in PURE with no
     file operand or file option, it redirects nothing in, it expands no tainted variable, and
     any $(...) inside it is pure too."""
-    if depth > MAX_DEPTH or "<" in sub or "`" in sub or set(VAR_REF.findall(sub)) & tainted:
+    if (
+        depth > MAX_DEPTH
+        or "<" in sub
+        or "`" in sub
+        or set(VAR_REF.findall(sub)) & tainted
+    ):
         return False
     if not all(pure(inner, tainted, depth + 1) for inner in substitutions(sub)[0]):
         return False
@@ -501,13 +530,18 @@ def pure(sub, tainted, depth=0):
         if not words:
             continue
         name, args = os.path.basename(words[0]), words[1:]
-        if name not in PURE or any(a.startswith(FILE_OPTS) and a not in VALUE_OPTS for a in args):
+        if name not in PURE or any(
+            a.startswith(FILE_OPTS) and a not in VALUE_OPTS for a in args
+        ):
             return False
         if name in DATA_OPERANDS:
             continue
         if name == "curl":
             # Over http(s) curl returns only what the web holds; file:// would read a local file.
-            if any("://" in a and not a.lower().startswith(("http://", "https://")) for a in args):
+            if any(
+                "://" in a and not a.lower().startswith(("http://", "https://"))
+                for a in args
+            ):
                 return False
             continue
         operands, k, scripted = [], 0, False
@@ -689,13 +723,19 @@ def unwrap(argv):
             elif rest[0] != "--":
                 option = rest[0].split("=", 1)[0]
                 takes_value = option in with_value or (
-                    option[:2] in with_value and len(option) > 2 and not option.startswith("--")
+                    option[:2] in with_value
+                    and len(option) > 2
+                    and not option.startswith("--")
                 )  # -n5, -I{}
-                if not takes_value and option not in WRAPPER_FLAGS[name] and not (
-                    name == "nice" and re.fullmatch(r"-\d+", option)
+                if (
+                    not takes_value
+                    and option not in WRAPPER_FLAGS[name]
+                    and not (name == "nice" and re.fullmatch(r"-\d+", option))
                 ):
-                    block(f"`{name} {option}`: an option this guard doesn't know, so it can't "
-                          "tell which command runs")
+                    block(
+                        f"`{name} {option}`: an option this guard doesn't know, so it can't "
+                        "tell which command runs"
+                    )
                 if takes_value and ("=" in rest[0] or option not in with_value):
                     rest = rest[1:]  # the value is in the same word
                     continue
@@ -709,7 +749,9 @@ def unwrap(argv):
     if wrapped and not argv:
         # `env` alone prints the environment, tokens included; the other wrappers do nothing
         # useful without a command.
-        block("a wrapper like `env` with no command after it prints the environment; not allowed")
+        block(
+            "a wrapper like `env` with no command after it prints the environment; not allowed"
+        )
     command = os.path.basename(argv[0]) if argv else None
     check_assignments(assigned, command, bare=not argv and not wrapped)
     return argv
@@ -747,15 +789,25 @@ def check_gh(args, raw, expands, clean=frozenset(), tainted=frozenset()):
     check_request_words(args, "gh", clean, tainted)
     # gh runs outside the OS sandbox (Go fails TLS under it; see hooks/agent-sandbox.json), so
     # nothing but this stops it reading a file into a request, or sending one elsewhere.
-    sent = [a for k, a in enumerate(args) if not (k and args[k - 1] in ("--jq", "-q", "--template", "-t"))
-            and not a.startswith(("--jq=", "--template="))]
-    if any(re.search(r"(?:^|=)@", a) for a in sent if not a.startswith("-") or "=" in a):
-        block("`gh api` with an `@file` value sends a file's contents; give values inline")
+    sent = [
+        a
+        for k, a in enumerate(args)
+        if not (k and args[k - 1] in ("--jq", "-q", "--template", "-t"))
+        and not a.startswith(("--jq=", "--template="))
+    ]
+    if any(
+        re.search(r"(?:^|=)@", a) for a in sent if not a.startswith("-") or "=" in a
+    ):
+        block(
+            "`gh api` with an `@file` value sends a file's contents; give values inline"
+        )
     endpoint = next((a for a in args[1:] if not a.startswith("-")), "")
     if "://" in endpoint:
         block("`gh api` takes a path on api.github.com, not a full URL")
     if any(a.startswith("--hostname") for a in args):
-        block("`gh api --hostname` sends the request, and maybe a token, to another host")
+        block(
+            "`gh api --hostname` sends the request, and maybe a token, to another host"
+        )
     method = None
     for i, arg in enumerate(args):
         if arg in ("-X", "--method") and i + 1 < len(args):
@@ -875,7 +927,9 @@ def check_request_words(args, tool, clean=frozenset(), tainted=frozenset()):
                 rest = rest.replace(f"$({inner})", "")
         rest = re.sub(
             r"\$\{?([A-Za-z_]\w*)\}?",
-            lambda m: "" if m.group(1) in clean or m.group(1) in SAFE_VARS else m.group(0),
+            lambda m: (
+                "" if m.group(1) in clean or m.group(1) in SAFE_VARS else m.group(0)
+            ),
             rest,
         )
         if "$" in rest or "`" in rest:
@@ -925,7 +979,9 @@ def check_curl(args, clean=frozenset(), tainted=frozenset()):
             if name in ("--header", "--proxy-header", "--url") and (
                 value or (args[i + 1] if i + 1 < len(args) else "")
             ).startswith("@"):
-                block(f"`curl {name} @file` sends a file's contents; give the value inline")
+                block(
+                    f"`curl {name} @file` sends a file's contents; give the value inline"
+                )
         elif arg.startswith("-") and len(arg) > 1:
             letters = arg[1:]
             for j, letter in enumerate(letters):
@@ -941,7 +997,9 @@ def check_curl(args, clean=frozenset(), tainted=frozenset()):
                 if letter == "H" and (
                     letters[j + 1 :] or (args[i + 1] if i + 1 < len(args) else "")
                 ).startswith("@"):
-                    block("`curl -H @file` sends a file's contents; give the header inline")
+                    block(
+                        "`curl -H @file` sends a file's contents; give the header inline"
+                    )
                 if letter == "X":
                     method = letters[j + 1 :] or (
                         args[i + 1] if i + 1 < len(args) else ""
@@ -1020,17 +1078,30 @@ def check_reader(name, args):
             a.startswith("--from-file") or re.fullmatch(r"-[a-zA-Z]*f[a-zA-Z]*", a)
             for a in args
         ):
-            block("`jq -f` reads its filter from a file, which can't be checked; give it inline")
+            block(
+                "`jq -f` reads its filter from a file, which can't be checked; give it inline"
+            )
         for arg in args:
             if arg.startswith("-") or os.path.lexists(absolute(arg)):
                 continue
             # Words inside a jq string are text, unless the string interpolates with \(...).
             code = arg if "\\(" in arg else JQ_STRING.sub('""', arg)
             if re.search(r"\$ENV\b|(?<![\w$.])env\b(?!\w)", code):
-                block("jq's `env` and `$ENV` read environment variables, which can hold tokens")
+                block(
+                    "jq's `env` and `$ENV` read environment variables, which can hold tokens"
+                )
     if name in ("grep", "egrep", "fgrep", "rg") and any(
-        (name != "rg" and (a == "--dereference-recursive" or re.fullmatch(r"-[a-zA-Z]*[RS][a-zA-Z]*", a)))
-        or (name == "rg" and (a == "--follow" or re.fullmatch(r"-[a-zA-Z]*L[a-zA-Z]*", a)))
+        (
+            name != "rg"
+            and (
+                a == "--dereference-recursive"
+                or re.fullmatch(r"-[a-zA-Z]*[RS][a-zA-Z]*", a)
+            )
+        )
+        or (
+            name == "rg"
+            and (a == "--follow" or re.fullmatch(r"-[a-zA-Z]*L[a-zA-Z]*", a))
+        )
         for a in args
     ):
         block(
@@ -1054,8 +1125,12 @@ def absolute(text):
     lexical = os.path.normpath(joined)
     # The shell resolves `link/..` to the link target's parent, the tools may resolve it to the
     # link's own, and the two can be different files: refuse, rather than judge only one of them.
-    if ".." in joined.split("/") and os.path.realpath(joined) != os.path.realpath(lexical):
-        block(f"`{text}` has `..` after a symlink, so the shell and the tools may not agree on which file it names")
+    if ".." in joined.split("/") and os.path.realpath(joined) != os.path.realpath(
+        lexical
+    ):
+        block(
+            f"`{text}` has `..` after a symlink, so the shell and the tools may not agree on which file it names"
+        )
     return lexical
 
 
@@ -1086,7 +1161,11 @@ def secret_path(path):
     if SESSION_RESULTS and any(under(path, form) for form in results_spellings()):
         return None
     for history in HISTORY_HOME:
-        if history == PLUGINS_HOME and OWN_ROOT and under(os.path.realpath(path), OWN_ROOT):
+        if (
+            history == PLUGINS_HOME
+            and OWN_ROOT
+            and under(os.path.realpath(path), OWN_ROOT)
+        ):
             continue
         if any(under(path, form) for form in spellings(history)):
             return f"{history} holds session history, which would show how a document was written"
@@ -1128,8 +1207,12 @@ def secret_word(word):
             # `~/.a*/credentials` reaches a secret if the part before the glob could.
             stem = absolute(text[:glob_at]) if glob_at else CWD
             stem += "/" if text[glob_at - 1 : glob_at] in ("/", "") else ""
-            if any(form.startswith(stem) for s in PRIVATE_HOME for form in spellings(s)):
-                return f"`{text}` can expand to a credentials or session history directory"
+            if any(
+                form.startswith(stem) for s in PRIVATE_HOME for form in spellings(s)
+            ):
+                return (
+                    f"`{text}` can expand to a credentials or session history directory"
+                )
             text = text[:glob_at]
         path = absolute(text)
         if not pathlike and not os.path.lexists(path):
@@ -1196,8 +1279,12 @@ def check_read(tool_name, tool_input):
     credentials directory, not above one."""
     path = tool_input.get("file_path") or tool_input.get("path") or ""
     if tool_name == "Glob" and (pattern := tool_input.get("pattern", "")):
-        glob_at = next((i for i, ch in enumerate(pattern) if ch in "*?[{"), len(pattern))
-        stem = absolute(os.path.join(absolute(path or "."), expand_home(pattern[:glob_at])))
+        glob_at = next(
+            (i for i, ch in enumerate(pattern) if ch in "*?[{"), len(pattern)
+        )
+        stem = absolute(
+            os.path.join(absolute(path or "."), expand_home(pattern[:glob_at]))
+        )
         if reason := secret_reason(stem):
             block(f"{reason}. These agents may not read it")
     if not path:
@@ -1261,8 +1348,10 @@ def check_command(command, depth=0, local=None, clean=None):
         if name == "eval":
             # Re-joining its words loses their quoting, so the shell may read them differently
             # from how the guard would. No agent has needed it.
-            block("`eval` re-reads its arguments as a new command, which can't be checked here; "
-                  "run the command directly")
+            block(
+                "`eval` re-reads its arguments as a new command, which can't be checked here; "
+                "run the command directly"
+            )
         if "/" in word and path.parent not in (
             Path("/bin"),
             Path("/usr/bin"),
@@ -1288,7 +1377,9 @@ def check_command(command, depth=0, local=None, clean=None):
                 f"`{name}` isn't on this agent's command list: reading and text tools, curl, "
                 "gh and git (read-only), and the skill scripts"
             )
-    if depth == 0:  # last, so a command wrong in some other way is refused for that reason
+    if (
+        depth == 0
+    ):  # last, so a command wrong in some other way is refused for that reason
         check_outside_only(command)
 
 
@@ -1296,7 +1387,9 @@ def command_names(command, depth=0):
     """The command name of every simple command, in $(...) too, keywords and wrappers stripped."""
     if depth > MAX_DEPTH:
         return []
-    names = [n for sub in substitutions(command)[0] for n in command_names(sub, depth + 1)]
+    names = [
+        n for sub in substitutions(command)[0] for n in command_names(sub, depth + 1)
+    ]
     for raw in simple_commands(tokens(command)):
         argv = unwrap(raw)
         if argv:
@@ -1320,8 +1413,13 @@ def outside_names(command, depth=0):
             continue
         if argv[1] == "-c" and len(argv) > 2 and depth < MAX_DEPTH:
             found += outside_names(argv[2], depth + 1)
-        elif not argv[1].startswith("-") and Path(argv[1]).expanduser().resolve() in NET_SCRIPTS:
-            found.append(argv[1])  # `bash repo-health.sh` runs the script, but not exempt
+        elif (
+            not argv[1].startswith("-")
+            and Path(argv[1]).expanduser().resolve() in NET_SCRIPTS
+        ):
+            found.append(
+                argv[1]
+            )  # `bash repo-health.sh` runs the script, but not exempt
     return found
 
 
@@ -1355,7 +1453,11 @@ def check_outside_only(command):
             for word in raw[: len(raw) - len(argv)]
         )
         and len(command_names(command)) == len(argvs)  # a $(...) adds its own commands
-        and all(ok_between(toks, i) for i, tok in enumerate(toks) if tok and set(tok) <= PUNCT)
+        and all(
+            ok_between(toks, i)
+            for i, tok in enumerate(toks)
+            if tok and set(tok) <= PUNCT
+        )
         and not QUOTED_GH.search(command)
     )
     if only_them:
@@ -1379,18 +1481,24 @@ def ok_between(toks, i):
     tok = toks[i]
     if tok in (";", "&&", "||", "|"):
         return True
-    return tok == ">&" and re.fullmatch(r"\d|-", "".join(toks[i + 1 : i + 2])) is not None
+    return (
+        tok == ">&" and re.fullmatch(r"\d|-", "".join(toks[i + 1 : i + 2])) is not None
+    )
 
 
 def check_search(query):
     if not isinstance(query, str) or not query.strip():
         block("a web search needs a query")
     if len(query) > MAX_QUERY:
-        block(f"a search query of {len(query)} characters, over the {MAX_QUERY} allowed: a long "
-              "query can carry data out")
+        block(
+            f"a search query of {len(query)} characters, over the {MAX_QUERY} allowed: a long "
+            "query can carry data out"
+        )
     if re.search(r"[A-Za-z0-9+/_=-]{40,}", query):
-        block("a search query holding a 40-character run of letters and digits looks like a token "
-              "or encoded data; search in words")
+        block(
+            "a search query holding a 40-character run of letters and digits looks like a token "
+            "or encoded data; search in words"
+        )
 
 
 def check_write(path, allowed_dir):

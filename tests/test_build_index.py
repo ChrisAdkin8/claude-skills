@@ -130,17 +130,26 @@ class BuildIndex(unittest.TestCase):
     def test_counts_one_topic_per_area_and_sub_area_in_use(self):
         self.write("research/a.md", note("Note A", "final", "a/x"))
         self.write("research/b.md", note("Note B", "final", "b"))
-        self.write("ideas/i.md", note("Idea I", "seed", related=["~/notes/research/b.md"]))
+        self.write(
+            "ideas/i.md", note("Idea I", "seed", related=["~/notes/research/b.md"])
+        )
         self.assertIn("2 topics, 3 notes, 0 unfiled", self.build()[0])
 
     def test_awkward_file_names_keep_their_links(self):
         self.write("research/a.md", note("Note A", "final", "a"))
-        self.write("ideas/my idea (v2).md", note("Idea", "seed", related=["~/notes/research/a.md"]))
-        self.write("ideas/odd<name>.md", note("Odd", "seed", related=["~/notes/research/a.md"]))
+        self.write(
+            "ideas/my idea (v2).md",
+            note("Idea", "seed", related=["~/notes/research/a.md"]),
+        )
+        self.write(
+            "ideas/odd<name>.md", note("Odd", "seed", related=["~/notes/research/a.md"])
+        )
         text = self.build()[1]
         self.assertIn("  - [Idea](<ideas/my idea (v2).md>) · seed", text)
         self.assertIn("  - [Odd](ideas/odd%3Cname%3E.md) · seed", text)
-        self.assertIn("- [Note A](research/a.md) · final", text)  # plain names are unchanged
+        self.assertIn(
+            "- [Note A](research/a.md) · final", text
+        )  # plain names are unchanged
 
     def test_dotfile_is_left_out(self):
         self.write("research/a.md", note("Note A", "final", "a"))
@@ -180,8 +189,9 @@ class BuildIndex(unittest.TestCase):
         )
         lines = self.lines()
         self.assertIn("- [Note A](research/a.md) · final", lines)
-        self.assertTrue(any(l.startswith("- [Caf") and "(research/b.md)" in l for l in lines))
-
+        self.assertTrue(
+            any(l.startswith("- [Caf") and "(research/b.md)" in l for l in lines)
+        )
 
     def test_odd_entries_are_skipped_not_a_crash(self):
         self.write("research/a.md", note("Note A", "final", "kubernetes"))
@@ -200,6 +210,7 @@ class BuildIndex(unittest.TestCase):
         lines = self.lines()
         self.assertIn("## kubernetes", lines)
         self.assertIn("- [Note A](research/a.md) · final", lines)
+
 
 if __name__ == "__main__":
     unittest.main()

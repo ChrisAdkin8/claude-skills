@@ -153,7 +153,11 @@ class ReviewState(unittest.TestCase):
         self.commit("edit")
         new_doc = self.root / "docs" / "playbook.md"
         self.git("mv", str(self.doc), str(new_doc))
-        self.git("mv", str(self.record), str(self.root / "docs" / "records" / "playbook-record.md"))
+        self.git(
+            "mv",
+            str(self.record),
+            str(self.root / "docs" / "records" / "playbook-record.md"),
+        )
         self.commit("rename")
         got, out = state(new_doc)
         self.assertEqual(got["review-commit"], saved, out)
@@ -174,9 +178,12 @@ class ReviewState(unittest.TestCase):
         got, out = state(self.doc)
         self.assertEqual(got["headings"], "## Rollback", out)
 
-
     def test_cold_review_quoted_in_code_is_not_a_review(self):
-        self.write(self.doc, DOC + "\n```markdown\n## Cold review\n\nReviewed on 2026-01-01 by cold-reviewer.\n```\n")
+        self.write(
+            self.doc,
+            DOC
+            + "\n```markdown\n## Cold review\n\nReviewed on 2026-01-01 by cold-reviewer.\n```\n",
+        )
         got, out = state(self.doc)
         self.assertEqual(got["review"], "none", out)
         self.assertEqual(got["state"], "full", out)
@@ -185,7 +192,8 @@ class ReviewState(unittest.TestCase):
         self.repo_with_review()
         self.write(
             self.record,
-            REVIEW + "\n```bash\n# re-run the checker\n```\n\n### Delta review, 2026-09-21\n"
+            REVIEW
+            + "\n```bash\n# re-run the checker\n```\n\n### Delta review, 2026-09-21\n"
             "\n- Not reviewed: Rollback changed, on 2026-09-21.\n",
         )
         got, out = state(self.doc)
@@ -194,8 +202,11 @@ class ReviewState(unittest.TestCase):
 
     def test_cold_review_heading_in_any_case(self):
         self.repo_with_review()
-        self.write(self.record, REVIEW.replace("## Cold review", "## Cold Review")
-                   + "\n- Not reviewed: Rollback changed, on 2026-09-21.\n")
+        self.write(
+            self.record,
+            REVIEW.replace("## Cold review", "## Cold Review")
+            + "\n- Not reviewed: Rollback changed, on 2026-09-21.\n",
+        )
         got, out = state(self.doc)
         self.assertEqual(got["review"], "record", out)
         self.assertEqual(got["state"], "delta", out)
@@ -224,11 +235,13 @@ class ReviewState(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         clone = Path(tmp.name) / "clone"
         subprocess.run(
-            ["git", "clone", "-q", "--depth", "1", f"file://{self.root}", str(clone)], check=True
+            ["git", "clone", "-q", "--depth", "1", f"file://{self.root}", str(clone)],
+            check=True,
         )
         got, out = state(clone / "docs" / "runbook.md")
         self.assertEqual(got["review-commit"], "none", out)
         self.assertEqual(got["state"], "no-base", out)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -29,6 +29,8 @@ with open(os.environ["STUB_ARGV"] + ".model", "a") as f:
     f.write(os.environ.get("RUN_AGENT_MODEL", "<unset>") + "\\n")
 with open(os.environ["STUB_ARGV"] + ".implement", "a") as f:
     f.write(os.environ.get("IMPLEMENT_MAX_USD", "<unset>") + "\\n")
+with open(os.environ["STUB_ARGV"] + ".memory", "a") as f:
+    f.write(os.environ.get("CLAUDE_CODE_DISABLE_AUTO_MEMORY", "<unset>") + "\\n")
 # A skill that writes the eval note, leaves an agent run dir named after it, and changes another
 # file in ~/notes, as a skill eval's research case might.
 m = re.search(r"\\S*/eval-[^/\\s]*\\.md", sys.argv[-1])
@@ -63,7 +65,7 @@ class Runners(unittest.TestCase):
             "EVAL_OUT": str(self.tmp / "out"),
             "STUB_ARGV": str(self.tmp / "argv.jsonl"),
         }
-        for var in ("EVAL_MODEL", "RUN_AGENT_MODEL"):
+        for var in ("EVAL_MODEL", "RUN_AGENT_MODEL", "CLAUDE_CODE_DISABLE_AUTO_MEMORY"):
             self.env.pop(var, None)
 
     def run_script(self, script, *cases):
@@ -221,7 +223,9 @@ class Runners(unittest.TestCase):
 
     def test_agent_evals_settings_override(self):
         custom = self.tmp / "custom.json"
-        custom.write_text('{"sandbox": {"excludedCommands": ["${CLAUDE_PLUGIN_ROOT}/x *"]}}')
+        custom.write_text(
+            '{"sandbox": {"excludedCommands": ["${CLAUDE_PLUGIN_ROOT}/x *"]}}'
+        )
         self.agent_case("plain", "says yes\n")
         self.env["EVAL_SETTINGS"] = str(custom)
         self.run_script(AGENT_RUN)
@@ -262,9 +266,14 @@ class Runners(unittest.TestCase):
 
     def test_skill_eval_prompts_type_the_namespaced_skill(self):
         # The bare /spec also resolves, but not to this plugin alone while an old install is present.
-        for prompt in sorted((REPO / "tests" / "skill-evals" / "cases").glob("*/prompt.txt")):
+        for prompt in sorted(
+            (REPO / "tests" / "skill-evals" / "cases").glob("*/prompt.txt")
+        ):
             with self.subTest(case=prompt.parent.name):
-                self.assertRegex(prompt.read_text(), r"\A/claude-skills:(spec|research|idea|cold-review|implement) ")
+                self.assertRegex(
+                    prompt.read_text(),
+                    r"\A/claude-skills:(spec|research|idea|cold-review|implement) ",
+                )
 
     def test_skill_evals_pass_the_model_to_the_skill_and_its_agents(self):
         self.skill_case("good", passes=True)
@@ -305,6 +314,13 @@ class Runners(unittest.TestCase):
         (argv,) = self.argv()
         self.assertEqual(self.flag(argv, "--model"), "opus")
 
+    def test_agent_evals_turn_off_auto_memory(self):
+        # As run-agent.sh does, so an eval's agent sees what a skill's would.
+        self.agent_case("plain", "says yes\n")
+        self.run_script(AGENT_RUN)
+        memory = (self.tmp / "argv.jsonl.memory").read_text().splitlines()
+        self.assertEqual(memory, ["1"])
+
     def home(self):
         """A HOME of its own, with ~/notes a git repo, so no real ~/code or ~/notes is touched."""
         home = self.tmp.resolve() / "home"
@@ -330,7 +346,9 @@ class Runners(unittest.TestCase):
     def test_skill_evals_settings_file(self):
         self.skill_case("plain", passes=True)
         self.skill_case("agents", passes=True)
-        (self.cases / "agents" / "settings.txt").write_text("agent-case-settings.json\n")
+        (self.cases / "agents" / "settings.txt").write_text(
+            "agent-case-settings.json\n"
+        )
         self.run_script(SKILL_RUN)
         settings = sorted(self.flag(a, "--settings") for a in self.argv())
         self.assertNotEqual(settings[0], settings[1])
@@ -369,7 +387,9 @@ class Runners(unittest.TestCase):
         self.assertEqual((self.tmp / "out/good.note.md").read_text(), "a note")
         self.assertEqual(list((home / ".cache/agent-runs").iterdir()), [])
         self.assertTrue(
-            (self.tmp / "out/good.agent-runs" / note.stem / "researcher/reply.md").exists()
+            (
+                self.tmp / "out/good.agent-runs" / note.stem / "researcher/reply.md"
+            ).exists()
         )
 
     def test_skill_evals_keep_and_remove_implement_runs(self):

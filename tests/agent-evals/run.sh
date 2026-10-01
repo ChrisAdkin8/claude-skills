@@ -51,6 +51,8 @@ settings=${EVAL_SETTINGS-$repo/hooks/agent-sandbox.json}
 # Every runner renders ${CLAUDE_PLUGIN_ROOT} in the settings to this checkout (hooks/agent-settings.py).
 cases_dir=${EVAL_CASES:-$here/cases}
 mkdir -p "$out"
+# No auto memory, as in hooks/run-agent.sh, so the agents run as the skills run them.
+export CLAUDE_CODE_DISABLE_AUTO_MEMORY=1
 
 cases=("$@")
 if [ ${#cases[@]} -eq 0 ]; then

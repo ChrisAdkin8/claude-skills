@@ -35,8 +35,14 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "research" / "scripts"))
-from mdcheck import (  # noqa: E402  shared with the checkers
-    DELTA_REVIEW, NOT_REVIEWED, in_code, is_heading, record_path, section, strip_code,
+from mdcheck import (  # shared with the checkers
+    DELTA_REVIEW,
+    NOT_REVIEWED,
+    in_code,
+    is_heading,
+    record_path,
+    section,
+    strip_code,
 )
 
 DATE_LINE = re.compile(r"Reviewed on (\d{4}-\d{2}-\d{2}) by")
@@ -75,7 +81,10 @@ def oldest(root, commits):
     """The earliest of commits on one line of history."""
     first = None
     for commit in commits:
-        if first is None or git(root, "merge-base", "--is-ancestor", commit, first) is not None:
+        if (
+            first is None
+            or git(root, "merge-base", "--is-ancestor", commit, first) is not None
+        ):
             first = commit
     return first
 
@@ -83,12 +92,16 @@ def oldest(root, commits):
 def git_read_command():
     """git-read.py by the path this script finds it at (hooks/ beside skills/), quoted for the
     shell. It is the absolute spelling the skill's allowed-tools expand ${CLAUDE_PLUGIN_ROOT} to."""
-    return shlex.quote(str(Path(__file__).resolve().parents[3] / "hooks" / "git-read.py"))
+    return shlex.quote(
+        str(Path(__file__).resolve().parents[3] / "hooks" / "git-read.py")
+    )
 
 
 def path_at(root, commit, rel):
     """What `rel` was called at `commit`, if it has been renamed since."""
-    for line in (git(root, "diff", "-M", "--name-status", commit, "--") or "").splitlines():
+    for line in (
+        git(root, "diff", "-M", "--name-status", commit, "--") or ""
+    ).splitlines():
         status, *names = line.split("\t")
         if status.startswith("R") and len(names) == 2 and names[1] == rel:
             return names[0]
@@ -156,12 +169,28 @@ def main():
             hits = [
                 found.split()[-1]
                 for path in paths
-                if (found := git(root, "log", "--follow", "--format=%h", f"-S{needle}", "--", path))
+                if (
+                    found := git(
+                        root,
+                        "log",
+                        "--follow",
+                        "--format=%h",
+                        f"-S{needle}",
+                        "--",
+                        path,
+                    )
+                )
                 and found.strip()
             ]
             commit = oldest(root, hits)
-            shallow = (git(root, "rev-parse", "--is-shallow-repository") or "").strip() == "true"
-            if commit and shallow and git(root, "rev-parse", "--verify", "--quiet", f"{commit}^") is None:
+            shallow = (
+                git(root, "rev-parse", "--is-shallow-repository") or ""
+            ).strip() == "true"
+            if (
+                commit
+                and shallow
+                and git(root, "rev-parse", "--verify", "--quiet", f"{commit}^") is None
+            ):
                 # The clone's cut-off commit "adds" every line in it, so it isn't the review.
                 commit = None
             out["review-commit"] = commit or "none"
@@ -177,15 +206,19 @@ def main():
         if base:
             # Both names if the document was renamed since, so the diff pairs them up.
             names = list(dict.fromkeys([path_at(root, base, rel), rel]))
-            out["diff"] = git_read_command() + " " + shlex.join(
-                ["-C", str(root), "diff", "-M", base, "--", *names]
+            out["diff"] = (
+                git_read_command()
+                + " "
+                + shlex.join(["-C", str(root), "diff", "-M", base, "--", *names])
             )
             stat = (git(root, "diff", "-M", "--stat", base, "--", *names) or "").strip()
             out["changed"] = "yes" if stat else "no"
             if stat:
                 out["stat"] = stat.splitlines()[-1].strip()
                 hunks = git(root, "diff", "-M", "-U0", base, "--", *names) or ""
-                out["headings"] = "; ".join(headings_at(doc_lines, changed_lines(hunks)))
+                out["headings"] = "; ".join(
+                    headings_at(doc_lines, changed_lines(hunks))
+                )
 
     if where == "none":
         state = "full"

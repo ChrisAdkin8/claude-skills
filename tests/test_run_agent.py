@@ -21,7 +21,8 @@ import json, os, sys
 calls = os.environ["STUB_CALLS"]
 with open(calls, "a") as f:
     f.write(json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd(),
-                        "root": os.environ.get("CLAUDE_PLUGIN_ROOT")}) + "\\n")
+                        "root": os.environ.get("CLAUDE_PLUGIN_ROOT"),
+                        "memory": os.environ.get("CLAUDE_CODE_DISABLE_AUTO_MEMORY")}) + "\\n")
 n = sum(1 for _ in open(calls))
 tail = os.environ.get("STUB_TAIL", "| # | Kind |\\nCounts: 0 findings\\nCold read: yes")
 print(json.dumps({"session_id": "sess-1", "result": f"reply {n}\\n{tail}", "subtype": "success"}))
@@ -53,7 +54,9 @@ class RunAgent(unittest.TestCase):
             "STUB_CALLS": str(self.calls),
             "RUN_AGENT_LOG": str(self.tmp / "sessions.log"),
         }
-        self.env.pop("RUN_AGENT_MODEL", None)
+        # Unset here, so only the script can turn auto memory off.
+        for var in ("RUN_AGENT_MODEL", "CLAUDE_CODE_DISABLE_AUTO_MEMORY"):
+            self.env.pop(var, None)
         self.name = f"test-{uuid.uuid4().hex[:8]}"
         self.work = self.tmp / "work"
         self.work.mkdir()
@@ -129,6 +132,9 @@ class RunAgent(unittest.TestCase):
         }
         self.assertEqual(guard, f'python3 "{root}/hooks/agent-guard.py" bash')
         self.assertEqual(call["root"], str(root))
+        # No auto memory: the work dir's MEMORY.md would reach the agent with no tool call the
+        # guard could see.
+        self.assertEqual(call["memory"], "1")
         # The plugin root is readable: an agent reads the plugin's own files from it, and a
         # checkout outside ~/.claude is not covered by the $HOME/.claude entry.
         dirs = argv[argv.index("--add-dir") + 1 :]

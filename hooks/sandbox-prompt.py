@@ -15,6 +15,8 @@ HERE = Path(__file__).resolve().parent
 hosts = json.loads((HERE / "agent-sandbox.json").read_text())["sandbox"]["network"][
     "allowedDomains"
 ]
-listed = ", ".join(hosts[:-1]) + f" and {hosts[-1]}" if len(hosts) > 1 else "".join(hosts)
+listed = (
+    ", ".join(hosts[:-1]) + f" and {hosts[-1]}" if len(hosts) > 1 else "".join(hosts)
+)
 text = (HERE / "agent-sandbox.md").read_text().replace("{{HOSTS}}", listed)
 print(text.replace("${CLAUDE_PLUGIN_ROOT}", str(HERE.parent)), end="")

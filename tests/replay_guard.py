@@ -73,7 +73,11 @@ def headless_sessions():
     for f in RUNS.glob("*/*/session_id"):
         # The run dir is named for its agent, with a round suffix: research-verifier-2.
         agent = max(
-            (n for n in GUARDED if f.parent.name == n or f.parent.name.startswith(n + "-")),
+            (
+                n
+                for n in GUARDED
+                if f.parent.name == n or f.parent.name.startswith(n + "-")
+            ),
             key=len,
             default=None,
         )
@@ -81,7 +85,9 @@ def headless_sessions():
     found = {}
     for session, agent in ids.items():
         if agent in GUARDED:
-            for path in (Path.home() / ".claude" / "projects").glob(f"*/{session}.jsonl"):
+            for path in (Path.home() / ".claude" / "projects").glob(
+                f"*/{session}.jsonl"
+            ):
                 found[path] = agent
     return found
 
@@ -105,7 +111,9 @@ def session_results(path):
 # A run from the symlink install wrote a skill script by its link: ~, $HOME or the home path, then
 # .claude/skills or .claude/hooks. The plugin writes the same script under its root instead.
 OLD_INSTALL = re.compile(
-    r"(?:~|\$HOME|\$\{HOME\}|" + re.escape(str(Path.home())) + r")/\.claude/(skills|hooks)/"
+    r"(?:~|\$HOME|\$\{HOME\}|"
+    + re.escape(str(Path.home()))
+    + r")/\.claude/(skills|hooks)/"
 )
 
 
@@ -138,7 +146,10 @@ def with_root(guard, root):
     guard.OWN_ROOT = (
         root
         if root
-        and any(p in (guard.PLUGINS_HOME, guard.PLUGINS_HOME.resolve()) for p in Path(root).parents)
+        and any(
+            p in (guard.PLUGINS_HOME, guard.PLUGINS_HOME.resolve())
+            for p in Path(root).parents
+        )
         else None
     )
 
@@ -232,7 +243,9 @@ def recorded_bash(path):
             elif item.get("type") == "tool_result":
                 reply = item.get("content")
                 if isinstance(reply, list):
-                    reply = "".join(p.get("text", "") for p in reply if isinstance(p, dict))
+                    reply = "".join(
+                        p.get("text", "") for p in reply if isinstance(p, dict)
+                    )
                 # The hook's own error, not a file that quotes the phrase (agent-sandbox.md does).
                 if (
                     item.get("is_error")
@@ -278,7 +291,9 @@ def main():
     for f in files:
         for line in f.read_text(errors="replace").splitlines():
             try:
-                commands.extend((c, session_results(f)) for c in bash_commands(json.loads(line)))
+                commands.extend(
+                    (c, session_results(f)) for c in bash_commands(json.loads(line))
+                )
             except json.JSONDecodeError:
                 continue
     unique = list(dict.fromkeys(commands))
@@ -350,15 +365,21 @@ def main():
                 continue
             seen.add((command, blocked_then))
             root = guard_root(f)
-            now, reason = verdict(new, plugin_spelling(command, root), session_results(f), root)
+            now, reason = verdict(
+                new, plugin_spelling(command, root), session_results(f), root
+            )
             if (now == "blocked") != blocked_then:
-                changed.append((command, "blocked" if blocked_then else "allowed", now, reason))
+                changed.append(
+                    (command, "blocked" if blocked_then else "allowed", now, reason)
+                )
     print(
         f"\n{len(seen)} unique Bash commands from {len(headless)} headless runs, any date; "
         f"verdict changed since they ran: {len(changed)}"
     )
     for command, then, now, reason in changed:
-        print(f"  - {then} then, {now} now: {command[:140]!r}\n    {(reason or '')[:160]}")
+        print(
+            f"  - {then} then, {now} now: {command[:140]!r}\n    {(reason or '')[:160]}"
+        )
     if not unique and not unique_reads and not seen:
         print("\nSKIP: no recorded agent transcripts here, so nothing was checked")
         return 0

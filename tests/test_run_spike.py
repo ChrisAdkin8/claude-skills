@@ -20,7 +20,8 @@ STUB = """#!/usr/bin/env python3
 import json, os, sys
 with open(os.environ["STUB_CALLS"], "a") as f:
     f.write(json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd(),
-                        "uv": os.environ.get("UV_CACHE_DIR")}) + "\\n")
+                        "uv": os.environ.get("UV_CACHE_DIR"),
+                        "memory": os.environ.get("CLAUDE_CODE_DISABLE_AUTO_MEMORY")}) + "\\n")
 print(json.dumps({"result": "done"}))
 """
 
@@ -46,6 +47,8 @@ class RunSpike(unittest.TestCase):
             "PATH": f"{bin_dir}:{os.environ['PATH']}",
             "STUB_CALLS": str(self.calls),
         }
+        # Unset here, so only the script can turn auto memory off.
+        self.env.pop("CLAUDE_CODE_DISABLE_AUTO_MEMORY", None)
 
     def scratch(self, rel="repo/spec/S1", files=("brief.md", "settings.json")):
         path = self.root / rel
@@ -87,17 +90,22 @@ class RunSpike(unittest.TestCase):
         # The caps and containment the README promises: $2, 60 turns, no project settings,
         # writes only inside the scratch dir, no MCP servers.
         argv = call["argv"]
-        flag = lambda name: argv[argv.index(name) + 1]  # noqa: E731
+        flag = lambda name: argv[argv.index(name) + 1]
         self.assertEqual(flag("--max-budget-usd"), "2")
         self.assertEqual(flag("--max-turns"), "60")
         self.assertEqual(flag("--setting-sources"), "user")
-        self.assertEqual(flag("--allowedTools"), "Read Grep Glob Bash Write(./**) Edit(./**)")
+        self.assertEqual(
+            flag("--allowedTools"), "Read Grep Glob Bash Write(./**) Edit(./**)"
+        )
         self.assertIn("--strict-mcp-config", argv)
         self.assertIn("--no-session-persistence", argv)
         # The spiker prompt is found beside the script, not under ~/.claude (this HOME has none).
-        self.assertEqual(flag("--append-system-prompt-file"), str(SCRIPT.parents[1] / "spiker.md"))
+        self.assertEqual(
+            flag("--append-system-prompt-file"), str(SCRIPT.parents[1] / "spiker.md")
+        )
         self.assertTrue(SCRIPT.parents[1].joinpath("spiker.md").is_file())
         self.assertTrue(call["uv"].endswith("/.cache/spec-spikes/.uv-cache"))
+        self.assertEqual(call["memory"], "1")  # no auto memory, as in run-agent.sh
         self.assertIn("done", (self.root / "repo/spec/S1/run.json").read_text())
 
     def test_refuses_other_dirs(self):

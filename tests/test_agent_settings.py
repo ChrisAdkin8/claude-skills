@@ -12,7 +12,10 @@ REPO = Path(__file__).resolve().parents[1]
 RENDER = REPO / "hooks" / "agent-settings.py"
 FILES = {
     "agent-sandbox.json": REPO / "hooks" / "agent-sandbox.json",
-    "agent-case-settings.json": REPO / "tests" / "skill-evals" / "agent-case-settings.json",
+    "agent-case-settings.json": REPO
+    / "tests"
+    / "skill-evals"
+    / "agent-case-settings.json",
 }
 NET = ("repo-health.sh", "gcp-skus.sh", "reddit-search.sh")
 
@@ -51,7 +54,11 @@ class Renderer(unittest.TestCase):
         self.assertTrue(json.loads(out)["a"].startswith("/"))
 
     def test_any_other_variable_is_refused(self):
-        for text in ('{"a": "${HOME}/x"}', '{"a": "${CLAUDE_PLUGIN_DATA}"}', '{"a": "${}"}'):
+        for text in (
+            '{"a": "${HOME}/x"}',
+            '{"a": "${CLAUDE_PLUGIN_DATA}"}',
+            '{"a": "${}"}',
+        ):
             with self.subTest(text=text):
                 code, out, err = render(self.settings(text), "/r")
                 self.assertEqual(code, 2)
@@ -61,7 +68,9 @@ class Renderer(unittest.TestCase):
     def test_bad_input_is_refused(self):
         self.assertEqual(render(self.tmp / "missing.json", "/r")[0], 2)
         self.assertEqual(render(self.settings("not json"), "/r")[0], 2)
-        run = subprocess.run([sys.executable, str(RENDER)], capture_output=True, check=False)
+        run = subprocess.run(
+            [sys.executable, str(RENDER)], capture_output=True, check=False
+        )
         self.assertEqual(run.returncode, 2)
 
 
@@ -88,7 +97,9 @@ class RenderedSettings(unittest.TestCase):
         entries = case["sandbox"]["excludedCommands"]
         self.assertIn(f"{REPO}/hooks/run-agent.sh *", entries)
         base = json.loads(render(FILES["agent-sandbox.json"], REPO)[1])
-        self.assertNotIn(f"{REPO}/hooks/run-agent.sh *", base["sandbox"]["excludedCommands"])
+        self.assertNotIn(
+            f"{REPO}/hooks/run-agent.sh *", base["sandbox"]["excludedCommands"]
+        )
 
 
 if __name__ == "__main__":

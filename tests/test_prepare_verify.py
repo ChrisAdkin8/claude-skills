@@ -4,8 +4,10 @@ scratch export, and its launcher.
 prepare-verify.sh deletes and fills only a verification's own scratch directory under
 ~/.cache/implement-verify: the head in src/, diff.patch, and each work item's starting state in
 before/W<n>/, all as git stores them, whatever the repo's attributes say. run-verify.sh launches
-claude only there; a stub `claude` first on PATH records its arguments and prints a result, so
-nothing is sent to a model. Both run under a home of their own.
+claude only there, and refuses a reply.md, run.json or run.err the run left as a link or as
+anything but a plain file. A stub `claude` first on PATH records its arguments and prints a
+result, so nothing is sent to a model; it can also run a shell command in the scratch dir, as the
+verifier's Bash calls, and the code they run, would. Both scripts run under a home of their own.
 
 Run with: python3 -m unittest discover -s tests
 """
@@ -24,13 +26,16 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "skills" / "implement" / "script
 PREPARE = SCRIPTS / "prepare-verify.sh"
 RUN = SCRIPTS / "run-verify.sh"
 STUB = """#!/usr/bin/env python3
-import json, os, sys
+import json, os, subprocess, sys
 with open(os.environ["STUB_CALLS"], "a") as f:
     f.write(json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd(),
                         "uv": os.environ.get("UV_CACHE_DIR"),
                         "memory": os.environ.get("CLAUDE_CODE_DISABLE_AUTO_MEMORY")}) + "\\n")
+if os.environ.get("STUB_DOES"):
+    subprocess.run(["/bin/sh", "-c", os.environ["STUB_DOES"]], check=True)
 reply = os.environ.get("STUB_REPLY", "| W | Done when |\\nVerified: 1 of 1\\nImplementation holds: yes")
 print(json.dumps({"result": reply, "subtype": "success", "total_cost_usd": 0.01}))
+sys.exit(int(os.environ.get("STUB_EXIT", "0")))
 """
 
 
@@ -114,9 +119,10 @@ class Home(unittest.TestCase):
             self.env.pop(var, None)
 
     def run_script(self, script, *args, env=None):
+        # A timeout, so a script that opens a FIFO the run left fails the test, not hangs it.
         run = subprocess.run(
             [str(script), *map(str, args)], capture_output=True, text=True, check=False,
-            env=env or self.env,
+            env=env or self.env, timeout=60,
         )  # fmt: skip
         return run.returncode, run.stdout + run.stderr
 
@@ -397,18 +403,137 @@ class PrepareVerify(Home):
 
 
 class RunVerify(Home):
-    def make_scratch(self, files=("brief.md", "spec.md", "diff.patch")):
-        (self.scratch / "src").mkdir(parents=True, exist_ok=True)
+    def make_scratch(self, files=("brief.md", "spec.md", "diff.patch"), scratch=None):
+        scratch = scratch or self.scratch
+        (scratch / "src").mkdir(parents=True, exist_ok=True)
         for name in files:
-            (self.scratch / name).write_text(
-                "the brief\n" if name == "brief.md" else "x\n"
-            )
-        return self.scratch
+            (scratch / name).write_text("the brief\n" if name == "brief.md" else "x\n")
+        return scratch
 
     def calls_made(self):
         if not self.calls.exists():
             return []
         return [json.loads(line) for line in self.calls.read_text().splitlines()]
+
+    def verify_that_does(self, n, does, status=0, reply=None):
+        """Runs V<n>, a scratch dir of its own, whose stub verifier runs `does` there and exits
+        `status`. Returns the scratch dir, the exit code and the output."""
+        scratch = self.make_scratch(scratch=self.scratch.parent / f"V{n}")
+        env = {**self.env, "STUB_DOES": does, "STUB_EXIT": str(status)}
+        if reply is not None:
+            env["STUB_REPLY"] = reply
+        code, out = self.run_script(RUN, scratch, env=env)
+        return scratch, code, out
+
+    def secret(self):
+        """A file outside the scratch dir, for a run to link to."""
+        secret = self.tmp / "secret"
+        secret.write_text("a secret\n")
+        return secret
+
+    def test_keeps_claudes_status_and_the_files_the_run_wrote(self):
+        for n, status in enumerate((0, 1, 7), start=1):
+            with self.subTest(status=status):
+                scratch, code, out = self.verify_that_does(
+                    n, "echo notes > notes.md", status
+                )
+                self.assertEqual(code, status, out)
+                self.assertIn(
+                    "Implementation holds: yes", (scratch / "reply.md").read_text()
+                )
+                self.assertIn("total_cost_usd", (scratch / "run.json").read_text())
+
+    def test_refuses_and_removes_a_planted_link(self):
+        # The sandbox stops the verifier, and the code it runs, reading ~/.ssh, but not linking
+        # to it from the scratch dir. This script then writes reply.md, outside the sandbox, and
+        # /implement's session reads all three files.
+        secret = self.secret()
+        outside = self.tmp / "outside"
+        outside.mkdir()
+        s, o = shlex.quote(str(secret)), shlex.quote(str(outside))
+        cases = (
+            (["reply.md"], f"ln -s {s} reply.md"),
+            # claude's output still goes to the file the script opened, now unlinked.
+            (["run.json"], f"rm run.json && ln -s {s} run.json"),
+            (["run.err"], f"rm run.err && ln -s {s} run.err"),
+            (["reply.md"], "ln -s /nonexistent/key reply.md"),  # to nothing
+            (["reply.md"], f"ln -s {o} reply.md"),  # to a directory
+            (
+                ["reply.md", "run.err"],
+                f"ln -s {s} reply.md && rm run.err && ln -s {s} run.err",
+            ),
+        )
+        for n, (names, does) in enumerate(cases, start=1):
+            with self.subTest(does=does):
+                scratch, code, out = self.verify_that_does(n, does)
+                self.assertEqual(code, 4, out)
+                for name in names:
+                    self.assertFalse(os.path.lexists(scratch / name), name)
+                    self.assertIn(f"{name} was a symlink", out)
+                # The run chose the target, so it isn't repeated into /implement's session.
+                for target in (str(secret), str(outside), "/nonexistent"):
+                    self.assertNotIn(target, out)
+        self.assertEqual(secret.read_text(), "a secret\n")
+        self.assertEqual(list(outside.iterdir()), [])
+
+    def test_refuses_and_removes_what_isnt_a_regular_file(self):
+        # A directory can hold links of its own, and a FIFO stalls whoever opens it.
+        secret = self.secret()
+        cases = (
+            ("run.json", "rm run.json && mkdir run.json"),
+            (
+                "reply.md",
+                f"mkdir reply.md && ln -s {shlex.quote(str(secret))} reply.md/key",
+            ),
+            ("reply.md", "mkfifo reply.md"),
+            ("run.err", "rm run.err && mkfifo run.err"),
+        )
+        for n, (name, does) in enumerate(cases, start=1):
+            with self.subTest(does=does):
+                scratch, code, out = self.verify_that_does(n, does)
+                self.assertEqual(code, 4, out)
+                self.assertFalse(os.path.lexists(scratch / name), name)
+                self.assertIn(f"{name} was not a regular file", out)
+        self.assertEqual(secret.read_text(), "a secret\n")
+
+    def test_a_link_gives_4_whatever_claude_or_the_reply_says(self):
+        # On any other code /implement reads the files, so 4 comes before claude's status and 3.
+        does = f"ln -s {shlex.quote(str(self.secret()))} reply.md"
+        for n, (status, reply) in enumerate(
+            ((1, None), (0, "Request timed out")), start=1
+        ):
+            with self.subTest(status=status, reply=reply):
+                scratch, code, out = self.verify_that_does(n, does, status, reply)
+                self.assertEqual(code, 4, out)
+                self.assertFalse(os.path.lexists(scratch / "reply.md"))
+
+    @unittest.skipIf(os.geteuid() == 0, "root can remove it anyway")
+    def test_refuses_a_link_it_cant_remove(self):
+        # A run may take away its own scratch dir's write permission, so the link stays. Exit 4
+        # still tells /implement not to read it, and nothing writes through it.
+        secret = self.secret()
+        scratch = self.scratch
+        self.addCleanup(lambda: scratch.chmod(0o755))
+        _, code, out = self.verify_that_does(
+            1, f"ln -s {shlex.quote(str(secret))} reply.md && chmod a-w ."
+        )
+        self.assertEqual(code, 4, out)
+        self.assertIn("reply.md was a symlink", out)
+        self.assertIn("couldn't remove it", out)
+        self.assertEqual(secret.read_text(), "a secret\n")
+
+    def test_a_link_left_from_an_earlier_run_is_cleared_first(self):
+        # The script writes run.json and run.err through a shell redirect, which would follow a
+        # link that an earlier, refused run couldn't remove.
+        secret = self.secret()
+        scratch = self.make_scratch()
+        for name in ("reply.md", "run.json", "run.err"):
+            (scratch / name).symlink_to(secret)
+        code, out = self.run_script(RUN, scratch)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(secret.read_text(), "a secret\n")
+        for name in ("reply.md", "run.json", "run.err"):
+            self.assertFalse((scratch / name).is_symlink(), name)
 
     def test_refuses_a_path_outside_its_root_whether_or_not_it_exists(self):
         made = self.tmp / "x"

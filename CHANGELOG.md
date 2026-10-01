@@ -3,6 +3,15 @@
 What changed, by day, drawn from the commit history. The repo has no releases or tags, so each
 section is a date. Within a day, changes are grouped by area.
 
+## 2026-10-01
+
+### Added
+
+- `docs/anti-slop-practice.md`, a research note on stopping coding agents writing slop: what
+  Anthropic, OpenAI, GitHub, Cursor and practitioners such as Robert C. Martin advise, what has
+  evidence, and six ranked changes to `/implement` and the repo, first a re-run of `scan-diff.py`
+  after the clean-up commits. None is built in yet. The README and the repo guide link it.
+
 ## 2026-09-30
 
 ### Security

@@ -51,6 +51,7 @@ runs a copy in Claude Code's plugin cache, which an edit here doesn't reach.
 | Path | What it is |
 |---|---|
 | `docs/checker-models.md` | a test of six models as a cheaper first check on research claims, and why none is built in |
+| `docs/anti-slop-practice.md` | a research note: what AI coding vendors and practitioners advise against slop code, and six ranked changes to `/implement` and the repo that follow from it |
 | `docs/specs/` | the specs for changes to this repo; their records are in `docs/specs/records/`, spike results in `docs/specs/spikes/` |
 | `docs/workflow*.png`, `docs/social-preview.png` | the diagram and the repo's social preview, drawn by `docs/diagram/workflow.py` |
 | `docs/diagram/` | the script that draws them, and `render.mjs`, which turns its SVGs into PNGs |

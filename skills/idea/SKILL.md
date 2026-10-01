@@ -2,7 +2,7 @@
 name: idea
 description: Captures a new idea as a markdown note in ~/notes/ideas, from the idea template. Use when the user runs /idea, or asks to capture, save or jot down an idea for later.
 argument-hint: <short description of the idea>
-allowed-tools: Read(~/notes/**), Edit(~/notes/**), Bash(git rev-parse *), Bash(git -C ~/notes add *), Bash(git -C ~/notes commit *)
+allowed-tools: Read(~/notes/**), Edit(~/notes/ideas/*.md), Bash(git rev-parse *), Bash(git -C ~/notes add *), Bash(git -C ~/notes commit *)
 ---
 
 # Capture an idea

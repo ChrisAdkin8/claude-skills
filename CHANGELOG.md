@@ -70,6 +70,13 @@ Fixes from a full review of the repo on 2026-10-01, PRs #35 to #46.
 - The README names all five commands, gives `/implement`'s caps, and asks for Claude Code 2.1.277
   or later and repos under `~/code`. (#44)
 
+### Added
+
+- `docs/anti-slop-practice.md`, a research note on stopping coding agents writing slop: what
+  Anthropic, OpenAI, GitHub, Cursor and practitioners such as Robert C. Martin advise, what has
+  evidence, and six ranked changes to `/implement` and the repo, first a re-run of `scan-diff.py`
+  after the clean-up commits. None is built in yet. The README and the repo guide link it.
+
 ## 2026-09-30
 
 ### Security

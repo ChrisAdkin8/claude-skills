@@ -379,6 +379,10 @@ paid tests cost. [`CLAUDE.md`](CLAUDE.md) has the rules for making a change.
 [Could a cheaper model check claims first?](docs/checker-models.md) tests six models on the
 verifier's past work. Haiku did best, but we haven't built it in yet.
 
+[Anti-slop practice](docs/anti-slop-practice.md) gathers what AI coding vendors and practitioners
+advise against padded, out-of-scope agent code, and ranks six changes to `/implement` that follow
+from it. None is built in yet.
+
 ## Licence
 
 MIT, so copy what's useful into your own `~/.claude`. See [`LICENSE`](LICENSE).

@@ -1412,3 +1412,60 @@ three runs above, and Opus $5.05 and $3.69. $22.78 in all.
 - The 2026-09-30 section's conclusion that `/spec`'s `allowed-tools` was complete wasn't shown then,
   since those runs pre-approved every tool. This round's passes are the first that show it, for the
   paths these cases exercise.
+
+## One review parser: W5's eval round (2026-10-01)
+
+W5 of `docs/specs/2026-10-01-review-parser.md`, on `implement/2026-10-01-review-parser` at `feb52be`:
+`mdcheck.read_review()` for `review-state.py` and `check-spec.py`, one heading rule, and two lines
+in `/cold-review` step 2 (unlogged lines go under `## Changes since the review`; a `record-moved:`
+is relayed with a `git mv` for the user). Run by hand from the worktree, `EVAL_MODEL=sonnet` and
+`opus`, one set at a time. The four skill-eval cases that failed outside the spec's accepted list
+were rerun once on the model they failed on, on 2026-10-02, and all passed.
+
+Agent evals:
+
+| Case | Sonnet | Opus |
+|---|---|---|
+| absence-claim | PASS (10, $0.21) | PASS (12, $0.30) |
+| cold-review-skip | PASS (5, $0.10) | PASS (7, $0.27) |
+| delta-review | FAIL (7, $0.12): the decoy-row check | PASS (7, $0.26) |
+| delta-review-record | FAIL (6, $0.11): the decoy-row check | PASS (10, $0.28) |
+| guard-applies | SKIP (opus only) | PASS (2, $0.10) |
+| record-skip | PASS (5, $0.10) | PASS (8, $0.26) |
+| research-ideas | PASS (28, $0.79) | PASS (42, $1.90) |
+| research-quick | PASS (9, $0.19) | PASS (10, $0.33) |
+| spec-miscite | PASS (7, $0.11) | PASS (7, $0.27) |
+| spike-inherited | PASS (6, $0.07) | PASS (6, $0.25) |
+| wrong-figure | PASS (6, $0.11) | PASS (7, $0.23) |
+
+Skill evals, with the agents a case launches; "rerun" is the 2026-10-02 run of that case:
+
+| Case | Sonnet | Opus |
+|---|---|---|
+| cold-review-delta | PASS (5, $0.14) | FAIL (6, $0.29): see below; rerun PASS (6, $0.28) |
+| implement-basic | FAIL (36, $0.37); implementer and verifier $0.56: a refused `find` of the run files; rerun PASS (38, $0.40); agents $0.64 | FAIL (36, $0.59); agents $1.12: a refused `skills/implement/scripts/run-cost.py`, which doesn't exist; rerun PASS (36, $0.59); agents $1.12 |
+| implement-trap | PASS (18, $0.21); implementer $0.23 | PASS (22, $0.41); implementer $0.33 |
+| research-quick-flow | PASS (20, $0.28); researcher and verifier $0.35 | PASS (24, $0.50); researcher and verifier $0.79 |
+| spec-done | PASS (13, $0.18) | PASS (12, $0.35) |
+| spec-done-branch | PASS (8, $0.15) | FAIL (8, $0.28): the grader missed a right reply; rerun PASS (7, $0.27) |
+| spec-done-implement | PASS (15, $0.21) | PASS (12, $0.35) |
+| spec-quick | PASS (19, $0.26); spec-verifier $0.05 | PASS (22, $0.47); spec-verifier $0.10 |
+
+Totals, agents included: agent evals Sonnet $1.91 (8 of 10) and Opus $4.46 (11 of 11); skill evals
+Sonnet $2.99 (7 of 8) and Opus $5.57 (5 of 8); reruns $3.29, plus $0.12 for two runs interrupted by
+hand that graded nothing. $18.34 in all.
+
+- **W5's Done when holds.** After the reruns, the only failures are the two the spec accepts: Sonnet
+  `delta-review` and `delta-review-record` on the decoy-row check (`!(?im)^\|[^\n]*\b2,?000\b`),
+  as in most sections since 2026-09-29.
+- **Opus `cold-review-delta` failed once, not on the changed paths.** The case asks for `prompt`
+  mode. Opus handed the prompt over, then sent a second message correcting its own table header
+  ("What would substitute it"), and the grader reads only the final message. W5's lines cover the
+  `unlogged` and `record-moved:` states, which a delta case doesn't reach, and `review-state.py`
+  gave the expected base on Sonnet (`created`) and on the Opus rerun.
+- **Opus `spec-done-branch` failed its wording check once** on a reply that did say to stop and run
+  `/spec done` from the `implement/2026-09-20-rounding` worktree. The rerun passed.
+- **`implement-basic` was refused an improvised command once on each model**: a `find` of the run
+  files on Sonnet (the spec accepted that only on Opus), and on Opus a `run-cost.py` that no skill
+  names. Both reruns passed. Both are the same class as the 2026-10-01 Wave 1 failures, which the
+  spend ledger planned for the implementer (stream S2) replaces.

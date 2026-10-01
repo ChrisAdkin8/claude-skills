@@ -199,6 +199,8 @@ class SpikeResultSecrets(unittest.TestCase):
 DELTA = """
 ### Delta review, 2026-09-16
 
+Reviewed on 2026-09-16 by cold-reviewer: the changes logged as Not reviewed. Saved unchanged.
+
 | # | Kind | Where | Finding | Affects | Evidence | What would settle it |
 |---|---|---|---|---|---|---|
 """
@@ -969,3 +971,81 @@ class CitationLoopholes(unittest.TestCase):
         out, result = self.check("See cr.txt:5.")
         self.assertEqual(result, "RESULT: FAIL", out)
         self.assertIn("cr.txt:5: the file had only 1 lines", out)
+
+
+class OneReviewParser(unittest.TestCase):
+    """check-spec.py reads the saved review through mdcheck.read_review, as review-state.py does:
+    by the lines /cold-review writes around the reviewer's reply, never by text inside it."""
+
+    def setUp(self):
+        self.base = FIXTURE.read_text()
+        self.reviewed = self.base.replace("status: draft", "status: reviewed")
+
+    def test_delta_heading_without_its_reviewed_line_still_fails(self):
+        text = self.reviewed.replace(
+            "- Nothing is open.",
+            "- Nothing is open.\n- Not reviewed: W1 now does something, on 2026-09-16.",
+        )
+        bare = "\n### Delta review, 2026-09-16\n\n| # | Kind |\n|---|---|\n"
+        out, result = check(with_review(text, REVIEW + bare))
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertRegex(
+            out, r"FAIL: 1 changes .*no delta review, but the spec is reviewed"
+        )
+
+    def test_not_reviewed_line_quoted_in_the_reply_does_not_count(self):
+        record = (
+            RECORD + "| 2 | GAP | W1 | log it as `- Not reviewed: W1` | x | y | z |\n"
+        )
+        record += "\n- Not reviewed: W1, as the reviewer wrote it.\n"
+        out, result = check(self.reviewed, record=record)
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertNotIn("Not reviewed:'", out)
+
+    def test_findings_heading_in_an_inline_reply_is_still_the_reply(self):
+        review = (
+            "## Cold review\n\nReviewed on 2026-09-15 by spec-reviewer.\n\n## Findings\n\n"
+            "The template is at skills/spec/record-template.md:999.\n"
+        )
+        out, result = check(with_review(self.base, review))
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertNotIn("999", out)
+
+    def test_inline_review_is_split_off_when_the_record_has_one_too(self):
+        out, result = check(with_review(self.base), record=RECORD)
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertNotIn("does-not-exist", out)
+        self.assertIn(
+            "review history kept in the spec: the '## Cold review' section", out
+        )
+
+    def test_record_template_placeholder_fails_unless_quoted_in_the_reply(self):
+        left = (
+            RECORD
+            + "\n## Changes since the review\n\n- Not reviewed: {{what changed}}.\n"
+        )
+        out, result = check(self.base, record=left)
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertRegex(out, r"FAIL: its record spec-record.md .*\{\{what changed\}\}")
+        quoted = RECORD + "| 2 | GAP | W1 | {{what changed}} is left in | x | y | z |\n"
+        out, result = check(self.base, record=quoted)
+        self.assertEqual(result, "RESULT: PASS", out)
+
+    def test_record_under_an_earlier_name_warns(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            git = ["git", "-C", tmp, "-c", "user.name=t", "-c", "user.email=t@t"]
+            subprocess.run(["git", "init", "-q", tmp], check=True)
+            (repo / "records").mkdir()
+            (repo / "old.md").write_text(self.base)
+            (repo / "records" / "old-record.md").write_text(RECORD)
+            subprocess.run([*git, "add", "."], check=True)
+            subprocess.run([*git, "commit", "-qm", "spec"], check=True)
+            subprocess.run([*git, "mv", "old.md", "new.md"], check=True)
+            run = subprocess.run(
+                [sys.executable, str(CHECKER), str(repo / "new.md"), "--repo", str(ROOT)],
+                capture_output=True, text=True, check=False,
+            )  # fmt: skip
+        self.assertIn("RESULT: PASS", run.stdout)
+        self.assertRegex(run.stdout, r"WARN: its record is still under .*old-record.md")
+        self.assertIn("git mv", run.stdout)

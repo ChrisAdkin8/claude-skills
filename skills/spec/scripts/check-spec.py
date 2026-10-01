@@ -23,7 +23,11 @@ beside it: the cold review and any delta review, the `Not reviewed:` changes sin
 rounds, spike routing and implementation notes. The plan is held to the word limit until the spec
 is done. Older specs that keep that history in the spec itself (a `## Cold review` section, `Not
 reviewed:` lines in Open questions, Route/Changes/Expect/Box lines under spike questions) are
-still read, with a WARN to move it to the record.
+still read, with a WARN to move it to the record. The review, its delta and the `Not reviewed:`
+lines are read by mdcheck.read_review, the parser review-state.py uses, so the two agree and the
+reviewer's reply can't steer either. A record left under the spec's earlier name (a committed or
+staged `git mv` of the spec alone) is used, with a WARN to move it, and a record-template
+placeholder left in the record outside the review FAILs.
 
 Checks only what can be checked mechanically: that every citation points at a file and at lines
 that existed, whether cited files have changed since, work items and acceptance criteria, that no code block is
@@ -36,6 +40,7 @@ line says what the spec claims is the spec-verifier agent's job.
 import argparse
 import collections
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -44,16 +49,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "research" / "scrip
 import mdcheck  # shared with check-note.py
 from mdcheck import (
     CITE,
-    DELTA_REVIEW,
     INLINE_CODE,
-    NOT_REVIEWED,
     SEPARATOR,
     count_words,
+    earlier_paths,
     frontmatter,
     has_account_id,
-    in_code,
     is_heading,
     line_count,
+    read_review,
+    record_for,
     record_path,
     secrets_in,
     section,
@@ -147,34 +152,20 @@ def git(repo, *args, strip=True):
 
 
 def split_cold_review(lines, warns):
-    """Split off a saved '## Cold review' section. It records the reviewer's reply unchanged, so
-    it's left out of the word count and the citation, link and template checks, which the
-    author couldn't fix without editing the reviewer's words. The secrets check still reads it."""
-    code = in_code(lines)  # a `## Cold review` quoted in a code block isn't the section
-    at = next(
-        (
-            i
-            for i, line in enumerate(lines)
-            if not code[i] and line.lower().startswith("## cold review")
-        ),
-        None,
-    )
-    if at is None:
+    """Split off a spec's saved '## Cold review' section, as mdcheck.read_review places it. It
+    records the reviewer's reply unchanged, so it's left out of the word count and the citation,
+    link and template checks, which the author couldn't fix without editing the reviewer's
+    words. The secrets check still reads it. Read from the spec alone: a review in the record
+    as well doesn't make the spec's own copy part of the plan."""
+    review = read_review(lines, [])
+    if review.where != "document":
         return lines, []
-    end = next(
-        (
-            j
-            for j in range(at + 1, len(lines))
-            if not code[j] and lines[j].startswith("## ")
-        ),
-        len(lines),
-    )
-    if end < len(lines):
+    if review.misplaced:
         warns.append(
             "'## Cold review' isn't the spec's last section; it records the reviewer's reply, "
             "so it goes at the end"
         )
-    return lines[:at] + lines[end:], lines[at:end]
+    return lines[: review.start] + lines[review.end :], lines[review.start : review.end]
 
 
 def body_status(body):
@@ -198,17 +189,25 @@ def body_status(body):
 
 
 def read_record(path):
-    """(lines, cold review lines, Not reviewed lines, implementation entries) of a record, or
-    empty values if there isn't one."""
-    if not path.is_file():
-        return [], [], [], []
+    """(lines, implementation entries) of a record, or empty values if there isn't one. Its
+    review and `Not reviewed:` lines come from mdcheck.read_review."""
+    if not path or not path.is_file():
+        return [], []
     lines = path.read_text(errors="replace").splitlines()
-    review = section(lines, "## Cold review") or []
-    changes = [l for l in lines if NOT_REVIEWED.match(l)]
     implemented = [
         l for l in section(lines, IMPLEMENTATION) or [] if re.match(r"\s*[-*]\s+\S", l)
     ]
-    return lines, review, changes, implemented
+    return lines, implemented
+
+
+def earlier_names(spec):
+    """The spec's earlier paths in its own git repo, committed or staged moves, newest first."""
+    top = git(spec.parent, "rev-parse", "--show-toplevel")
+    if not top:
+        return []
+    root = Path(top)
+    rel = spec.relative_to(root).as_posix()
+    return [root / p for p in earlier_paths(lambda *a: git(root, *a), rel)]
 
 
 def template_prompts():
@@ -509,10 +508,21 @@ def main():
         print("RESULT: FAIL")
         return 1
     fails, warns, infos = [], [], []
+    found = record_for(spec, earlier_names(spec))
+    record = found or record_path(spec)
+    record_lines, implemented = read_record(found)
+    parsed = read_review(lines, record_lines)
     lines, legacy_review = split_cold_review(lines, warns)
-    record = record_path(spec)
-    record_lines, record_review, record_changes, implemented = read_record(record)
-    review = legacy_review + record_review
+    review = parsed.where is not None
+    if found and found != record_path(spec):
+        warns.append(
+            f"its record is still under the spec's earlier name, {found}: move it with "
+            f"`git mv {shlex.quote(str(found))} {shlex.quote(str(record_path(spec)))}`"
+        )
+    for line_no, token in parsed.placeholders:
+        fails.append(
+            f"its record {record.name} still has the record template's {token} on line {line_no}"
+        )
     fields, start = frontmatter(lines)
     if (open_at := unclosed_fence(lines[start:])) is not None:
         # Everything after it would read as code, so no check would see it.
@@ -770,9 +780,10 @@ def main():
     # Changes folded in after the cold review are logged in Open questions as `Not reviewed:`
     # lines. One delta review, of just those changes, is allowed before implementation.
     open_questions = section(body, "## Open questions") or []
-    legacy_changes = [l for l in open_questions if NOT_REVIEWED.match(l)]
-    unreviewed = legacy_changes + record_changes
-    delta = any(DELTA_REVIEW.match(l) for l in strip_code(review))
+    unreviewed = parsed.not_reviewed
+    legacy_changes = [n for n in unreviewed if n[0].startswith("document ")]
+    record_changes = [n for n in unreviewed if n[0].startswith("record ")]
+    delta = parsed.delta_date is not None
     residue = []
     if legacy_review:
         residue.append("the '## Cold review' section")

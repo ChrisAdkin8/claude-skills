@@ -84,6 +84,23 @@ class Headings(unittest.TestCase):
         self.assertEqual(mdcheck.section(lines, "## A"), ["a", "### A1", "a1"])
         self.assertIsNone(mdcheck.section(lines, "## C"))
 
+    def test_section_needs_the_whole_heading(self):
+        """`## Cold review of any document` (README.md) isn't a saved cold review."""
+        self.assertIsNone(
+            mdcheck.section(["## Cold review of any document", "x"], "## Cold review")
+        )
+        for line in ("## Cold Review", "## Cold review:", "## Cold review, 2026-09-01"):
+            with self.subTest(line=line):
+                self.assertEqual(mdcheck.section([line, "x"], "## Cold review"), ["x"])
+
+    def test_heading_is(self):
+        self.assertTrue(mdcheck.heading_is("  ## Sources  ", "## Sources"))
+        self.assertTrue(
+            mdcheck.heading_is("### Delta review, 2026-09-27", "### Delta review")
+        )
+        self.assertFalse(mdcheck.heading_is("## Sources and notes", "## Sources"))
+        self.assertFalse(mdcheck.heading_is("## Sourcesx", "## Sources"))
+
 
 class Frontmatter(unittest.TestCase):
     def fields(self, *body):
@@ -178,6 +195,174 @@ class Loopholes(unittest.TestCase):
         self.assertEqual(
             mdcheck.frontmatter(["\ufeff---", "title: x", "---"])[0], {"title": "x"}
         )
+
+
+TABLE = ["| # | Kind |", "|---|---|", "| 1 | GAP |"]
+REVIEW = ["## Cold review", "", "Reviewed on 2026-09-20 by cold-reviewer.", "", *TABLE]
+DELTA = [
+    "### Delta review, 2026-09-22",
+    "",
+    "Reviewed on 2026-09-22 by cold-reviewer: the changes logged as Not reviewed.",
+    "",
+    *TABLE,
+]
+CHANGES = [
+    "## Changes since the review",
+    "",
+    "- Not reviewed: W1 changed, on 2026-09-21.",
+]
+
+
+def record(*sections):
+    return ["# Record: x", "", "## Verification", "", "- verified"] + [
+        line for part in sections for line in ["", *part]
+    ]
+
+
+class ReadReview(unittest.TestCase):
+    """read_review(): the one reading of a saved cold review that review-state.py and
+    check-spec.py share. It finds the review by the lines /cold-review writes around the
+    reviewer's reply, never by text inside it."""
+
+    def test_record_review_with_delta(self):
+        rec = record(REVIEW, DELTA, CHANGES)
+        got = mdcheck.read_review([], rec)
+        self.assertEqual(got.where, "record")
+        self.assertEqual((got.date, got.delta_date), ("2026-09-20", "2026-09-22"))
+        self.assertEqual(rec[got.start], "## Cold review")
+        self.assertEqual(rec[got.end], "## Changes since the review")
+        self.assertEqual(
+            got.not_reviewed,
+            [("record ## Changes since the review", len(rec), CHANGES[2])],
+        )
+        self.assertEqual(got.placeholders, [])
+
+    def test_delta_without_its_reviewed_line_is_no_delta(self):
+        delta = [DELTA[0], "", *TABLE]
+        got = mdcheck.read_review([], record(REVIEW, delta, CHANGES))
+        self.assertEqual(got.where, "record")
+        self.assertIsNone(got.delta_date)
+
+    def test_findings_heading_in_the_reply_does_not_end_the_review(self):
+        reply = [*REVIEW, "", "## Findings", "", "More of the reply."]
+        rec = record(reply, DELTA, CHANGES)
+        got = mdcheck.read_review([], rec)
+        self.assertEqual(got.delta_date, "2026-09-22")
+        self.assertEqual(rec[got.end], "## Changes since the review")
+
+    def test_not_reviewed_line_in_the_reply_is_not_counted(self):
+        reply = [*REVIEW, "", "- Not reviewed: quoted by the reviewer."]
+        got = mdcheck.read_review([], record(reply))
+        self.assertEqual(got.where, "record")
+        self.assertEqual(got.not_reviewed, [])
+
+    def test_guard_diff_review_is_neither_a_delta_nor_part_of_one(self):
+        guard = [
+            "### Guard diff review, 2026-09-30",
+            "",
+            "Reviewed on 2026-09-30 by cold-reviewer: the guard's diff.",
+        ]
+        got = mdcheck.read_review([], record(REVIEW, guard, CHANGES))
+        self.assertIsNone(got.delta_date)
+        late = [
+            "### Delta review, 2026-09-22",
+            "",
+            *TABLE,
+            "",
+            *guard,
+        ]  # the guard review's Reviewed on line isn't the delta's
+        self.assertIsNone(mdcheck.read_review([], record(REVIEW, late)).delta_date)
+        got = mdcheck.read_review([], record(REVIEW, DELTA, guard, CHANGES))
+        self.assertEqual(got.delta_date, "2026-09-22")
+
+    def test_reviewed_on_line_not_first_does_not_date_the_review(self):
+        reply = ["## Cold review", "", *TABLE, "", "Reviewed on 2026-09-20 by someone."]
+        got = mdcheck.read_review([], record(reply))
+        self.assertIsNone(got.where)
+        self.assertIsNone(got.date)
+
+    def test_unfilled_record_template_is_no_review_and_lists_placeholders(self):
+        template = (
+            Path(__file__).resolve().parents[1]
+            / "skills"
+            / "spec"
+            / "record-template.md"
+        )
+        got = mdcheck.read_review([], template.read_text().splitlines())
+        self.assertIsNone(got.where)
+        tokens = {token for _, token in got.placeholders}
+        self.assertIn("{{YYYY-MM-DD}}", tokens)
+        self.assertIn("{{spec title}}", tokens)
+        self.assertEqual(got.placeholders[0], (1, "{{spec title}}"))
+
+    def test_open_questions_lines_count_when_a_record_exists(self):
+        doc = ["# Spec", "", "## Open questions", "", "- Not reviewed: W2 changed."]
+        got = mdcheck.read_review(doc, record(["## Verification", "", "- ok"]))
+        self.assertEqual(got.not_reviewed, [("document ## Open questions", 5, doc[4])])
+
+    def test_changes_after_the_delta_and_spikes_are_counted(self):
+        after = ["## Changes after the delta review", "", "- Not reviewed: later."]
+        spikes = ["## Spikes", "", "- Not reviewed: from spike S1."]
+        other = ["## Implementation", "", "- Not reviewed: not a fold."]
+        got = mdcheck.read_review([], record(REVIEW, DELTA, after, spikes, other))
+        self.assertEqual(
+            [source for source, _, _ in got.not_reviewed],
+            ["record ## Changes after the delta review", "record ## Spikes"],
+        )
+
+    def test_spec_template_heading_ends_an_inline_review(self):
+        doc = ["# Spec", "", "## Goal", "", "x", "", *REVIEW, "", "## Findings", "",
+               "## Open questions", "", "- None.", "", "## Effort"]  # fmt: skip
+        got = mdcheck.read_review(doc, [])
+        self.assertEqual(got.where, "document")
+        self.assertEqual(doc[got.end], "## Open questions")
+        self.assertEqual(got.misplaced, ["## Open questions", "## Effort"])
+        self.assertEqual(mdcheck.read_review(doc[:13], []).misplaced, [])
+        self.assertEqual(mdcheck.read_review(doc[:-1], []).end, len(doc) - 5)
+
+    def test_inline_review_without_a_template_heading_runs_to_the_end(self):
+        doc = ["# Spec", "", "## Goal", "", *REVIEW, "", "## Findings", "", "x"]
+        got = mdcheck.read_review(doc, [])
+        self.assertEqual(
+            (got.where, got.end, got.misplaced), ("document", len(doc), [])
+        )
+
+    def test_quoted_placeholder_is_not_one(self):
+        reply = [*REVIEW, "", "| 2 | WRONG | {{YYYY-MM-DD}} is left in |"]
+        fold = ["## Changes since the review", "", "- Not reviewed: `{{N}}` filled in."]
+        code = ["## Spikes", "", "```", "{{N}}", "```"]
+        got = mdcheck.read_review([], record(reply, fold, code))
+        self.assertEqual(got.placeholders, [])
+        rec = record(reply, ["## Spikes", "", "- Question {{n}}: Route: spike."])
+        self.assertEqual(
+            mdcheck.read_review([], rec).placeholders, [(len(rec), "{{n}}")]
+        )
+
+    def test_record_tried_first(self):
+        doc = ["# Spec", "", *REVIEW]
+        self.assertEqual(mdcheck.read_review(doc, record(REVIEW)).where, "record")
+        self.assertEqual(mdcheck.read_review(doc, record()).where, "document")
+        self.assertIsNone(mdcheck.read_review(["# Spec"], None).where)
+
+
+class RecordFor(unittest.TestCase):
+    def test_finds_a_record_under_an_earlier_name(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            specs = Path(tmp)
+            (specs / "records").mkdir()
+            doc = specs / "new.md"
+            self.assertIsNone(mdcheck.record_for(doc, [specs / "old.md"]))
+            old_record = specs / "records" / "old-record.md"
+            old_record.write_text("# Record\n")
+            self.assertEqual(
+                mdcheck.record_for(doc, [specs / "older.md", specs / "old.md"]),
+                old_record,
+            )
+            new_record = specs / "records" / "new-record.md"
+            new_record.write_text("# Record\n")
+            self.assertEqual(mdcheck.record_for(doc, [specs / "old.md"]), new_record)
 
 
 if __name__ == "__main__":

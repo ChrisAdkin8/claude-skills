@@ -47,9 +47,13 @@ reviewer runs, and in the final report. When it returns, carry on from the first
      `diff:` exactly as printed; the prompt gives it starting with `git` (step 4). If `headings:`
      names parts no logged line covers, say so in one line and offer to log them.
    - `unlogged`: say so, show `stat:` and `headings:`, and draft one `Not reviewed:` line per
-     change; once the user confirms them, add them to the record and do the delta review.
+     change; once the user confirms them, add them to the record under
+     `## Changes since the review` (lines anywhere else don't count), and do the delta review.
    - `unchanged` (say its `review-date:`), `no-base` (no commit to diff from) or `done` (name any
      `logged:` lines left): say so, and stop.
+   - If it printed `record-moved:`, the record is still under the document's old name: say so,
+     and give the user the command to run: `git mv <that path> <dir>/records/<name>-record.md`,
+     with the document's folder and basename.
 3. **Its repo**: `repo:` and `head:` from the script. If `${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py -C <repo>
    status --porcelain` shows the document or its code uncommitted, say so in one line.
 4. **Who wrote it.** If this session wrote or edited it, say so in one line and offer `prompt`

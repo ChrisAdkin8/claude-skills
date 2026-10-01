@@ -110,7 +110,8 @@ class ReviewState(unittest.TestCase):
         self.repo_with_review()
         self.write(
             self.record,
-            REVIEW + "\n### Delta review, 2026-09-22\n\nReviewed on 2026-09-22.\n",
+            REVIEW
+            + "\n### Delta review, 2026-09-22\n\nReviewed on 2026-09-22 by cold-reviewer.\n",
         )
         got, out = state(self.doc)
         self.assertEqual(got["state"], "done", out)
@@ -194,6 +195,8 @@ class ReviewState(unittest.TestCase):
             self.record,
             REVIEW
             + "\n```bash\n# re-run the checker\n```\n\n### Delta review, 2026-09-21\n"
+            "\nReviewed on 2026-09-21 by cold-reviewer.\n"
+            "\n## Changes since the review\n"
             "\n- Not reviewed: Rollback changed, on 2026-09-21.\n",
         )
         got, out = state(self.doc)
@@ -205,7 +208,8 @@ class ReviewState(unittest.TestCase):
         self.write(
             self.record,
             REVIEW.replace("## Cold review", "## Cold Review")
-            + "\n- Not reviewed: Rollback changed, on 2026-09-21.\n",
+            + "\n## Changes since the review\n"
+            "\n- Not reviewed: Rollback changed, on 2026-09-21.\n",
         )
         got, out = state(self.doc)
         self.assertEqual(got["review"], "record", out)
@@ -226,6 +230,100 @@ class ReviewState(unittest.TestCase):
         )
         self.assertEqual(run.returncode, 0, run.stderr)
         self.assertIn("+More.", run.stdout)
+
+    # The saved reply, and the lines /cold-review writes around it (the 2026-10-01 review parser).
+
+    def test_legacy_deadlock_open_questions_count_once_a_record_exists(self):
+        subprocess.run(["git", "init", "-q", str(self.root)], check=True)
+        self.write(
+            self.doc,
+            "# Spec\n\n## Goal\n\nx\n\n## Open questions\n\n"
+            "- Not reviewed: W1 changed, on 2026-09-21.\n\n" + REVIEW.split("\n", 2)[2],
+        )
+        self.write(self.record, "# Record: Spec\n\n## Verification\n\n- verified\n")
+        self.commit("spec")
+        got, out = state(self.doc)
+        self.assertEqual(got["review"], "document", out)
+        self.assertEqual(got["not-reviewed"], "1", out)
+        self.assertEqual(got["state"], "delta", out)
+
+    def test_delta_heading_without_its_reviewed_line_is_no_delta(self):
+        self.repo_with_review()
+        self.write(
+            self.record,
+            REVIEW + "\n### Delta review, 2026-09-22\n\n| # | Kind |\n|---|---|\n"
+            "\n## Changes since the review\n\n- Not reviewed: Rollback, on 2026-09-21.\n",
+        )
+        got, out = state(self.doc)
+        self.assertEqual(got["delta-review"], "no", out)
+        self.assertEqual(got["state"], "delta", out)
+
+    def test_findings_heading_in_the_reply_does_not_end_the_review(self):
+        self.repo_with_review()
+        self.write(
+            self.record,
+            REVIEW + "\n## Findings\n\nMore of the reply.\n"
+            "\n### Delta review, 2026-09-22\n\nReviewed on 2026-09-22 by cold-reviewer.\n"
+            "\n## Changes since the review\n\n- Not reviewed: Rollback, on 2026-09-21.\n",
+        )
+        got, out = state(self.doc)
+        self.assertEqual(got["delta-review"], "yes", out)
+        self.assertEqual(got["state"], "done", out)
+
+    def test_not_reviewed_line_quoted_in_the_reply_is_not_counted(self):
+        self.repo_with_review()
+        self.write(
+            self.record,
+            REVIEW + "| 1 | says `- Not reviewed: x` |\n\n- Not reviewed: x\n",
+        )
+        self.commit("reply")
+        got, out = state(self.doc)
+        self.assertEqual(got["not-reviewed"], "0", out)
+        self.assertEqual(got["state"], "unchanged", out)
+
+    def test_reviewed_on_line_must_come_first(self):
+        self.repo_with_review()
+        self.write(
+            self.record,
+            "# Record: Runbook\n\n## Cold review\n\n| # | Kind |\n|---|---|\n"
+            "| 1 | Reviewed on 2026-09-20 by cold-reviewer. |\n",
+        )
+        got, out = state(self.doc)
+        self.assertEqual(got["review"], "none", out)
+        self.assertEqual(got["state"], "full", out)
+
+    def moved_without_record(self, *, commit):
+        """The runbook `git mv`'d to playbook.md with its record left behind."""
+        _, saved = self.repo_with_review()
+        before, _ = state(self.doc)
+        new_doc = self.root / "docs" / "playbook.md"
+        self.git("mv", str(self.doc), str(new_doc))
+        if commit:
+            self.commit("move")
+        got, out = state(new_doc)
+        self.assertEqual(got["record-moved"], str(self.record.resolve()), out)
+        self.assertEqual(got["record"], str(self.record.resolve()), out)
+        self.assertEqual(got["review"], "record", out)
+        self.assertEqual(got["review-commit"], before["review-commit"], out)
+        self.assertEqual(got["review-commit"], saved, out)
+        self.assertEqual(got["changed"], "no", out)
+        self.assertEqual(got["state"], "unchanged", out)
+
+    def test_document_moved_without_its_record_committed(self):
+        self.moved_without_record(commit=True)
+
+    def test_document_moved_without_its_record_staged(self):
+        self.moved_without_record(commit=False)
+
+    def test_unfilled_record_template_is_full_and_lists_placeholders(self):
+        self.write(self.doc, DOC)
+        template = ROOT / "skills" / "spec" / "record-template.md"
+        self.write(self.record, template.read_text())
+        got, out = state(self.doc)
+        self.assertEqual(got["review"], "none", out)
+        self.assertEqual(got["state"], "full", out)
+        self.assertIn("placeholder: 1: {{spec title}}", out)
+        self.assertIn("placeholder: 12: {{YYYY-MM-DD}}", out)
 
     def test_shallow_clone_cut_off_is_not_the_review_commit(self):
         self.repo_with_review()

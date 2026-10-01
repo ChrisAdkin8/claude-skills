@@ -62,3 +62,7 @@ Needs a run: 1, 3
 - Not reviewed: W5's accepted failures add Sonnet `delta-review-record` on the decoy-row check, from delta review row 3, on 2026-10-01.
 - Not reviewed: W5 accepts a refused `ls` or `find` of the run files in Opus `implement-basic`, and any other refused command blocks, from delta review row 4, on 2026-10-01.
 - Not reviewed: the half-moved Non-goal says what `check-spec.py` loses for that layout, in place of "as now", from delta review row 5, on 2026-10-01.
+
+## Evidence
+
+- Started at b9a37ae

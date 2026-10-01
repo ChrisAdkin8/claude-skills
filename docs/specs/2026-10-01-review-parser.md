@@ -1,7 +1,7 @@
 ---
 title: One review parser for review-state.py and check-spec.py
 created: 2026-10-01
-status: reviewed # draft | reviewed | in-progress | done | superseded
+status: in-progress # draft | reviewed | in-progress | done | superseded
 research: none
 idea: none
 read-at: 7158a7b

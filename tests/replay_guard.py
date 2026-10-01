@@ -2,6 +2,7 @@
 """Replay the agents' real Bash commands through the old and new guard, and show what changed.
 
 Usage: replay_guard.py [--before 2026-09-15T09:14] [--base c7adaf4] [--glob PATTERN]
+                       [--accepted tests/replay-accepted.txt]
 
 Reads every Bash command from the subagent transcripts last modified before --before (the default
 selects the 48 present when the guard's assignment rule was specified, so the result is stable as
@@ -28,12 +29,16 @@ agents.json names that root, or for an earlier session in the same run dir, its 
 
 Exits 1 if a command the guard at --base blocked is allowed now, if any recorded Read, Grep or
 Glob call is refused now, or if a headless run's command gets a different verdict now than it got
-then: all are changes to look at before committing. It prints SKIP and exits
-0 when there's nothing to replay, as on a machine whose transcripts these aren't.
+then: all are changes to look at before committing. A difference looked at and meant, such as a
+rule the guard tightened on purpose, goes in tests/replay-accepted.txt, and then doesn't fail the
+run. An accepted difference that no longer occurs is reported as stale, without failing: old
+transcripts age out. It prints SKIP and exits 0 when there's nothing to replay, as on a machine
+whose transcripts these aren't.
 """
 
 import argparse
 import contextlib
+import hashlib
 import importlib.util
 import io
 import json
@@ -325,6 +330,50 @@ def bash_commands(obj):
             yield from bash_commands(value)
 
 
+# The differences looked at and accepted, so that a replay fails only on a new one. The file's
+# header says what an entry holds.
+ACCEPTED = Path(__file__).resolve().parent / "replay-accepted.txt"
+ENTRY = re.compile(
+    r"([0-9a-f]{16}) (base|read|headless) (allowed->blocked|blocked->allowed) +# *(\S.*)"
+)
+
+
+def fingerprint(text):
+    """The first 16 hex characters of the text's SHA-256: enough to name a difference in the
+    accepted file without its command, which comes from the user's private transcripts."""
+    return hashlib.sha256(text.encode("utf-8", "surrogatepass")).hexdigest()[:16]
+
+
+def load_accepted(path):
+    """{(fingerprint, half, change): reason} for each entry in the accepted file. Exits on a line
+    that isn't an entry, rather than replay without it."""
+    try:
+        lines = path.read_text().splitlines()
+    except FileNotFoundError:
+        return {}
+    accepted = {}
+    for n, line in enumerate(lines, 1):
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        found = ENTRY.fullmatch(line.strip())
+        if not found:
+            sys.exit(f"{path}:{n}: not `<fingerprint> <half> <then>-><now>  # <why>`")
+        accepted[found.group(1, 2, 3)] = found.group(4)
+    return accepted
+
+
+def report(heading, found, accepted, matched):
+    """Print the differences in `found` ({key: what to show}) that `accepted` doesn't list, under
+    the heading with their count, and return them. The keys it does list go into `matched`."""
+    hits = found.keys() & accepted.keys()
+    matched |= hits
+    left = {key: shown for key, shown in found.items() if key not in hits}
+    print(f"{heading}: {len(left)}" + (f" (and {len(hits)} accepted)" if hits else ""))
+    for key, shown in left.items():
+        print(f"  - {' '.join(key)}: {shown}")
+    return left
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--before", default="2026-09-15T09:14")
@@ -333,7 +382,10 @@ def main():
     parser.add_argument(
         "--reads-glob", default=READS_GLOB, help="relative to ~/.claude, all dates"
     )
+    parser.add_argument("--accepted", type=Path, default=ACCEPTED)
     args = parser.parse_args()
+    # Read first, so a bad line fails before the replay rather than after it.
+    accepted, matched = load_accepted(args.accepted), set()
 
     cutoff = datetime.fromisoformat(args.before).timestamp()
     headless = headless_sessions()
@@ -387,9 +439,15 @@ def main():
     print(f"\nallowed at {args.base}, blocked now: {len(newly_blocked)}")
     for command, reason in newly_blocked:
         print(f"  - {command[:160]!r}\n    {reason[:160]}")
-    print(f"\nblocked at {args.base}, allowed now: {len(newly_allowed)}")
-    for command in newly_allowed:
-        print(f"  - {command[:160]!r}")
+    newly_allowed = report(
+        f"\nblocked at {args.base}, allowed now",
+        {
+            (fingerprint(command), "base", "blocked->allowed"): f"{command[:160]!r}"
+            for command in newly_allowed
+        },
+        accepted,
+        matched,
+    )
 
     reads = [
         call
@@ -399,20 +457,23 @@ def main():
     unique_reads = list(
         {json.dumps(call, sort_keys=True): call for call in reads}.values()
     )
-    refused = []
+    refused = {}
     for tool, tool_input, cwd, results, root in unique_reads:
         after, reason = read_verdict(new, tool, tool_input, cwd, results, root)
         if after == "blocked":
-            refused.append((tool, tool_input, reason))
-    print(
+            target = tool_input.get("file_path") or tool_input.get("path") or ""
+            call = json.dumps([tool, tool_input, cwd], sort_keys=True)
+            refused[(fingerprint(call), "read", "allowed->blocked")] = (
+                f"{tool} {target[:140]}\n    {reason[:160]}"
+            )
+    refused = report(
         f"\n{len(unique_reads)} unique Read, Grep and Glob calls by guarded agents "
-        f"({len(headless)} headless runs included); "
-        f"refused now: {len(refused)}"
+        f"({len(headless)} headless runs included); refused now",
+        refused,
+        accepted,
+        matched,
     )
-    for tool, tool_input, reason in refused:
-        target = tool_input.get("file_path") or tool_input.get("path") or ""
-        print(f"  - {tool} {target[:140]}\n    {reason[:160]}")
-    changed = []
+    changed = {}
     seen = set()
     for f in sorted(headless):
         root = guard_root(f)
@@ -424,25 +485,34 @@ def main():
                 new, plugin_spelling(command, root), session_results(f), root
             )
             if (now == "blocked") != blocked_then:
-                changed.append(
-                    (command, "blocked" if blocked_then else "allowed", now, reason)
+                then = "blocked" if blocked_then else "allowed"
+                changed[(fingerprint(command), "headless", f"{then}->{now}")] = (
+                    f"{command[:140]!r}\n    {(reason or '')[:160]}"
                 )
-    print(
+    changed = report(
         f"\n{len(seen)} unique Bash commands from {len(headless)} headless runs, any date; "
-        f"verdict changed since they ran: {len(changed)}"
+        "verdict changed since they ran",
+        changed,
+        accepted,
+        matched,
     )
-    for command, then, now, reason in changed:
-        print(
-            f"  - {then} then, {now} now: {command[:140]!r}\n    {(reason or '')[:160]}"
-        )
     if not unique and not unique_reads and not seen:
         print("\nSKIP: no recorded agent transcripts here, so nothing was checked")
         return 0
+    if stale := sorted(accepted.keys() - matched):
+        # Not a failure: old transcripts age out, taking their differences with them.
+        print(
+            f"\nWARN: {len(stale)} accepted differences no longer occur (stale), so their "
+            f"entries in {args.accepted} can go:"
+        )
+        for key in stale:
+            print(f"  - {' '.join(key)}")
     if newly_allowed or refused or changed:
         print(
             f"\nFAIL: {len(newly_allowed)} commands allowed that --base blocked, "
             f"{len(refused)} recorded reads refused, {len(changed)} headless commands "
-            "with a different verdict now"
+            f"with a different verdict now, none of them accepted. Look at each; if it's "
+            f"meant, add its line from above to {args.accepted}, with `  # why`"
         )
         return 1
     return 0

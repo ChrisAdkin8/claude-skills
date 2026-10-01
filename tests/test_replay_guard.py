@@ -4,6 +4,7 @@ one call ran in leaking into the next, and a run whose guard lived somewhere els
 another checkout) being judged as if it lived in this one. Then main() itself, on a home
 directory of made-up transcripts."""
 
+import hashlib
 import json
 import os
 import subprocess
@@ -206,6 +207,18 @@ class RootFromTheTranscript(unittest.TestCase):
         self.assertIsNone(self.root(prompt("run ~/.claude/hooks/agent-guard.py")))
 
 
+def fingerprint(text):
+    """As replay-accepted.txt names a difference: the first 16 hex characters of the SHA-256."""
+    return hashlib.sha256(text.encode()).hexdigest()[:16]
+
+
+class AcceptedFile(unittest.TestCase):
+    def test_the_committed_file_reads(self):
+        # A line that isn't an entry would stop every replay, so it fails here first, in CI.
+        self.assertTrue(replay_guard.ACCEPTED.is_file())
+        replay_guard.load_accepted(replay_guard.ACCEPTED)  # exits on such a line
+
+
 def use(n, tool, **tool_input):
     """An agent's call `t<n>`, as a transcript records it."""
     item = {"type": "tool_use", "id": f"t{n}", "name": tool, "input": tool_input}
@@ -231,17 +244,68 @@ class Main(unittest.TestCase):
         self.project = self.home / ".claude" / "projects" / "-work"
         self.project.mkdir(parents=True)
 
-    def replay(self, *entries):
-        """(exit code, output) of a replay of a transcript holding these entries."""
+    def replay(self, *entries, accepted=""):
+        """(exit code, output) of a replay of a transcript holding these entries, with this
+        text as the accepted-differences file."""
         (self.project / f"{self.SESSION}.jsonl").write_text(transcript(*entries))
+        (self.home / "accepted.txt").write_text(accepted)
         run = subprocess.run(
-            [sys.executable, str(REPLAY), "--base", "HEAD"],
+            [sys.executable, str(REPLAY), "--base", "HEAD"]
+            + ["--accepted", str(self.home / "accepted.txt")],
             capture_output=True,
             text=True,
             check=False,  # exit 1 is a verdict
             env={**os.environ, "HOME": str(self.home)},
         )
         return run.returncode, run.stdout + run.stderr
+
+    def test_accepted_differences_pass(self):
+        # printenv was allowed then and is refused now, as is the read of a key: both are
+        # differences, and both are accepted, the read by its tool, input and directory.
+        key = str(self.home / ".ssh" / "id_rsa")
+        read = json.dumps(["Read", {"file_path": key}, "/work"], sort_keys=True)
+        code, out = self.replay(
+            use(0, "Bash", command="printenv"),
+            use(1, "Read", file_path=key),
+            accepted=(
+                f"{fingerprint('printenv')} headless allowed->blocked  # a reason\n"
+                f"{fingerprint(read)} read allowed->blocked  # a reason\n"
+            ),
+        )
+        self.assertEqual(code, 0, out)
+        self.assertIn("verdict changed since they ran: 0 (and 1 accepted)", out)
+        self.assertIn("refused now: 0 (and 1 accepted)", out)
+        self.assertNotIn("stale", out)
+
+    def test_a_difference_not_accepted_fails(self):
+        entry = f"{fingerprint('printenv')} headless allowed->blocked"
+        other_way = entry.replace("allowed->blocked", "blocked->allowed")
+        # Not listed at all, or listed with the verdicts the other way round.
+        for accepted in ("", f"{other_way}  # a reason\n"):
+            with self.subTest(accepted=accepted):
+                code, out = self.replay(
+                    use(0, "Bash", command="printenv"), accepted=accepted
+                )
+                self.assertEqual(code, 1, out)
+                self.assertIn(entry, out)  # what to add, should it be accepted
+
+    def test_an_entry_that_no_longer_occurs_is_reported_but_passes(self):
+        gone = fingerprint("a command from a transcript that has aged out")
+        code, out = self.replay(
+            use(0, "Bash", command="ls"),
+            accepted=f"{gone} headless allowed->blocked  # a reason\n",
+        )
+        self.assertEqual(code, 0, out)
+        self.assertIn("stale", out)
+        self.assertIn(f"{gone} headless allowed->blocked", out)
+
+    def test_an_entry_without_a_reason_fails(self):
+        code, out = self.replay(
+            use(0, "Bash", command="printenv"),
+            accepted=f"{fingerprint('printenv')} headless allowed->blocked\n",
+        )
+        self.assertEqual(code, 1, out)
+        self.assertIn("accepted.txt:1:", out)
 
     def test_a_run_under_another_checkout_is_judged_at_this_one(self):
         # The run's guard lived at its own root and allowed its own script; the guard here would

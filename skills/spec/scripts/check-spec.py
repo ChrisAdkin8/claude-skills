@@ -123,7 +123,10 @@ WORK_ITEM = re.compile(r"^#{2,3}\s+W(\d+)\b")
 DONE_WHEN = re.compile(
     r"\s*(?:[-*+]\s+|\d+[.)]\s+)?(?:\*\*|__)?done when\b(?:\*\*|__)?", re.IGNORECASE
 )
-PLACEHOLDER = re.compile(r"(?:tbd|tbc|todo|n/a|\?+|\.\.\.|…)", re.IGNORECASE)
+# A placeholder, with any punctuation after it: `TBD.` is as empty as `TBD`.
+PLACEHOLDER = re.compile(
+    r"(?:tbd|tbc|todo|n/a|\?+|\.\.\.|…)[\s.!?;:,…]*", re.IGNORECASE
+)
 ACCEPTANCE = "## Acceptance criteria"
 EMPTY_FIELD = re.compile(r"^\s*-\s+\*\*[^*]+:\*\*\s*$")
 NESTED_ITEM = re.compile(r"\s+(?:[-*]|\d+\.)\s+\S")

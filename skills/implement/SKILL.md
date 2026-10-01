@@ -3,7 +3,7 @@ name: implement
 description: Implements a reviewed, committed spec test first. Checks the spec, makes a git worktree and branch, hands the work items to an implementer subagent in its own headless session there, then has the sandboxed implement-verifier re-run every Done when, and leaves the evidence in the spec's record on the branch. Runs when the user types /implement.
 disable-model-invocation: true
 argument-hint: <spec path>
-allowed-tools: Read Grep Glob Write(~/.cache/implement-runs/**) Edit(~/.cache/implement-runs/**) Write(~/.cache/implement-verify/**) Edit(~/code/**/*-worktrees/*/docs/specs/**) Skill
+allowed-tools: Read Grep Glob Edit(~/.cache/implement-runs/**) Edit(~/.cache/implement-verify/**) Edit(~/code/**/*-worktrees/*/docs/specs/**) Skill
   Bash(git status *) Bash(git -C * status *) Bash(git worktree add *) Bash(git -C * worktree add *) Bash(git add *) Bash(git -C * add *) Bash(git commit *) Bash(git -C * commit *) Bash(git revert *) Bash(git -C * revert *)
   Bash(${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/check-spec.py *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/run-implementer.sh *)
   Bash(${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/prepare-verify.sh ~/.cache/implement-verify/*) Bash(${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/run-verify.sh ~/.cache/implement-verify/*) Bash(${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/scan-diff.py *)

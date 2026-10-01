@@ -114,6 +114,23 @@ their commands are no longer pre-approved.
 `/research`, `/spec` and `/cold-review` start only when you type them, because each launches paid
 agents. `/idea` is cheap, so Claude may also start it when you ask it to jot something down.
 
+#### Update
+
+Claude Code doesn't fetch new versions of this plugin by itself: for marketplaces like this one,
+auto-update starts turned off. To update it, run these in a terminal, outside Claude Code. The
+first fetches the marketplace's latest copy, and the second updates the plugin from it.
+
+```
+claude plugin marketplace update claude-skills
+claude plugin update claude-skills@claude-skills
+```
+
+Inside Claude Code, `/plugin marketplace update claude-skills` does the first, and **Update now**
+on the plugin in `/plugin`'s **Installed** tab does the second. Either way, the new version loads
+in your next session, or after `/reload-plugins` in one that's open. To have Claude Code update it
+for you, run `/plugin`, pick `claude-skills` on the **Marketplaces** tab and choose **Enable
+auto-update**.
+
 ### Set up `~/notes`
 
 The commands keep their notes in `~/notes`. It must be a git repo, because they commit to it.
@@ -295,10 +312,16 @@ There are three ways to view it, easiest first:
    VS Code's normal preview. It shows the same tree as an indented list.
 
 To rebuild the index by hand, for example after `/idea` adds a note, run the script from the
-installed plugin, whose versioned folder the `*` fills in:
-`python3 ~/.claude/plugins/cache/claude-skills/claude-skills/*/skills/research/scripts/build-index.py ~/notes`
-(from a clone, `skills/research/scripts/build-index.py ~/notes`). Don't edit `index.md` itself:
-the next rebuild overwrites it.
+installed plugin. The plugin's folder changes with each update, so the first line looks it up in
+Claude Code's record of installed plugins, and the second runs the script from there:
+
+```
+plugin=$(python3 -c 'import json, sys; print(json.load(sys.stdin)["plugins"]["claude-skills@claude-skills"][0]["installPath"])' < ~/.claude/plugins/installed_plugins.json)
+python3 "$plugin/skills/research/scripts/build-index.py" ~/notes
+```
+
+From a clone, run `skills/research/scripts/build-index.py ~/notes` instead. Don't edit `index.md`
+itself: the next rebuild overwrites it.
 
 ## Safety and cost
 

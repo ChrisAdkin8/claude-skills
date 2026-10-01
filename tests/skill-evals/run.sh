@@ -31,9 +31,10 @@
 # ~/code fixture and the agent run dirs named eval-<case>-<stamp>* are copied to the results and
 # removed, and so are an /implement case's worktrees (~/code/eval-<case>-<stamp>-worktrees), its
 # implementer run dirs (~/.cache/implement-runs) and its verifier scratch dirs
-# (~/.cache/implement-verify). IMPLEMENT_MAX_USD caps the implementer at $5 unless it is set; the
-# printed cost is the skill session's alone, so read the implementer's and verifiers' run.json files
-# in the results for theirs. Run this and ../agent-evals/run.sh one after the other: each checks ~/notes.
+# (~/.cache/implement-verify). IMPLEMENT_MAX_USD caps the implementer at $5 and RUN_AGENT_MAX_USD
+# each agent a skill launches at $2, unless they are set; the printed cost is the skill session's
+# alone, so read the agents', implementer's and verifiers' run.json files in the results for theirs.
+# Run this and ../agent-evals/run.sh one after the other: each checks ~/notes.
 # Exits 0 only if every case passed, 1 if any failed, 2 on a bad case name or no cases.
 set -uo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
@@ -59,6 +60,9 @@ trap 'rm -rf "$tmp_root" "$HOME"/code/eval-*-"$stamp" "$HOME"/code/eval-*-"$stam
 export RUN_AGENT_MODEL=${EVAL_MODEL:-}
 # An /implement case's implementer (skills/implement/scripts/run-implementer.sh) gets $5, not $20.
 export IMPLEMENT_MAX_USD=${IMPLEMENT_MAX_USD:-5}
+# Each agent a skill launches (hooks/run-agent.sh) gets $2, not its own $5, or $10 for the
+# researcher: an eval's questions are small, and its agents cost $0.06 to $0.38 on 2026-09-30.
+export RUN_AGENT_MAX_USD=${RUN_AGENT_MAX_USD:-2}
 
 # What in ~/notes has changed, leaving out eval notes from either eval set, hidden or not.
 notes_status() {

@@ -1,5 +1,10 @@
 # The figure the results don't show (0.4 s) is ruled INHERITED or WRONG.
 (?im)^\|.*0\.4.*\|\s*\**(INHERITED|WRONG)\**\s*\|
-# The reply is complete, so an empty or cut-off reply can't pass.
-(?m)Confirmed:
-(?m)Plan holds:
+# Both citations are true at bb9f240, and each is ruled CONFIRMED, so a reply that rules
+# everything wrong fails. A verdict cell may go on after the word.
+(?m)^\|(?=[^\n]*(run-spike\.sh|60 turns))[^\n]*\|\s*\**CONFIRMED\b[^|\n]*\|
+(?m)^\|(?=[^\n]*(spike-settings\.json|no network))[^\n]*\|\s*\**CONFIRMED\b[^|\n]*\|
+# The reply is complete, so an empty or cut-off reply can't pass: the closing lines
+# hooks/run-agent.sh's REPLY_SHAPES reads for the spec-verifier, copied here.
+Confirmed: \d+ of \d+
+Plan holds: (yes|no)

@@ -1,4 +1,10 @@
 # The planted citation is ruled MISCITED, and the right lines are given.
 (?im)^\|.*\|\s*\**MISCITED\**\s*\|.*\b(18[7-9]|19[0-3])\b
-# The reply is complete.
-(?m)Plan holds:
+# The other two citations are true at c7adaf4, and each is ruled CONFIRMED, so a reply that rules
+# everything wrong fails. A verdict cell may go on after the word: "CONFIRMED (at read-at)".
+(?m)^\|(?=[^\n]*\b31\s*[-–]\s*37\b)[^\n]*\|\s*\**CONFIRMED\b[^|\n]*\|
+(?m)^\|(?=[^\n]*\b394\s*[-–]\s*395\b)[^\n]*\|\s*\**CONFIRMED\b[^|\n]*\|
+# The reply is complete: the closing lines hooks/run-agent.sh's REPLY_SHAPES reads for the
+# spec-verifier, copied here.
+Confirmed: \d+ of \d+
+Plan holds: (yes|no)

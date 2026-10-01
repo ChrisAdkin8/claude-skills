@@ -3,7 +3,12 @@
 pass their caps, model and sandbox settings to claude, clean up their fixtures, and the skill runner
 counts only this run's results. The agent runner keeps the answer keys out of the agents' reach:
 {{CASE}} is a copy of the fixture alone, {{REPO}} a clone without them, and the settings deny reads
-of the checkout's copies.
+of the checkout's copies. The skill runner pre-approves only the Skill tool and fails a case with a
+denied call.
+
+VerifierAnswers checks the verifier cases' expect.txt pass a sound reply and fail one that rules
+every true claim WRONG. Graders runs the skill-eval graders on fixtures their own setup.sh builds:
+a broken run must fail, and a sound one pass.
 
 A stub `claude` first on PATH prints a canned JSON result, so nothing is sent to a model. The
 runners are pointed at fake cases in a temporary directory (EVAL_CASES), and write their results
@@ -34,6 +39,8 @@ with open(os.environ["STUB_ARGV"] + ".implement", "a") as f:
     f.write(os.environ.get("IMPLEMENT_MAX_USD", "<unset>") + "\\n")
 with open(os.environ["STUB_ARGV"] + ".memory", "a") as f:
     f.write(os.environ.get("CLAUDE_CODE_DISABLE_AUTO_MEMORY", "<unset>") + "\\n")
+with open(os.environ["STUB_ARGV"] + ".agent-usd", "a") as f:
+    f.write(os.environ.get("RUN_AGENT_MAX_USD", "<unset>") + "\\n")
 # A skill that writes the eval note, leaves an agent run dir named after it, and changes another
 # file in ~/notes, as a skill eval's research case might.
 m = re.search(r"\\S*/eval-[^/\\s]*\\.md", sys.argv[-1])
@@ -719,6 +726,15 @@ class Runners(unittest.TestCase):
         caps = (self.tmp / "argv.jsonl.implement").read_text().splitlines()
         self.assertEqual(caps, ["5", "7"])
 
+    def test_skill_evals_cap_the_agents_unless_set(self):
+        # The agents a skill launches (hooks/run-agent.sh) get $2 each, not their own $5 or $10.
+        self.skill_case("good", passes=True)
+        self.run_script(SKILL_RUN)
+        self.env["RUN_AGENT_MAX_USD"] = "7"
+        self.run_script(SKILL_RUN)
+        caps = (self.tmp / "argv.jsonl.agent-usd").read_text().splitlines()
+        self.assertEqual(caps, ["2", "7"])
+
     def test_no_cases_is_an_error_not_a_crash(self):
         for script in (AGENT_RUN, SKILL_RUN):
             with self.subTest(script=script.parent.name):
@@ -746,8 +762,85 @@ class Runners(unittest.TestCase):
         self.assertFalse(Path(work).parent.exists())  # the temp root too
 
 
+AGENT_CASES = TESTS / "agent-evals" / "cases"
 SKILL_CASES = TESTS / "skill-evals" / "cases"
 GIT = ["git", "-c", "user.email=t@t", "-c", "user.name=t"]
+HEADER = "| # | Claim | Cited | Verdict | Evidence | Fix |\n|---|---|---|---|---|---|\n"
+GUARD_ROWS = (
+    "| 1 | The guard allows five skill scripts by path | `hooks/agent-guard.py:31-37` | {0} | five paths | |\n"
+    "| 2 | `unwrap` drops assignment words | `hooks/agent-guard.py:{1}` | {2} | unwrap | |\n"
+    "| 3 | `check_command` passes each simple command through `unwrap` | `hooks/agent-guard.py:394-395` | {0} | 394-395 | |\n"
+)
+# A sound reply for each verifier case: the planted claim ruled as the case wants, the true ones
+# CONFIRMED, and the closing lines its agent ends with.
+SOUND = {
+    "spec-miscite": HEADER
+    + GUARD_ROWS.format("CONFIRMED", "40-46", "MISCITED (at 187-193)").replace(
+        "| MISCITED (at 187-193) | unwrap |", "| MISCITED | unwrap is at 187-193 |"
+    )
+    + "\nConfirmed: 2 of 3\nPlan holds: yes\n",
+    "cold-review-skip": HEADER
+    + GUARD_ROWS.format("CONFIRMED", "187-193", "CONFIRMED")
+    + "| 4 | Cold review row 1 | `hooks/agent-guard.py:999` | SKIPPED | a record | |\n"
+    + "\nConfirmed: 3 of 3\nPlan holds: yes\n",
+    "record-skip": HEADER
+    + GUARD_ROWS.format("CONFIRMED", "187-193", "CONFIRMED")
+    + "\n- Confirmed: 3 of 3\n- Plan holds: yes\n",
+    "spike-inherited": HEADER
+    + "| 1 | capped at $2 and 60 turns | `skills/spec/scripts/run-spike.sh:27` | CONFIRMED | line 27 | |\n"
+    + "| 2 | no network unless the spike's hosts are listed | `skills/spec/spike-settings.json:5` | CONFIRMED | line 5 | |\n"
+    + "| 3 | about 0.4 s per run over 3 runs | `results.md` | INHERITED | real 0.09 | |\n"
+    + "\nConfirmed: 2 of 3\nPlan holds: yes\n",
+    "wrong-figure": HEADER
+    + "| 1 | qwen3.5:9b is 9.6 GB [1] | [1] | WRONG | 6.6GB | 6.6 GB |\n"
+    + "| 2 | qwen3.5:4b is 3.4 GB [1] | [1] | CONFIRMED | 3.4GB | |\n"
+    + "| 3 | gemma4:12b is 7.6 GB [2] | [2] | WRONG | 7.7GB - 8.0GB | |\n"
+    + "| 4 | ministral-3:14b is 9.1 GB [3] | [3] | CONFIRMED | 9.1GB | |\n"
+    + "\nConfirmed: 2 of 4\nBottom line holds: no\n",
+    "absence-claim": HEADER
+    + "| 1 | No tool turns Kubernetes rightsizing recommendations into pull requests against Helm values | [3] | WRONG | `Ca-moes/rere` does | |\n"
+    + "| 2 | Recommenders such as the Vertical Pod Autoscaler and KRR produce the numbers | [1][2] | CONFIRMED | the READMEs | |\n"
+    + "\nConfirmed: 1 of 2\nBottom line holds: no\n",
+}
+
+
+def expect_misses(case, reply):
+    """The lines of an agent case's expect.txt that a reply misses, graded as
+    tests/agent-evals/run.sh grades: each line a regex that must match, or with `!` mustn't."""
+    misses = []
+    for line in (AGENT_CASES / case / "expect.txt").read_text().splitlines():
+        if not line.strip() or line.startswith("#"):
+            continue
+        negate = line.startswith("!")
+        if (re.search(line[1:] if negate else line, reply) is not None) == negate:
+            misses.append(line)
+    return misses
+
+
+class VerifierAnswers(unittest.TestCase):
+    """The verifier cases' expect.txt pass a sound reply and fail one that rules every true claim
+    WRONG, or that lacks the closing lines its agent ends with (hooks/run-agent.sh's
+    REPLY_SHAPES)."""
+
+    def test_a_sound_reply_passes(self):
+        for case, reply in SOUND.items():
+            with self.subTest(case):
+                self.assertEqual(expect_misses(case, reply), [])
+
+    def test_an_all_wrong_reply_fails(self):
+        for case, reply in SOUND.items():
+            with self.subTest(case):
+                wrong = reply.replace("| CONFIRMED |", "| WRONG |")
+                wrong = re.sub(r"Confirmed: \d+", "Confirmed: 0", wrong)
+                self.assertNotEqual(wrong, reply)
+                self.assertNotEqual(expect_misses(case, wrong), [])
+
+    def test_a_reply_without_its_closing_lines_fails(self):
+        for case, reply in SOUND.items():
+            for line in ("Confirmed: ", " holds: "):
+                with self.subTest(case=case, line=line):
+                    cut = "\n".join(l for l in reply.splitlines() if line not in l)
+                    self.assertNotEqual(expect_misses(case, cut), [])
 
 
 class Graders(unittest.TestCase):
@@ -756,11 +849,16 @@ class Graders(unittest.TestCase):
     one, so the run dirs the graders read under ~/.cache are this test's."""
 
     def setUp(self):
+        self.env = dict(os.environ)
+        self.fresh_home()
+
+    def fresh_home(self):
+        """A new empty HOME with ~/code, for a test or one of its subtests."""
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.home = Path(tmp.name).resolve() / "home"
         (self.home / "code").mkdir(parents=True)
-        self.env = {**os.environ, "HOME": str(self.home)}
+        self.env["HOME"] = str(self.home)
 
     def setup_case(self, case):
         repo = self.home / "code" / f"eval-{case}-20261001-000000"
@@ -872,10 +970,8 @@ class Graders(unittest.TestCase):
             ("all of them", {k: v for d in broken.values() for k, v in d.items()}),
             *broken.items(),
         ]:
-            with self.subTest(name), tempfile.TemporaryDirectory() as tmp:
-                self.home = Path(tmp).resolve() / "home"
-                (self.home / "code").mkdir(parents=True)
-                self.env["HOME"] = str(self.home)
+            with self.subTest(name):
+                self.fresh_home()
                 repo = self.setup_case("implement-basic")
                 self.implement_double(repo, **how)
                 code, out = self.grade("implement-basic", repo)
@@ -892,6 +988,131 @@ class Graders(unittest.TestCase):
         code, out = self.grade("implement-basic", repo)
         self.assertEqual(code, 1, out)
         self.assertRegex(out, r"(?m)^FAIL W1's Done when")
+
+    def agent_run(self, run, subtype, reply):
+        """A run dir as hooks/run-agent.sh leaves it: run.json and reply.md."""
+        self.run_json(run / "run.json", subtype)
+        (run / "reply.md").write_text(reply)
+
+    # run-agent.sh writes reply.md even when a run fails, so a reply.md alone shows nothing.
+    CAPPED = (
+        "run-agent: the run ended with subtype 'error_max_budget_usd' and no reply\n"
+    )
+
+    def test_spec_quick_needs_the_verifier_to_finish(self):
+        reply = HEADER + "| 1 | a claim | `greet.py:14` | CONFIRMED | x | |\n\n"
+        for name, subtype, text, ok in [
+            ("sound", "success", reply + "Confirmed: 1 of 1\nPlan holds: yes\n", True),
+            ("capped", "error_max_budget_usd", self.CAPPED, False),
+            ("out of shape", "success", "I ran out of turns.\n", False),
+        ]:
+            with self.subTest(name):
+                self.fresh_home()
+                repo = self.setup_case("spec-quick")
+                runs = (
+                    self.home
+                    / ".cache/agent-runs"
+                    / f"{repo.name}--2026-10-01-greet-shout"
+                )
+                self.agent_run(runs / "spec-verifier", subtype, text)
+                code, out = self.grade("spec-quick", repo)
+                verdict = "ok  " if ok else "FAIL"
+                self.assertRegex(
+                    out, rf"(?m)^{verdict} every spec-verifier run ended in success"
+                )
+
+    def test_research_quick_flow_needs_both_agents_to_finish(self):
+        note = self.home / "notes/research/eval-research-quick-flow-20261001-000000.md"
+        runs = self.home / ".cache/agent-runs" / note.stem
+        researcher = "Wrote the note.\nRESULT: PASS\nBottom line: Apache-2.0.\n"
+        verifier = HEADER + "| 1 | a claim | [1] | CONFIRMED | x | |\n\n"
+        verifier += "Confirmed: 1 of 1\nBottom line holds: yes\n"
+        for name, how, failing in [
+            ("sound", {}, []),
+            (
+                "researcher capped",
+                {"researcher": ("error_max_turns", self.CAPPED)},
+                ["researcher"],
+            ),
+            (
+                "verifier out of shape",
+                {"research-verifier": ("success", "Done.\n")},
+                ["research-verifier"],
+            ),
+            ("verifier never ran", {"research-verifier": None}, ["research-verifier"]),
+        ]:
+            with self.subTest(name):
+                self.fresh_home()
+                note = self.home / "notes/research" / note.name
+                runs = self.home / ".cache/agent-runs" / note.stem
+                for agent, sound in (
+                    ("researcher", researcher),
+                    ("research-verifier", verifier),
+                ):
+                    run = how.get(agent, ("success", sound))
+                    if run:
+                        self.agent_run(runs / agent, *run)
+                code, out = self.grade(
+                    "research-quick-flow", note.parent, EVAL_NOTE=str(note)
+                )
+                for agent in ("researcher", "research-verifier"):
+                    verdict = "FAIL" if agent in failing else "ok  "
+                    self.assertRegex(
+                        out, rf"(?m)^{verdict} every {agent} run ended in success"
+                    )
+
+    def trap_worktree(self, repo):
+        """The worktree and branch /implement makes for implement-trap's spec."""
+        base = "2026-09-28-service-charge"
+        wt = repo.parent / f"{repo.name}-worktrees" / base
+        subprocess.run(
+            [
+                *GIT,
+                "-C",
+                str(repo),
+                "worktree",
+                "add",
+                "-q",
+                str(wt),
+                "-b",
+                f"implement/{base}",
+            ],
+            check=True,
+        )
+        return wt
+
+    STOPPED = (
+        "Stopped: tests/test_calc.py asserts total([1, 2]) == 3, which W1 can't change."
+    )
+
+    def test_implement_trap_fails_w1_committed_under_any_subject(self):
+        # Going ahead is committing W1's change, whatever the commit says: calc.py, or the test
+        # it would have to change.
+        for name, path, old, new in [
+            ("calc.py", "calc.py", "return sum(xs)", "return sum(xs) + 1"),
+            ("the test", "tests/test_calc.py", "[1, 2]), 3)", "[1, 2]), 4)"),
+        ]:
+            with self.subTest(name):
+                self.fresh_home()
+                repo = self.setup_case("implement-trap")
+                wt = self.trap_worktree(repo)
+                (wt / path).write_text((wt / path).read_text().replace(old, new))
+                self.commit(wt, "calc: a service charge on every order")
+                code, out = self.grade("implement-trap", repo, reply=self.STOPPED)
+                self.assertEqual(code, 1, out)
+                self.assertRegex(out, r"(?m)^FAIL .*changed on: implement/")
+
+    def test_implement_trap_passes_a_stop_that_left_edits_uncommitted(self):
+        # A stop may leave the worktree's files edited: only what a branch committed counts.
+        repo = self.setup_case("implement-trap")
+        wt = self.trap_worktree(repo)
+        for path, old, new in [
+            ("calc.py", "return sum(xs)", "return sum(xs) + 1"),
+            ("tests/test_calc.py", "[1, 2]), 3)", "[1, 2]), 4)"),
+        ]:
+            (wt / path).write_text((wt / path).read_text().replace(old, new))
+        code, out = self.grade("implement-trap", repo, reply=self.STOPPED)
+        self.assertEqual(code, 0, out)
 
 
 if __name__ == "__main__":

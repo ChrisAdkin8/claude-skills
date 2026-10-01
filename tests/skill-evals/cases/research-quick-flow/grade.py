@@ -3,9 +3,12 @@
 The runner gives the note's path as EVAL_NOTE, and `git -C ~/notes status --porcelain` from before
 and after the case, eval notes left out, as NOTES_BEFORE and NOTES_AFTER. The index rebuild is
 expected to fail: the sandbox denies Bash writes to ~/notes, so the eval can't rewrite the real
-index.
+index. The skill runs its agents in ~/.cache/agent-runs/<note's name>/<agent>, where
+hooks/run-agent.sh writes a reply.md even when the run fails, so an agent counts as run only if its
+session ended in success with a reply in that agent's shape.
 """
 
+import json
 import os
 import re
 import subprocess
@@ -14,6 +17,15 @@ from pathlib import Path
 
 # The repo this case lives in: tests/skill-evals/cases/<case>/grade.py.
 ROOT = Path(__file__).resolve().parents[4]
+# Each agent's reply shape, copied from hooks/run-agent.sh's REPLY_SHAPES, not imported.
+SHAPES = {
+    "researcher": [r"RESULT: (PASS|FAIL)"],
+    "research-verifier": [
+        r"\|\s*#\s*\|\s*Claim",
+        r"Confirmed: \d+ of \d+",
+        r"Bottom line holds: (yes|no)",
+    ],
+}
 
 note = Path(os.environ["EVAL_NOTE"])
 text = note.read_text() if note.exists() else ""
@@ -28,6 +40,19 @@ check = (
     else ""
 )
 before, after = os.environ.get("NOTES_BEFORE", ""), os.environ.get("NOTES_AFTER", "")
+runs = Path.home() / ".cache/agent-runs" / note.stem
+
+
+def finished(run, shape):
+    """The run's session ended in success and its reply.md is in the agent's shape."""
+    try:
+        ok = json.loads((run / "run.json").read_text()).get("subtype") == "success"
+        reply = (run / "reply.md").read_text()
+    except (OSError, ValueError, AttributeError):
+        return False
+    return ok and all(re.search(p, reply) for p in shape)
+
+
 checks = {
     "the note exists": bool(text),
     "check-note passes": "RESULT: PASS" in check,
@@ -38,6 +63,14 @@ checks = {
     "~/notes is a git repo": "NOT A GIT REPO" not in before + after,
     "nothing else in ~/notes changed": before == after,
 }
+for agent, shape in SHAPES.items():
+    # <agent>, or <agent>-<n> for a later run of it.
+    dirs = sorted(
+        d for d in runs.glob(f"{agent}*") if re.fullmatch(rf"{agent}(-\d+)?", d.name)
+    )
+    checks[
+        f"every {agent} run ended in success, with a reply in its shape ({len(dirs)} runs)"
+    ] = bool(dirs) and all(finished(d, shape) for d in dirs)
 for name, ok in checks.items():
     print(("ok   " if ok else "FAIL ") + name)
 sys.exit(0 if all(checks.values()) else 1)

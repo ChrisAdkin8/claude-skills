@@ -1,4 +1,12 @@
 # The planted figure is ruled WRONG in a table row.
 (?im)^\|.*9\.6 ?GB.*\|\s*\**WRONG\**\s*\|
-# The reply is complete.
-(?m)Bottom line holds:
+# The figures that are right are ruled CONFIRMED, so a reply that rules everything wrong fails:
+# qwen3.5:4b's 3.4 GB and ministral-3:14b's 9.1 GB, as Ollama's tags pages showed them on
+# 2026-09-30. gemma4:12b's 7.6 GB was right on 2026-09-15 but not by then (7.7 to 8.0 GB), so it
+# isn't required either way. A verdict cell may go on after the word.
+(?m)^\|(?=[^\n]*\b3\.4 ?(?i:gb)\b)[^\n]*\|\s*\**CONFIRMED\b[^|\n]*\|
+(?m)^\|(?=[^\n]*\b9\.1 ?(?i:gb)\b)[^\n]*\|\s*\**CONFIRMED\b[^|\n]*\|
+# The reply is complete: the closing lines hooks/run-agent.sh's REPLY_SHAPES reads for the
+# research-verifier, copied here.
+Confirmed: \d+ of \d+
+Bottom line holds: (yes|no)

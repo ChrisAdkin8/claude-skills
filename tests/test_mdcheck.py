@@ -84,6 +84,23 @@ class Headings(unittest.TestCase):
         self.assertEqual(mdcheck.section(lines, "## A"), ["a", "### A1", "a1"])
         self.assertIsNone(mdcheck.section(lines, "## C"))
 
+    def test_section_needs_the_whole_heading(self):
+        """`## Cold review of any document` (README.md) isn't a saved cold review."""
+        self.assertIsNone(
+            mdcheck.section(["## Cold review of any document", "x"], "## Cold review")
+        )
+        for line in ("## Cold Review", "## Cold review:", "## Cold review, 2026-09-01"):
+            with self.subTest(line=line):
+                self.assertEqual(mdcheck.section([line, "x"], "## Cold review"), ["x"])
+
+    def test_heading_is(self):
+        self.assertTrue(mdcheck.heading_is("  ## Sources  ", "## Sources"))
+        self.assertTrue(
+            mdcheck.heading_is("### Delta review, 2026-09-27", "### Delta review")
+        )
+        self.assertFalse(mdcheck.heading_is("## Sources and notes", "## Sources"))
+        self.assertFalse(mdcheck.heading_is("## Sourcesx", "## Sources"))
+
 
 class Frontmatter(unittest.TestCase):
     def fields(self, *body):

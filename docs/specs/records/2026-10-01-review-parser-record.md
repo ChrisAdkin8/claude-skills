@@ -66,3 +66,11 @@ Needs a run: 1, 3
 ## Evidence
 
 - Started at b9a37ae
+- Baseline: python3 -m unittest discover -s tests -> pass
+- Baseline: python3 tests/replay_guard.py -> pass
+- Baseline: ruff check --isolated --select E9,F . -> pass
+- Baseline: git ls-files -z '*.sh' | xargs -0 shellcheck -S warning -> pass
+- Baseline: claude plugin validate . --json -> pass
+- Baseline: claude plugin validate .claude-plugin/plugin.json -> pass
+- Baseline: python3 skills/spec/scripts/check-spec.py <each of docs/specs/*.md> -> pass (all 10 PASS)
+- Baseline: tests/agent-evals/run.sh and tests/skill-evals/run.sh -> not run: paid, by hand (CLAUDE.md)

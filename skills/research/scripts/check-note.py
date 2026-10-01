@@ -39,6 +39,7 @@ from mdcheck import (
     flow_list,
     frontmatter,
     has_account_id,
+    heading_is,
     is_heading,
     secrets_in,
     section,
@@ -102,7 +103,8 @@ UNVERIFIED_MARK = re.compile(r"\*\((?:inferred|unverified)[^)]*\)\*")
 
 
 def heading_index(lines, heading):
-    return next((i for i, line in enumerate(lines) if line.startswith(heading)), None)
+    """Index of the first line that is `heading`, matched as mdcheck.section() matches it."""
+    return next((i for i, line in enumerate(lines) if heading_is(line, heading)), None)
 
 
 def cells(line):
@@ -282,7 +284,7 @@ def check_after_sources(body, depth, fails):
     for line in body[src_at + 1 :]:
         if not is_heading(line):
             continue
-        heading = next((h for h in allowed if line.startswith(h)), None)
+        heading = next((h for h in allowed if heading_is(line, h)), None)
         if heading is None:
             fails.append(
                 f"'{line.strip()}' comes after Sources; only {names} may. Move it above Sources"
@@ -303,7 +305,7 @@ def stray_after_sources(body, depth):
     stray, in_pool, in_source = [], False, False
     for line in body[src_at + 1 :]:
         if is_heading(line):
-            in_pool = depth == "ideas" and line.startswith("## Candidate pool")
+            in_pool = depth == "ideas" and heading_is(line, "## Candidate pool")
         text = line.strip()
         # An indented line continues the source right above it; after a blank line it's prose.
         continues = in_source and line[:1] in (" ", "\t") and bool(text)
@@ -311,7 +313,7 @@ def stray_after_sources(body, depth):
         if (
             in_pool
             or not text
-            or line.startswith("## Verification")
+            or heading_is(line, "## Verification")
             or in_source
             or text.startswith(("|", "Checked on"))
         ):

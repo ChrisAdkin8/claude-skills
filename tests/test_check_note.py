@@ -117,6 +117,18 @@ class SampleStated(unittest.TestCase):
         self.assertEqual(module.cited_claims(prose), 4)
 
 
+class HeadingRule(unittest.TestCase):
+    """heading_index matches a heading as mdcheck.section does: whole, not as a prefix."""
+
+    def test_heading_index_skips_a_longer_heading(self):
+        spec = importlib.util.spec_from_file_location("check_note", CHECKER)
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        lines = ["## Sources and notes", "x", "## sources", "1. A source."]
+        self.assertEqual(module.heading_index(lines, "## Sources"), 2)
+
+
 class LimitAfterVerification(unittest.TestCase):
     def setUp(self):
         self.base = FIXTURE.read_text()

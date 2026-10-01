@@ -2,7 +2,7 @@
 skills/spec/scripts/check-spec.py and skills/cold-review/scripts/review-state.py.
 
 Not run on its own. Each script loads it by path, so a fix here reaches all of them: frontmatter,
-code fences (and a fence left open), headings, sections, citations, template leftovers, the topic
+code fences (and a fence left open), headings and the one rule that matches them, sections, citations, template leftovers, the topic
 form, the `Not reviewed:` and delta-review patterns, the record path, word and line counts, and the
 secret and account-ID patterns.
 """
@@ -144,13 +144,23 @@ def level(line):
     return len(line) - len(line.lstrip("#"))
 
 
+def heading_is(line, heading):
+    """Whether `line` is `heading`, in any case: the whole of it, or it followed by `:` or `,`.
+    So `## Cold Review` and `### Delta review, 2026-09-27` match, but `## Cold review of any
+    document` doesn't. section(), check-note.py and the review parser all match this way."""
+    text, want = line.strip().lower(), heading.strip().lower()
+    return text == want or (
+        text.startswith(want) and text[len(want) : len(want) + 1] in (":", ",")
+    )
+
+
 def section(lines, heading):
-    """Lines under the first heading starting with `heading`, in any case, up to the next heading
-    of its level or above. A heading inside a code block neither starts nor ends a section: a
-    quoted `## Cold review`, or a `# comment` in a shell block, is code."""
-    code, want = in_code(lines), heading.lower()
+    """Lines under the first line that is `heading` (heading_is), up to the next heading of its
+    level or above. A heading inside a code block neither starts nor ends a section: a quoted
+    `## Cold review`, or a `# comment` in a shell block, is code."""
+    code = in_code(lines)
     for i, line in enumerate(lines):
-        if not code[i] and line.lower().startswith(want):
+        if not code[i] and heading_is(line, heading):
             body = []
             for nxt, in_block in zip(lines[i + 1 :], code[i + 1 :]):
                 if not in_block and is_heading(nxt) and level(nxt) <= level(heading):

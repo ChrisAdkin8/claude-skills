@@ -13,6 +13,7 @@ Run with: python3 -m unittest discover -s ~/code/github.com/claude-skills/tests
 
 import json
 import os
+import re
 import subprocess
 import tempfile
 import unittest
@@ -54,7 +55,8 @@ if os.environ.get("STUB_SNAPSHOT"):
         shutil.copytree(path, snap / key.lower(), symlinks=True)
     (snap / "paths.json").write_text(json.dumps(named))
 print(json.dumps({"subtype": "success", "is_error": False, "num_turns": 1,
-                  "total_cost_usd": 0.01, "result": "the reply says yes"}))
+                  "total_cost_usd": 0.01, "result": "the reply says yes",
+                  "permission_denials": json.loads(os.environ.get("STUB_DENIALS", "[]"))}))
 """
 # The answer key the F7a tests plant, and look for where an agent could reach it.
 KEY = "ANSWER-KEY-7f3a"
@@ -482,6 +484,56 @@ class Runners(unittest.TestCase):
         self.run_script(SKILL_RUN)
         (argv,) = self.argv()
         self.assertEqual(self.flag(argv, "--plugin-dir"), str(REPO))
+
+    def test_skill_evals_leave_approval_to_the_skill(self):
+        # Only the Skill tool is pre-approved, and edits aren't accepted wholesale: a bare tool
+        # name approves every use of it, so the skill's own allowed-tools never decided.
+        self.skill_case("good", passes=True)
+        self.run_script(SKILL_RUN)
+        (argv,) = self.argv()
+        self.assertEqual(self.flag(argv, "--allowedTools"), "Skill")
+        self.assertNotIn("--permission-mode", argv)
+
+    def test_skill_evals_fail_a_denied_call(self):
+        # A call the skill's allowed-tools don't cover is denied, headless, where a user would
+        # have been asked: the case fails whatever grade.py says, naming the tool and its input.
+        self.skill_case("good", passes=True)
+        self.env["STUB_DENIALS"] = json.dumps(
+            [
+                {
+                    "tool_name": "Bash",
+                    "tool_use_id": "toolu_1",
+                    "tool_input": {"command": "git log --oneline -3"},
+                }
+            ]
+        )
+        code, out = self.run_script(SKILL_RUN)
+        self.assertEqual(code, 1, out)
+        self.assertIn("FAIL good", out)
+        self.assertIn("permission denied: Bash", out)
+        self.assertIn("git log --oneline -3", out)
+        self.assertIn("0 of 1 passed", out)
+
+    def test_skill_evals_fail_without_a_result(self):
+        # No result JSON, no verdict, whatever the files say.
+        self.skill_case("good", passes=True)
+        (self.tmp / "bin" / "claude").write_text("#!/bin/sh\necho 'not JSON'\n")
+        code, out = self.run_script(SKILL_RUN)
+        self.assertEqual(code, 1, out)
+        self.assertIn("FAIL good", out)
+        self.assertIn("no result JSON", out)
+
+    def test_skill_eval_cases_for_spec_and_implement_run_under_code(self):
+        # /spec and /implement work on a repo under ~/code, and their allowed-tools edit files only
+        # there: a temp fixture would see edits refused that no user's repo would.
+        for prompt in sorted(
+            (REPO / "tests" / "skill-evals" / "cases").glob("*/prompt.txt")
+        ):
+            if re.match(r"/claude-skills:(spec|implement) ", prompt.read_text()):
+                with self.subTest(case=prompt.parent.name):
+                    location = prompt.parent / "location.txt"
+                    self.assertTrue(location.exists())
+                    self.assertEqual(location.read_text().strip(), "code")
 
     def test_skill_eval_prompts_type_the_namespaced_skill(self):
         # The bare /spec also resolves, but not to this plugin alone while an old install is present.

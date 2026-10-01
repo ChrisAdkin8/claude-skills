@@ -6,6 +6,9 @@
 # Usage: run.sh [case ...]   all cases by default, in parallel
 # Runs inside hooks/agent-sandbox.json, so Bash writes stay in the fixture and network is limited.
 # Loads this checkout as the plugin (--plugin-dir), so prompt.txt types /claude-skills:<skill>.
+# Pre-approves only the Skill tool, so the skill's own allowed-tools decide what runs. Headless, a
+# call they don't approve is denied, not asked about, and a case with any denial fails, as does
+# one whose session left no result.
 # Costs real tokens; run by hand after changing a skill's steps. Results: results/<timestamp>/.
 #   SKILL_EVAL_MAX_USD  per-case cost ceiling, passed as --max-budget-usd (default 3)
 #   EVAL_MODEL          model to run the skills on, passed as --model (default: your default model);
@@ -15,8 +18,9 @@
 #
 # A case may also hold:
 #   location.txt  "code": the fixture is ~/code/eval-<case>-<stamp>, not a temp dir, for /spec,
-#                 which works only in a repo under ~/code. No leading dot: run-agent.sh refuses a
-#                 run dir name that starts with one, and /spec names its run dir after the repo.
+#                 which works only in a repo under ~/code and whose allowed-tools edit Markdown
+#                 only there. No leading dot: run-agent.sh refuses a run dir name that starts with
+#                 one, and /spec names its run dir after the repo.
 #   settings.txt  the settings file for --settings, in this directory, in place of
 #                 hooks/agent-sandbox.json: agent-case-settings.json for a case that runs agents,
 #                 implement-case-settings.json (the sandbox off) for an /implement case, whose
@@ -83,13 +87,32 @@ run_case() {
   prompt=$(sed -e "s#{{NOTE}}#$note#g" -e "s#{{STAMP}}#$stamp#g" "$dir/prompt.txt")
   "$dir/setup.sh" "$work" > "$out/$c.setup" 2>&1 || { echo "FAIL $c (setup)"; echo FAIL > "$out/$c.result"; rm -rf "$work"; return; }
   before=$(notes_status)
+  # Only Skill is pre-approved, and edits aren't accepted wholesale, so the skill's own
+  # allowed-tools decide what runs, as for a user: a bare tool name here would approve every use
+  # of that tool, and a command missing from the skill's list would never be refused.
   (cd "$work" && claude -p --plugin-dir "$repo" --output-format json --max-turns 60 --max-budget-usd "${SKILL_EVAL_MAX_USD:-3}" ${EVAL_MODEL:+--model "$EVAL_MODEL"} \
-    --settings "$settings" --permission-mode acceptEdits \
-    --allowedTools "Read Write Edit Glob Grep Bash Skill" --strict-mcp-config --no-session-persistence \
+    --settings "$settings" --allowedTools Skill --strict-mcp-config --no-session-persistence \
     "$prompt" < /dev/null) > "$out/$c.json" 2> "$out/$c.err"
   after=$(notes_status)
   if EVAL_NOTE="$note" NOTES_BEFORE="$before" NOTES_AFTER="$after" \
     python3 "$dir/grade.py" "$work" "$out/$c.json" > "$out/$c.grade" 2>&1; then r=PASS; else r=FAIL; fi
+  # Then the session's own verdict, whatever grade.py found. Headless, a call nothing approved is
+  # denied rather than asked about: one the skill's allowed-tools miss, or one a settings file
+  # refuses. Either fails the case. So does a session with no result to read.
+  python3 - "$out/$c.json" >> "$out/$c.grade" <<'PY' || r=FAIL
+import json, sys
+
+try:
+    with open(sys.argv[1]) as f:
+        denials = json.load(f).get("permission_denials") or []
+except (OSError, ValueError, AttributeError):
+    print("FAIL no result JSON from the session")
+    sys.exit(1)
+for d in denials:
+    call = json.dumps(d.get("tool_input"))
+    print(f"FAIL permission denied: {d.get('tool_name')} {call[:200] + '...' * (len(call) > 200)}")
+sys.exit(1 if denials else 0)
+PY
   cost=$(python3 -c "import json,sys;d=json.load(open(sys.argv[1]));print(f\"{d.get('num_turns')} turns, \${d.get('total_cost_usd',0):.2f}\")" "$out/$c.json" 2>/dev/null)
   echo "$r $c ($cost)"; sed 's/^/    /' "$out/$c.grade"; echo "$r" > "$out/$c.result"
   (cd "$work" && git status --short && git diff) > "$out/$c.diff" 2>&1

@@ -11,3 +11,5 @@ __pycache__/
 /docs/diagram/build/
 # Per-machine Claude Code settings for this repo.
 /.claude/settings.local.json
+# Git worktrees Claude Code makes for background agents (`isolation: "worktree"`).
+/.claude/worktrees/

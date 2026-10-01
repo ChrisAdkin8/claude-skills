@@ -47,3 +47,8 @@ e7bc289ea2261aab headless allowed->blocked  # `gh` in a call with other commands
 ef347396cb8ddfd4 headless allowed->blocked  # `gh` in a call with other commands: refused since 50d1390 (2026-09-29)
 f1d7755b51b6b064 headless allowed->blocked  # `gh` in a call with other commands: refused since 50d1390 (2026-09-29)
 f2c969b1ce7e7c78 headless allowed->blocked  # `gh` in a call with other commands: refused since 50d1390 (2026-09-29)
+
+# Since #39 (2026-10-01) the guard allows `git worktree list`, and nothing else under `git
+# worktree`: /spec done and /implement run it through git-read.py. A recorded call that the base
+# refused only for its `worktree list` part is allowed now on purpose.
+f7132e38260e5c93 base blocked->allowed  # `git worktree list` allowed since #39 (2026-10-01)

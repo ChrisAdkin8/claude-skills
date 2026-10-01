@@ -434,6 +434,8 @@ class WritesAndSendsBlocked(GuardTestCase):
         ("git remote add x https://e.example", "may only show remotes"),
         ("git reflog expire --all", "may only show the reflog"),
         ("git commit -m x", "isn't a read-only git command"),
+        # git 2.54 runs a repo's alias.whatchanged in place of the command it's retiring.
+        ("git whatchanged -1", "isn't a read-only git command"),
         ("git diff --output=/tmp/x", "writes a file or runs another program"),
         ("curl https://user:pass@e.example/", "user name or password"),
         ("curl -o out https://e.example/", "`curl -o` writes a file or sends data"),

@@ -5,6 +5,7 @@ it runs outside the agent sandbox, so this is the only check on what it runs.
 Run with: python3 -m unittest discover -s ~/code/github.com/claude-skills/tests
 """
 
+import importlib.util
 import os
 import shlex
 import subprocess
@@ -14,6 +15,7 @@ import unittest
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[1] / "hooks" / "git-read.py"
+GUARD = SCRIPT.parent / "agent-guard.py"
 ID = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
 
 
@@ -337,6 +339,17 @@ class RepoOwnConfig(unittest.TestCase):
         # --help starts the manual viewer git's config names, which may be the repo's own.
         self.config(("man.viewer", "x"), ("man.x.cmd", str(self.payload)))
         self.assertNothingRuns(("log", "--help"), ("--help", "log"), refused="--help")
+
+    def test_no_alias_stands_in(self):
+        # An alias can't replace a git command, except one git is retiring: git 2.54 runs the
+        # repo's alias.whatchanged in place of `git whatchanged`. So no subcommand git-read.py
+        # allows may be one of those.
+        spec = importlib.util.spec_from_file_location("agent_guard", GUARD)
+        guard = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(guard)
+        subs = sorted(guard.GIT_READ | {"whatchanged"})
+        self.config(*((f"alias.{sub}", f"!{self.payload}") for sub in subs))
+        self.assertNothingRuns(*((sub, "-h") for sub in subs), code=None)
 
 
 if __name__ == "__main__":

@@ -11,7 +11,13 @@ import unittest
 import uuid
 from pathlib import Path
 
-SCRIPT = Path(__file__).resolve().parents[1] / "skills" / "spec" / "scripts" / "prepare-spike.sh"
+SCRIPT = (
+    Path(__file__).resolve().parents[1]
+    / "skills"
+    / "spec"
+    / "scripts"
+    / "prepare-spike.sh"
+)
 
 
 def git(repo, *args):

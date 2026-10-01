@@ -42,9 +42,22 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "research" / "scripts"))
 from mdcheck import (  # noqa: E402  shared with check-note.py
-    CITE, DELTA_REVIEW, INLINE_CODE, NOT_REVIEWED, SEPARATOR, count_words, frontmatter,
-    has_account_id, in_code, is_heading, line_count, record_path, secrets_in, section,
-    strip_code, unclosed_fence,
+    CITE,
+    DELTA_REVIEW,
+    INLINE_CODE,
+    NOT_REVIEWED,
+    SEPARATOR,
+    count_words,
+    frontmatter,
+    has_account_id,
+    in_code,
+    is_heading,
+    line_count,
+    record_path,
+    secrets_in,
+    section,
+    strip_code,
+    unclosed_fence,
 )
 import mdcheck  # noqa: E402
 
@@ -107,7 +120,9 @@ IMPLEMENTATION = "## Implementation"
 WORK_ITEM = re.compile(r"^#{2,3}\s+W(\d+)\b")
 # The field line itself, `- **Done when:** ...` or `**Done when**, on k3s:`, not prose that says
 # "this step is done when W2 lands".
-DONE_WHEN = re.compile(r"\s*(?:[-*+]\s+|\d+[.)]\s+)?(?:\*\*|__)?done when\b(?:\*\*|__)?", re.I)
+DONE_WHEN = re.compile(
+    r"\s*(?:[-*+]\s+|\d+[.)]\s+)?(?:\*\*|__)?done when\b(?:\*\*|__)?", re.I
+)
 PLACEHOLDER = re.compile(r"(?:tbd|tbc|todo|n/a|\?+|\.\.\.|…)", re.IGNORECASE)
 ACCEPTANCE = "## Acceptance criteria"
 EMPTY_FIELD = re.compile(r"^\s*-\s+\*\*[^*]+:\*\*\s*$")
@@ -134,13 +149,21 @@ def split_cold_review(lines, warns):
     author couldn't fix without editing the reviewer's words. The secrets check still reads it."""
     code = in_code(lines)  # a `## Cold review` quoted in a code block isn't the section
     at = next(
-        (i for i, line in enumerate(lines) if not code[i] and line.lower().startswith("## cold review")),
+        (
+            i
+            for i, line in enumerate(lines)
+            if not code[i] and line.lower().startswith("## cold review")
+        ),
         None,
     )
     if at is None:
         return lines, []
     end = next(
-        (j for j in range(at + 1, len(lines)) if not code[j] and lines[j].startswith("## ")),
+        (
+            j
+            for j in range(at + 1, len(lines))
+            if not code[j] and lines[j].startswith("## ")
+        ),
         len(lines),
     )
     if end < len(lines):
@@ -159,7 +182,9 @@ def body_status(body):
     written, lower case, even one this check doesn't know; None if it states none."""
     for line in body[:25]:
         if m := re.match(
-            r"[>\s]*(?:[-*]\s+)?(?:\*\*)?status(?:\*\*)?\s*:\s*(?:\*\*)?\s*([a-z-]+)", line, re.I
+            r"[>\s]*(?:[-*]\s+)?(?:\*\*)?status(?:\*\*)?\s*:\s*(?:\*\*)?\s*([a-z-]+)",
+            line,
+            re.I,
         ):
             return m.group(1).lower()
         if banner := re.match(r"[>\s#*_]*(?:[^\w\s]\s*)?(SHIPPED|SUPERSEDED)\b", line):
@@ -367,12 +392,16 @@ def drifted(repo, read_at, rev, rel, spans):
     for line in out.splitlines():
         m = HUNK.match(line)
         if m:
-            hunks.append((int(m.group(1)), 1 if m.group(2) is None else int(m.group(2))))
+            hunks.append(
+                (int(m.group(1)), 1 if m.group(2) is None else int(m.group(2)))
+            )
     hit = []
     for start, end in spans:
         for at, n in hunks:
             # n == 0 is a pure insertion after read-at line `at`.
-            if (n and at <= end and at + n - 1 >= start) or (not n and start <= at < end):
+            if (n and at <= end and at + n - 1 >= start) or (
+                not n and start <= at < end
+            ):
                 hit.append((start, end))
                 break
     return hit
@@ -594,8 +623,15 @@ def main():
     # against a commit (the cited files that differ between read-at and it).
     drift_lines = []
     drift_rev = args.drift_at
-    if drift_rev and read_at and (
-        git(cite_repo, "rev-parse", "--verify", "--quiet", f"{drift_rev}^{{commit}}") is None
+    if (
+        drift_rev
+        and read_at
+        and (
+            git(
+                cite_repo, "rev-parse", "--verify", "--quiet", f"{drift_rev}^{{commit}}"
+            )
+            is None
+        )
     ):
         fails.append(f"--drift-at {drift_rev} is not a commit in {cite_repo}")
         drift_rev = None
@@ -667,13 +703,18 @@ def main():
     for what in secrets_in("\n".join(record_lines)):
         fails.append(f"its record {record.name} contains what looks like {what}")
     if has_account_id("\n".join(record_lines)):
-        warns.append(f"its record {record.name} contains a 12-digit number: make sure it isn't an AWS account ID")
+        warns.append(
+            f"its record {record.name} contains a 12-digit number: make sure it isn't an AWS account ID"
+        )
     if has_account_id("\n".join([text, *legacy_review])):
         warns.append("contains a 12-digit number: make sure it isn't an AWS account ID")
     # Spike results are raw command output, committed beside the spec, so they get the same
     # check: this spec's own results file, and any other its answer lines cite.
     results = {spec.parent / "spikes" / f"{spec.stem}-results.md"} | {
-        repo / p for line in body if SPIKE_ANSWER.match(line) for p in RESULTS_PATH.findall(line)
+        repo / p
+        for line in body
+        if SPIKE_ANSWER.match(line)
+        for p in RESULTS_PATH.findall(line)
     }
     for path in sorted(r for r in results if r.is_file()):
         content = path.read_text(errors="replace")
@@ -738,10 +779,14 @@ def main():
         residue.append("the 'Verifier round 2 ran on' line")
     routing = [l for l in folded if not SPIKE_ANSWER.match(l)]
     if routing:
-        residue.append(f"{len(routing)} Route/Changes/Expect/Box lines under spike questions")
+        residue.append(
+            f"{len(routing)} Route/Changes/Expect/Box lines under spike questions"
+        )
     if residue and status in LIVE:
         warns.append(
-            "review history kept in the spec: " + "; ".join(residue) + ". It belongs in the "
+            "review history kept in the spec: "
+            + "; ".join(residue)
+            + ". It belongs in the "
             f"record, {record.parent.name}/{record.name}, so the spec stays the plan"
         )
     if implemented and status in ("draft", "reviewed"):
@@ -771,7 +816,9 @@ def main():
             "This fails once the spec is reviewed or in-progress"
         )
     elif unreviewed:
-        places = ["Open questions"] * bool(legacy_changes) + [record.name] * bool(record_changes)
+        places = ["Open questions"] * bool(legacy_changes) + [record.name] * bool(
+            record_changes
+        )
         where = "in " + " and ".join(places)
         infos.append(f"{len(unreviewed)} changes marked 'Not reviewed:' {where}")
     marks = len(re.findall(r"\*\((?:assumption|inferred|unverified)[^)]*\)\*", text))

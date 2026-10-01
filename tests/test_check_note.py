@@ -83,12 +83,16 @@ class SampleStated(unittest.TestCase):
         self.assertIn("a sample of the note's 3 cited claims", out)
 
     def test_sample_stated_is_quiet(self):
-        header = HEADER.replace("confirmed.", "confirmed, a sample of the note's 3 cited claims.")
+        header = HEADER.replace(
+            "confirmed.", "confirmed, a sample of the note's 3 cited claims."
+        )
         out, _ = check(FIXTURE.read_text().replace(HEADER, header))
         self.assertNotIn("cited in the note", out)
 
     def test_wrong_size_warns(self):
-        header = HEADER.replace("confirmed.", "confirmed, a sample of the note's 9 cited claims.")
+        header = HEADER.replace(
+            "confirmed.", "confirmed, a sample of the note's 9 cited claims."
+        )
         out, _ = check(FIXTURE.read_text().replace(HEADER, header))
         self.assertIn("about 3 cited in the note", out)
 
@@ -199,7 +203,6 @@ class PoolRowsAreNotStale(unittest.TestCase):
         )
 
 
-
 class BudgetEscapes(unittest.TestCase):
     """Text the word budget and the other checks used to miss."""
 
@@ -207,7 +210,9 @@ class BudgetEscapes(unittest.TestCase):
         pad = "    " + " ".join(["filler"] * 2000)
         text = FIXTURE.read_text().replace(
             "2. [Gadget spec](https://example.com/gadgets): boxes of 12.\n",
-            "2. [Gadget spec](https://example.com/gadgets): boxes of 12.\n\n" + pad + "\n",
+            "2. [Gadget spec](https://example.com/gadgets): boxes of 12.\n\n"
+            + pad
+            + "\n",
         )
         out, result = check(text)
         self.assertEqual(result, "RESULT: FAIL", out)
@@ -222,7 +227,9 @@ class BudgetEscapes(unittest.TestCase):
         self.assertEqual(result, "RESULT: PASS", out)
 
     def test_unclosed_code_block_fails(self):
-        text = FIXTURE.read_text().replace("Run the tests.", "Run the tests.\n\n```bash\nmake test")
+        text = FIXTURE.read_text().replace(
+            "Run the tests.", "Run the tests.\n\n```bash\nmake test"
+        )
         out, result = check(text)
         self.assertEqual(result, "RESULT: FAIL", out)
         self.assertIn("is never closed", out)
@@ -251,43 +258,74 @@ class IdeasDepth(unittest.TestCase):
     def test_too_few_candidates(self):
         pool = self.text.split("## Candidate pool\n", 1)[1]
         kept = "\n".join(pool.strip().splitlines()[:10])
-        self.fails_with(self.text.replace(pool, "\n" + kept + "\n"), "at least 20 are required")
+        self.fails_with(
+            self.text.replace(pool, "\n" + kept + "\n"), "at least 20 are required"
+        )
 
     def test_untagged_and_unmarked_candidates(self):
-        self.fails_with(self.text.replace("- [tool] Candidate 2,", "- Candidate 2,"), "have no [lens] tag")
         self.fails_with(
-            self.text.replace("Candidate 2, a widget tool idea. Cut: overlaps a stronger candidate.",
-                              "Candidate 2, a widget tool idea."),
+            self.text.replace("- [tool] Candidate 2,", "- Candidate 2,"),
+            "have no [lens] tag",
+        )
+        self.fails_with(
+            self.text.replace(
+                "Candidate 2, a widget tool idea. Cut: overlaps a stronger candidate.",
+                "Candidate 2, a widget tool idea.",
+            ),
             "marked neither 'Cut: <reason>' nor 'Shortlisted #n'",
         )
 
     def test_lens_outside_scope(self):
-        self.fails_with(self.text.replace("- [tool] Candidate 2,", "- [game] Candidate 2,"),
-                        "lenses outside this note's scope: game")
+        self.fails_with(
+            self.text.replace("- [tool] Candidate 2,", "- [game] Candidate 2,"),
+            "lenses outside this note's scope: game",
+        )
 
     def test_prose_in_the_pool_fails_indented_or_not(self):
         for indent in ("", "    "):
             with self.subTest(indent=repr(indent)):
                 prose = "\n".join(f"{indent}More thoughts, line {k}." for k in range(3))
-                self.fails_with(self.text + "\n" + prose + "\n", "lines of prose in the Candidate pool")
+                self.fails_with(
+                    self.text + "\n" + prose + "\n",
+                    "lines of prose in the Candidate pool",
+                )
 
     def test_very_long_candidate_fails(self):
         long = " ".join(["word"] * 130)
-        self.fails_with(self.text.replace("Candidate 2, a widget", f"Candidate 2, {long}, a widget"),
-                        "candidates run over 120 words")
+        self.fails_with(
+            self.text.replace(
+                "Candidate 2, a widget", f"Candidate 2, {long}, a widget"
+            ),
+            "candidates run over 120 words",
+        )
 
     def test_shortlist_rubric(self):
-        self.fails_with(self.text.replace("| Why it flops |", "| Risk |"), "missing rubric columns: Why it flops")
-        self.fails_with(self.text.replace("| Baseline | Do nothing", "| 6 | Do nothing"), "no baseline row")
-        self.fails_with(self.text.replace("| a gif | a week |", "|  | a week |", 1), "rows with empty cells")
+        self.fails_with(
+            self.text.replace("| Why it flops |", "| Risk |"),
+            "missing rubric columns: Why it flops",
+        )
+        self.fails_with(
+            self.text.replace("| Baseline | Do nothing", "| 6 | Do nothing"),
+            "no baseline row",
+        )
+        self.fails_with(
+            self.text.replace("| a gif | a week |", "|  | a week |", 1),
+            "rows with empty cells",
+        )
         rows = [l for l in self.text.splitlines() if l.startswith(("| 4 |", "| 5 |"))]
-        self.fails_with("\n".join(l for l in self.text.splitlines() if l not in rows), "5 to 7 are required")
+        self.fails_with(
+            "\n".join(l for l in self.text.splitlines() if l not in rows),
+            "5 to 7 are required",
+        )
 
     def test_pool_before_sources_fails(self):
         head, pool = self.text.split("## Candidate pool\n", 1)
-        moved = head.replace("## Sources", "## Candidate pool\n" + pool + "\n## Sources")
+        moved = head.replace(
+            "## Sources", "## Candidate pool\n" + pool + "\n## Sources"
+        )
         out, result = check(moved)
         self.assertEqual(result, "RESULT: FAIL", out)
+
 
 if __name__ == "__main__":
     unittest.main()
@@ -312,10 +350,14 @@ class StaleRows(unittest.TestCase):
         self.assertEqual(result, "RESULT: PASS", out)
 
     def test_claim_split_across_paragraphs_is_stale(self):
-        text = FIXTURE.read_text().replace(
-            "Widgets weigh 3 kg each [1]. Gadgets ship in boxes of 12 [2].",
-            "Widgets weigh 3 kg each [1]. Gadgets ship in boxes\n\nof 12 [2].",
-        ).replace(" and gadgets ship in boxes of 12 [2]", "")
+        text = (
+            FIXTURE.read_text()
+            .replace(
+                "Widgets weigh 3 kg each [1]. Gadgets ship in boxes of 12 [2].",
+                "Widgets weigh 3 kg each [1]. Gadgets ship in boxes\n\nof 12 [2].",
+            )
+            .replace(" and gadgets ship in boxes of 12 [2]", "")
+        )
         out, result = check(text)
         self.assertEqual(result, "RESULT: FAIL", out)
         self.assertIn("no longer appears in the note", out)
@@ -340,16 +382,16 @@ class UnverifiedMarks(unittest.TestCase):
         self.assertEqual(result, "RESULT: PASS", out)
 
     def test_mark_after_the_full_stop_passes(self):
-        text = self.text.replace("3 kg each [1].", "3 kg each [1]. *(unverified)*").replace(
-            "3 kg each [1],", "3 kg each [1] *(unverified)*,"
-        )
+        text = self.text.replace(
+            "3 kg each [1].", "3 kg each [1]. *(unverified)*"
+        ).replace("3 kg each [1],", "3 kg each [1] *(unverified)*,")
         out, result = check(text)
         self.assertEqual(result, "RESULT: PASS", out)
 
     def test_mark_on_another_sentence_fails(self):
-        text = self.text.replace("boxes of 12 [2].", "boxes of 12 [2] *(unverified)*.").replace(
-            "3 kg each [1],", "3 kg each [1] *(unverified)*,"
-        )
+        text = self.text.replace(
+            "boxes of 12 [2].", "boxes of 12 [2] *(unverified)*."
+        ).replace("3 kg each [1],", "3 kg each [1] *(unverified)*,")
         out, result = check(text)
         self.assertEqual(result, "RESULT: FAIL", out)
         self.assertIn("isn't marked *(unverified)*", out)
@@ -363,7 +405,10 @@ class UnverifiedMarks(unittest.TestCase):
                 "| Gadgets ship in boxes of 12 | [2] | WRONG | corrected from boxes of 10, cited [2] |",
                 "| Gadgets ship in boxes of 12 | [2] | UNREACHABLE | marked *(unverified)* |",
             )
-            .replace("boxes of 12 [2]. Confidence", "boxes of 12 [2] *(unverified)*. Confidence")
+            .replace(
+                "boxes of 12 [2]. Confidence",
+                "boxes of 12 [2] *(unverified)*. Confidence",
+            )
             .replace("3 kg each [1]. Gadgets", "3 kg each [1]. *(unverified)* Gadgets")
         )
         out, result = check(text)
@@ -377,8 +422,14 @@ class Markdown(unittest.TestCase):
     def test_tilde_fence_is_code(self):
         block = "~~~\n" + " ".join(["word"] * 300) + " [9]\n~~~\n\n"
         base, _ = check(FIXTURE.read_text())
-        out, result = check(FIXTURE.read_text().replace("### Counter-evidence", block + "### Counter-evidence"))
-        self.assertEqual(result, "RESULT: PASS", out)  # [9] inside the fence isn't a citation
+        out, result = check(
+            FIXTURE.read_text().replace(
+                "### Counter-evidence", block + "### Counter-evidence"
+            )
+        )
+        self.assertEqual(
+            result, "RESULT: PASS", out
+        )  # [9] inside the fence isn't a citation
         self.assertEqual(words_above_sources(out), words_above_sources(base))
 
     def test_table_pipes_are_not_words(self):
@@ -396,7 +447,9 @@ class Markdown(unittest.TestCase):
         self.assertIn("does-not-exist.md doesn't exist", out)
 
     def test_missing_absolute_related_path_fails(self):
-        text = FIXTURE.read_text().replace("related: []", "related: [/nonexistent/gone.md]")
+        text = FIXTURE.read_text().replace(
+            "related: []", "related: [/nonexistent/gone.md]"
+        )
         out, result = check(text)
         self.assertEqual(result, "RESULT: FAIL", out)
         self.assertIn("gone.md doesn't exist", out)
@@ -404,9 +457,17 @@ class Markdown(unittest.TestCase):
     def test_account_id_in_an_arn_warns(self):
         for where in ("prose", "code"):
             arn = "arn:aws:iam::123456789012:role/x"
-            block = f"The role is {arn}.\n\n" if where == "prose" else f"```\n{arn}\n```\n\n"
+            block = (
+                f"The role is {arn}.\n\n"
+                if where == "prose"
+                else f"```\n{arn}\n```\n\n"
+            )
             with self.subTest(where=where):
-                out, _ = check(FIXTURE.read_text().replace("### Counter-evidence", block + "### Counter-evidence"))
+                out, _ = check(
+                    FIXTURE.read_text().replace(
+                        "### Counter-evidence", block + "### Counter-evidence"
+                    )
+                )
                 self.assertIn("isn't an AWS account ID", out)
 
 
@@ -437,20 +498,28 @@ class Topic(unittest.TestCase):
     def test_well_formed_topic_is_quiet(self):
         for topic in ("kubernetes", "claude-code/research-skill", "aws2/s3"):
             with self.subTest(topic=topic):
-                out, _ = check(with_topic(topic), siblings={"other.md": with_topic(topic)})
+                out, _ = check(
+                    with_topic(topic), siblings={"other.md": with_topic(topic)}
+                )
                 self.assertNotIn("topic", out)
 
     def test_first_use_warns(self):
-        out, result = check(with_topic("kubernetes"), siblings={"other.md": with_topic("aws")})
+        out, result = check(
+            with_topic("kubernetes"), siblings={"other.md": with_topic("aws")}
+        )
         self.assertEqual(result, "RESULT: PASS", out)
         self.assertRegex(out, r"WARN: no other note in .* has topic 'kubernetes'")
 
     def test_topic_in_use_is_quiet(self):
-        out, _ = check(with_topic("kubernetes"), siblings={"other.md": with_topic("kubernetes")})
+        out, _ = check(
+            with_topic("kubernetes"), siblings={"other.md": with_topic("kubernetes")}
+        )
         self.assertNotIn("has topic", out)
 
     def test_dotfile_sibling_does_not_count(self):
-        out, _ = check(with_topic("kubernetes"), siblings={".eval-x.md": with_topic("kubernetes")})
+        out, _ = check(
+            with_topic("kubernetes"), siblings={".eval-x.md": with_topic("kubernetes")}
+        )
         self.assertIn("has topic 'kubernetes'", out)
 
 
@@ -461,13 +530,16 @@ class MarkdownEdgeCases(unittest.TestCase):
         # Every mention above Sources, so the Verification row's claim has only linked copies.
         prose, sources = FIXTURE.read_text().split("## Sources", 1)
         link = "[Widgets](https://en.wikipedia.org/wiki/Widget_(thing))"
-        prose = prose.replace("Widgets weigh", f"{link} weigh").replace("widgets weigh", f"{link} weigh")
+        prose = prose.replace("Widgets weigh", f"{link} weigh").replace(
+            "widgets weigh", f"{link} weigh"
+        )
         out, result = check(prose + "## Sources" + sources)
         self.assertEqual(result, "RESULT: PASS", out)
 
     def test_index_zero_is_not_a_citation(self):
         text = FIXTURE.read_text().replace(
-            "Use the fixture only in tests.", "Use the fixture only in tests; read args[0] first."
+            "Use the fixture only in tests.",
+            "Use the fixture only in tests; read args[0] first.",
         )
         out, result = check(text)
         self.assertEqual(result, "RESULT: PASS", out)
@@ -484,7 +556,8 @@ class MarkdownEdgeCases(unittest.TestCase):
 
     def test_inline_code_at_line_start_is_not_a_fence(self):
         text = FIXTURE.read_text().replace(
-            "Use the fixture only in tests.", "```x``` is inline code. Use the fixture only in tests."
+            "Use the fixture only in tests.",
+            "```x``` is inline code. Use the fixture only in tests.",
         )
         out, result = check(text)
         self.assertEqual(result, "RESULT: PASS", out)
@@ -492,9 +565,14 @@ class MarkdownEdgeCases(unittest.TestCase):
     def test_note_that_is_not_utf8(self):
         with tempfile.TemporaryDirectory() as tmp:
             note = Path(tmp) / "note.md"
-            note.write_bytes(FIXTURE.read_bytes().replace(b"fixture only", b"caf\xe9 only"))
+            note.write_bytes(
+                FIXTURE.read_bytes().replace(b"fixture only", b"caf\xe9 only")
+            )
             run = subprocess.run(
-                [sys.executable, str(CHECKER), str(note)], capture_output=True, text=True, check=False
+                [sys.executable, str(CHECKER), str(note)],
+                capture_output=True,
+                text=True,
+                check=False,
             )
         self.assertNotIn("Traceback", run.stderr)
         self.assertIn("RESULT: PASS", run.stdout)

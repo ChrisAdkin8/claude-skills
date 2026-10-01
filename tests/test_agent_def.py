@@ -145,7 +145,8 @@ class AgentDef(unittest.TestCase):
 
     def test_root_replaces_the_placeholder_in_commands_and_prompt(self):
         text = MINIMAL.replace(
-            "python3 guard.py bash", 'python3 "${CLAUDE_PLUGIN_ROOT}/hooks/guard.py" bash'
+            "python3 guard.py bash",
+            'python3 "${CLAUDE_PLUGIN_ROOT}/hooks/guard.py" bash',
         ).replace("Do the thing.", "Run ${CLAUDE_PLUGIN_ROOT}/skills/x.sh twice.")
         code, out, err = self.probe(text, root="/r/p")
         self.assertEqual(code, 0, err)

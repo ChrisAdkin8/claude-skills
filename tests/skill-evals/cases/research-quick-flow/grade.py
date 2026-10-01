@@ -18,15 +18,22 @@ ROOT = Path(__file__).resolve().parents[4]
 note = Path(os.environ["EVAL_NOTE"])
 text = note.read_text() if note.exists() else ""
 check = (
-    subprocess.run([str(ROOT / "skills/research/scripts/check-note.py"), str(note)],
-                   capture_output=True, text=True, check=False).stdout
-    if text else ""
+    subprocess.run(
+        [str(ROOT / "skills/research/scripts/check-note.py"), str(note)],
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout
+    if text
+    else ""
 )
 before, after = os.environ.get("NOTES_BEFORE", ""), os.environ.get("NOTES_AFTER", "")
 checks = {
     "the note exists": bool(text),
     "check-note passes": "RESULT: PASS" in check,
-    "the note has a Verification section": bool(re.search(r"(?m)^## Verification\b", text)),
+    "the note has a Verification section": bool(
+        re.search(r"(?m)^## Verification\b", text)
+    ),
     "the note has a status": bool(re.search(r"(?m)^status: \w", text)),
     "~/notes is a git repo": "NOT A GIT REPO" not in before + after,
     "nothing else in ~/notes changed": before == after,

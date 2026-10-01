@@ -31,7 +31,15 @@ MONO = "Menlo, Monaco, monospace"
 #  whether its work runs in a subagent: a separate headless session, and optionally whether its
 #  command is only planned, not built yet: the line under the command says so)
 STAGES = [
-    (1, "Capture", "notes", "/idea", "Save the idea as a note", "~/notes/ideas/", False),
+    (
+        1,
+        "Capture",
+        "notes",
+        "/idea",
+        "Save the idea as a note",
+        "~/notes/ideas/",
+        False,
+    ),
     (
         2,
         "Research",
@@ -41,7 +49,15 @@ STAGES = [
         "~/notes/research/",
         True,
     ),
-    (3, "Plan", "repo", "/spec", "A spec in the repo, citing the code", "docs/specs/", False),
+    (
+        3,
+        "Plan",
+        "repo",
+        "/spec",
+        "A spec in the repo, citing the code",
+        "docs/specs/",
+        False,
+    ),
     (
         4,
         "Spike",
@@ -93,6 +109,8 @@ def runs(st, short=False):
     if planned(st):
         return RUNS_PLANNED_SHORT if short else RUNS_PLANNED
     return (RUNS_SHORT if short else RUNS)[st[6]]
+
+
 QUICK = [("/spec quick", True), (" skips review and spikes", False)]
 DELTA_HEAD = "Spec edited after its review?"
 DELTA_BODY = [
@@ -126,7 +144,8 @@ THEMES = {
         ink="#111827",
         muted="#4B5563",
         line="#D1D5DB",
-        panel="#F3F4F6", pill="#111827",
+        panel="#F3F4F6",
+        pill="#111827",
         loop="#6B7280",
         loop_ink="#374151",
         shadow=True,
@@ -142,7 +161,8 @@ THEMES = {
         ink="#E6EDF3",
         muted="#9DA7B3",
         line="#30363D",
-        panel="#11161D", pill="#30363D",
+        panel="#11161D",
+        pill="#30363D",
         loop="#8B949E",
         loop_ink="#C9D1D9",
         shadow=False,
@@ -251,12 +271,18 @@ class Canvas:
             dx, dy = (x2 - x1) / n, (y2 - y1) / n
             ln, hw = 4.4 * width, 2.4 * width
             bx, by = x2 - dx * ln, y2 - dy * ln
-            tip = (f'<path d="M{x2:.1f},{y2:.1f} L{bx - dy * hw:.1f},{by + dx * hw:.1f} '
-                   f'L{bx + dy * hw:.1f},{by - dx * hw:.1f} Z" fill="{color}"/>')
+            tip = (
+                f'<path d="M{x2:.1f},{y2:.1f} L{bx - dy * hw:.1f},{by + dx * hw:.1f} '
+                f'L{bx + dy * hw:.1f},{by - dx * hw:.1f} Z" fill="{color}"/>'
+            )
             pts[-1] = (x2 - dx * (ln - 1), y2 - dy * (ln - 1))
-        d = " ".join(f"{'M' if i == 0 else 'L'}{x:.1f},{y:.1f}" for i, (x, y) in enumerate(pts))
+        d = " ".join(
+            f"{'M' if i == 0 else 'L'}{x:.1f},{y:.1f}" for i, (x, y) in enumerate(pts)
+        )
         ds = f' stroke-dasharray="{dash}"' if dash else ""
-        self.out.append(f'<path d="{d}" fill="none" stroke="{color}" stroke-width="{width}"{ds}/>')
+        self.out.append(
+            f'<path d="{d}" fill="none" stroke="{color}" stroke-width="{width}"{ds}/>'
+        )
         if tip:
             self.out.append(tip)
 
@@ -413,7 +439,14 @@ def wide(theme):
         c.number(x + 30, TOP + 26, st[0], key)
         c.text(x + 56, TOP + 35, st[1], size=24, fill="#FFFFFF", weight="bold")
         c.pill(x + PAD, TOP + 72, IW, 42, st, "card")
-        c.text(x + PAD, TOP + 138, runs(st), size=16, fill=t["muted"], weight="bold" if st[6] else "normal")
+        c.text(
+            x + PAD,
+            TOP + 138,
+            runs(st),
+            size=16,
+            fill=t["muted"],
+            weight="bold" if st[6] else "normal",
+        )
         c.lines(x + PAD, BODY_Y, bodies[i], size=19, lh=25)
         c.output(x + PAD, CARD_B - 64 - 18, IW, 64, key, st[5])
     for i in range(5):
@@ -584,7 +617,14 @@ def narrow(theme):
         c.number(RX + 30, y + 30, n, key)
         c.text(RX + 56, y + 38, st[1], size=22, fill="#FFFFFF", weight="bold")
         c.pill(RX + 16, y + 54, BW - 32, 34, st, "block", size=17)
-        c.text(RX + 16, y + 110, runs(st), size=15, fill="#FFFFFF", weight="bold" if st[6] else "normal")
+        c.text(
+            RX + 16,
+            y + 110,
+            runs(st),
+            size=15,
+            fill="#FFFFFF",
+            weight="bold" if st[6] else "normal",
+        )
         c.lines(DX, y + 40, body, size=19, lh=25)
         c.output(RX + RW - OW - 16, y + 18, OW, 64, key, st[5], size=15)
         if chips:
@@ -745,7 +785,14 @@ def social(theme):
         c.number(x + 28, TOP + 36, st[0], key)
         c.text(x + 50, TOP + 45, st[1], size=24, fill="#FFFFFF", weight="bold")
         c.pill(x + 14, TOP + 84, BW - 28, 48, st, "block", size=19)
-        c.text(x + 16, TOP + 160, runs(st, short=True), size=17, fill="#FFFFFF", weight="bold" if st[6] else "normal")
+        c.text(
+            x + 16,
+            TOP + 160,
+            runs(st, short=True),
+            size=17,
+            fill="#FFFFFF",
+            weight="bold" if st[6] else "normal",
+        )
         if i < 5:
             ay = TOP + BH / 2
             c.arrow([(x + BW + 3, ay), (x + BW + GAP - 3, ay)], t["muted"], width=3)

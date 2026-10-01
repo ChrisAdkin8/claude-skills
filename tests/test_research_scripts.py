@@ -141,7 +141,9 @@ class RedditSearch(Scripts):
         bare.mkdir()
         for tool in ("bash", "env", "curl"):
             (bare / tool).symlink_to(shutil.which(tool))
-        code, out, err = self.run_script("reddit-search.sh", "rightsizing", PATH=str(bare))
+        code, out, err = self.run_script(
+            "reddit-search.sh", "rightsizing", PATH=str(bare)
+        )
         self.assertEqual(code, 1, out + err)
         self.assertIn("Reddit unavailable: needs jq and curl", out)
 

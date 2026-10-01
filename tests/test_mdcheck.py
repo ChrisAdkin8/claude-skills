@@ -139,20 +139,46 @@ class Loopholes(unittest.TestCase):
         self.assertIsNone(mdcheck.unclosed_fence(["a", "```", "b", "```"]))
 
     def test_section_skips_code_and_ignores_case(self):
-        lines = ["## Cold Review", "x", "```bash", "# comment", "```", "### Delta review", "## Next"]
+        lines = [
+            "## Cold Review",
+            "x",
+            "```bash",
+            "# comment",
+            "```",
+            "### Delta review",
+            "## Next",
+        ]
         self.assertEqual(mdcheck.section(lines, "## Cold review"), lines[1:6])
-        self.assertIsNone(mdcheck.section(["```", "## Cold review", "```"], "## Cold review"))
+        self.assertIsNone(
+            mdcheck.section(["```", "## Cold review", "```"], "## Cold review")
+        )
 
     def test_rule_or_unclosed_block_is_not_frontmatter(self):
-        self.assertEqual(mdcheck.frontmatter(["---", "# Title", "", "Prose.", "---", "more"]), ({}, 0))
+        self.assertEqual(
+            mdcheck.frontmatter(["---", "# Title", "", "Prose.", "---", "more"]),
+            ({}, 0),
+        )
         self.assertEqual(mdcheck.frontmatter(["---", "title: x", "body"]), ({}, 0))
         fields, start = mdcheck.frontmatter(
-            ["---", "title: x", "related:", "  - a", "# comment", "desc: >", "  folded", "---", "b"]
+            [
+                "---",
+                "title: x",
+                "related:",
+                "  - a",
+                "# comment",
+                "desc: >",
+                "  folded",
+                "---",
+                "b",
+            ]
         )
         self.assertEqual((fields["title"], fields["related"], start), ("x", "a", 8))
 
     def test_byte_order_mark_before_frontmatter(self):
-        self.assertEqual(mdcheck.frontmatter(["\ufeff---", "title: x", "---"])[0], {"title": "x"})
+        self.assertEqual(
+            mdcheck.frontmatter(["\ufeff---", "title: x", "---"])[0], {"title": "x"}
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

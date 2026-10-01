@@ -52,7 +52,9 @@ def notes(root, kind):
             text = path.read_text(errors="replace")
         except OSError:
             continue
-        found.append((path.relative_to(root).as_posix(), frontmatter(text.splitlines())[0]))
+        found.append(
+            (path.relative_to(root).as_posix(), frontmatter(text.splitlines())[0])
+        )
     return found
 
 

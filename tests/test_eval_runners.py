@@ -221,7 +221,9 @@ class Runners(unittest.TestCase):
 
     def test_agent_evals_settings_override(self):
         custom = self.tmp / "custom.json"
-        custom.write_text('{"sandbox": {"excludedCommands": ["${CLAUDE_PLUGIN_ROOT}/x *"]}}')
+        custom.write_text(
+            '{"sandbox": {"excludedCommands": ["${CLAUDE_PLUGIN_ROOT}/x *"]}}'
+        )
         self.agent_case("plain", "says yes\n")
         self.env["EVAL_SETTINGS"] = str(custom)
         self.run_script(AGENT_RUN)
@@ -262,9 +264,14 @@ class Runners(unittest.TestCase):
 
     def test_skill_eval_prompts_type_the_namespaced_skill(self):
         # The bare /spec also resolves, but not to this plugin alone while an old install is present.
-        for prompt in sorted((REPO / "tests" / "skill-evals" / "cases").glob("*/prompt.txt")):
+        for prompt in sorted(
+            (REPO / "tests" / "skill-evals" / "cases").glob("*/prompt.txt")
+        ):
             with self.subTest(case=prompt.parent.name):
-                self.assertRegex(prompt.read_text(), r"\A/claude-skills:(spec|research|idea|cold-review|implement) ")
+                self.assertRegex(
+                    prompt.read_text(),
+                    r"\A/claude-skills:(spec|research|idea|cold-review|implement) ",
+                )
 
     def test_skill_evals_pass_the_model_to_the_skill_and_its_agents(self):
         self.skill_case("good", passes=True)
@@ -330,7 +337,9 @@ class Runners(unittest.TestCase):
     def test_skill_evals_settings_file(self):
         self.skill_case("plain", passes=True)
         self.skill_case("agents", passes=True)
-        (self.cases / "agents" / "settings.txt").write_text("agent-case-settings.json\n")
+        (self.cases / "agents" / "settings.txt").write_text(
+            "agent-case-settings.json\n"
+        )
         self.run_script(SKILL_RUN)
         settings = sorted(self.flag(a, "--settings") for a in self.argv())
         self.assertNotEqual(settings[0], settings[1])
@@ -369,7 +378,9 @@ class Runners(unittest.TestCase):
         self.assertEqual((self.tmp / "out/good.note.md").read_text(), "a note")
         self.assertEqual(list((home / ".cache/agent-runs").iterdir()), [])
         self.assertTrue(
-            (self.tmp / "out/good.agent-runs" / note.stem / "researcher/reply.md").exists()
+            (
+                self.tmp / "out/good.agent-runs" / note.stem / "researcher/reply.md"
+            ).exists()
         )
 
     def test_skill_evals_keep_and_remove_implement_runs(self):

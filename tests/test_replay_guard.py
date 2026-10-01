@@ -17,11 +17,15 @@ REPO = Path(__file__).resolve().parents[1]
 
 class Replay(unittest.TestCase):
     def setUp(self):
-        self.guard = replay_guard.load_guard(REPO / "hooks" / "agent-guard.py", "guard_under_test")
+        self.guard = replay_guard.load_guard(
+            REPO / "hooks" / "agent-guard.py", "guard_under_test"
+        )
 
     def test_a_read_does_not_change_the_directory_later_commands_run_in(self):
         before = self.guard.CWD
-        replay_guard.read_verdict(self.guard, "Read", {"file_path": "x"}, "/somewhere/else")
+        replay_guard.read_verdict(
+            self.guard, "Read", {"file_path": "x"}, "/somewhere/else"
+        )
         self.assertEqual(self.guard.CWD, before)
 
     def test_a_cache_rooted_run_may_read_its_own_root_and_no_other(self):
@@ -30,21 +34,32 @@ class Replay(unittest.TestCase):
         own = f"{root}/hooks/run-agent.sh"
         other = str(home / ".claude/plugins/cache/other/o/1.0.0/x")
         # Judged as a checkout's guard, the plugin cache is private.
-        self.assertEqual(replay_guard.read_verdict(self.guard, "Read", {"file_path": own}, "/")[0], "blocked")
+        self.assertEqual(
+            replay_guard.read_verdict(self.guard, "Read", {"file_path": own}, "/")[0],
+            "blocked",
+        )
         # Judged as the run's guard was, from its own root, its own files are readable...
         self.assertEqual(
-            replay_guard.read_verdict(self.guard, "Read", {"file_path": own}, "/", None, root)[0], "allowed"
+            replay_guard.read_verdict(
+                self.guard, "Read", {"file_path": own}, "/", None, root
+            )[0],
+            "allowed",
         )
         # ...and another plugin's still are not.
         self.assertEqual(
-            replay_guard.read_verdict(self.guard, "Read", {"file_path": other}, "/", None, root)[0], "blocked"
+            replay_guard.read_verdict(
+                self.guard, "Read", {"file_path": other}, "/", None, root
+            )[0],
+            "blocked",
         )
         self.assertIsNone(self.guard.OWN_ROOT)
 
     def test_a_root_outside_the_plugins_home_exempts_nothing(self):
         home = self.guard.HOME
         own = str(home / ".claude/plugins/cache/m/p/1.0.0/x")
-        verdict = replay_guard.read_verdict(self.guard, "Read", {"file_path": own}, "/", None, "/some/checkout")
+        verdict = replay_guard.read_verdict(
+            self.guard, "Read", {"file_path": own}, "/", None, "/some/checkout"
+        )
         self.assertEqual(verdict[0], "blocked")
 
     def test_the_root_comes_from_the_run_dir_that_holds_the_session(self):
@@ -56,7 +71,10 @@ class Replay(unittest.TestCase):
             (run / "agents.json").write_text(json.dumps({"a": {"hooks": hook}}))
             old, replay_guard.RUNS = replay_guard.RUNS, Path(tmp)
             try:
-                self.assertEqual(replay_guard.guard_root(Path("/x/abc-123.jsonl")), "/r/plugins/cache/m/p/1")
+                self.assertEqual(
+                    replay_guard.guard_root(Path("/x/abc-123.jsonl")),
+                    "/r/plugins/cache/m/p/1",
+                )
                 self.assertIsNone(replay_guard.guard_root(Path("/x/other.jsonl")))
             finally:
                 replay_guard.RUNS = old
@@ -79,12 +97,21 @@ class Replay(unittest.TestCase):
         for home in ("~", "$HOME", "${HOME}", str(Path.home())):
             with self.subTest(home=home):
                 command = f"{home}/.claude/skills/{script}"
-                self.assertEqual(replay_guard.plugin_spelling(command, None), f"{REPO}/skills/{script}")
-                self.assertEqual(replay_guard.plugin_spelling(command, "/r/p/1"), f"/r/p/1/skills/{script}")
+                self.assertEqual(
+                    replay_guard.plugin_spelling(command, None),
+                    f"{REPO}/skills/{script}",
+                )
+                self.assertEqual(
+                    replay_guard.plugin_spelling(command, "/r/p/1"),
+                    f"/r/p/1/skills/{script}",
+                )
         # The recorded spelling was allowed then, and the plugin's spelling of it is allowed now.
         now = replay_guard.plugin_spelling(f"~/.claude/skills/{script}", None)
         self.assertEqual(replay_guard.verdict(self.guard, now)[0], "allowed")
-        self.assertEqual(replay_guard.plugin_spelling("ls ~/.claude/projects", None), "ls ~/.claude/projects")
+        self.assertEqual(
+            replay_guard.plugin_spelling("ls ~/.claude/projects", None),
+            "ls ~/.claude/projects",
+        )
 
 
 if __name__ == "__main__":

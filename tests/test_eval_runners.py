@@ -347,6 +347,7 @@ class Runners(unittest.TestCase):
         copy = snap / "case"
         files = sorted(str(p.relative_to(copy)) for p in copy.rglob("*") if p.is_file())
         self.assertEqual(files, ["records/spec-record.md", "spec.md"])
+        self.assertFalse(any(KEY in (copy / f).read_text() for f in files))
         named = json.loads((snap / "paths.json").read_text())
         self.assertNotIn("spec-miscite", named["Case"])
         self.assertNotIn(str(self.cases), named["Case"])

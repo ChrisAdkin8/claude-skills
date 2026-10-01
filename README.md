@@ -81,13 +81,14 @@ plugin from it:
 
 ```
 /plugin marketplace add ChrisAdkin8/claude-skills
-/plugin install claude-skills@claude-skills
+/plugin install checked-plans@checked-plans
 ```
 
-That gives you `idea`, `research`, `spec`, `cold-review` and `implement`, and the hooks and agent
-files they use, from Claude Code's plugin cache. The commands are named `/claude-skills:idea`,
-`/claude-skills:research`, `/claude-skills:spec`, `/claude-skills:cold-review` and
-`/claude-skills:implement`, and the short names `/idea`, `/research`, `/spec`, `/cold-review` and
+The plugin is called `checked-plans`; the repo keeps the name `claude-skills`. That gives you
+`idea`, `research`, `spec`, `cold-review` and `implement`, and the hooks and agent files they use,
+from Claude Code's plugin cache. The commands are named `/checked-plans:idea`,
+`/checked-plans:research`, `/checked-plans:spec`, `/checked-plans:cold-review` and
+`/checked-plans:implement`, and the short names `/idea`, `/research`, `/spec`, `/cold-review` and
 `/implement` work too while no other skill has the name. This README writes the short ones.
 
 **Two things a plugin can't install for you.**
@@ -115,6 +116,17 @@ links: `ls -l ~/.claude` shows any of `skills`, `hooks` or `agents` with an arro
 and `rm ~/.claude/<name>` removes one. Left in place, they define every skill a second time, and
 their commands are no longer pre-approved.
 
+**If you installed it as `claude-skills`**, before it was renamed on 2026-10-01, remove that
+install and its marketplace, then add and install it again as above:
+
+```
+/plugin uninstall claude-skills@claude-skills
+/plugin marketplace remove claude-skills
+```
+
+Claude Code's plugin checks now reject names that start with `claude-`, because they read as
+Anthropic's own.
+
 `/research`, `/spec`, `/cold-review` and `/implement` start only when you type them, because each
 launches paid agents. `/idea` is cheap, so Claude may also start it when you ask it to jot
 something down.
@@ -126,14 +138,14 @@ auto-update starts turned off. To update it, run these in a terminal, outside Cl
 first fetches the marketplace's latest copy, and the second updates the plugin from it.
 
 ```
-claude plugin marketplace update claude-skills
-claude plugin update claude-skills@claude-skills
+claude plugin marketplace update checked-plans
+claude plugin update checked-plans@checked-plans
 ```
 
-Inside Claude Code, `/plugin marketplace update claude-skills` does the first, and **Update now**
+Inside Claude Code, `/plugin marketplace update checked-plans` does the first, and **Update now**
 on the plugin in `/plugin`'s **Installed** tab does the second. Either way, the new version loads
 in your next session, or after `/reload-plugins` in one that's open. To have Claude Code update it
-for you, run `/plugin`, pick `claude-skills` on the **Marketplaces** tab and choose **Enable
+for you, run `/plugin`, pick `checked-plans` on the **Marketplaces** tab and choose **Enable
 auto-update**.
 
 ### Set up `~/notes`
@@ -322,7 +334,7 @@ installed plugin. The plugin's folder changes with each update, so the first lin
 Claude Code's record of installed plugins, and the second runs the script from there:
 
 ```
-plugin=$(python3 -c 'import json, sys; print(json.load(sys.stdin)["plugins"]["claude-skills@claude-skills"][0]["installPath"])' < ~/.claude/plugins/installed_plugins.json)
+plugin=$(python3 -c 'import json, sys; print(json.load(sys.stdin)["plugins"]["checked-plans@checked-plans"][0]["installPath"])' < ~/.claude/plugins/installed_plugins.json)
 python3 "$plugin/skills/research/scripts/build-index.py" ~/notes
 ```
 

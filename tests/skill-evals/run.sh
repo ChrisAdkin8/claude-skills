@@ -5,7 +5,7 @@
 #
 # Usage: run.sh [case ...]   all cases by default, in parallel
 # Runs inside hooks/agent-sandbox.json, so Bash writes stay in the fixture and network is limited.
-# Loads this checkout as the plugin (--plugin-dir), so prompt.txt types /claude-skills:<skill>.
+# Loads this checkout as the plugin (--plugin-dir), so prompt.txt types /checked-plans:<skill>.
 # Pre-approves only the Skill tool, so the skill's own allowed-tools decide what runs. Headless, a
 # call they don't approve is denied, not asked about, and a case with any denial fails, as does
 # one whose session left no result.

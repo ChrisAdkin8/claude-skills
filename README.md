@@ -10,7 +10,8 @@ what was written, not what was meant.
 
 **Is it for you?** It's for people who use Claude Code most days and want a plan checked before
 code gets written. It has only been tried on macOS. The research and each check run a paid
-agent, capped at $5 a run ($10 for the research).
+agent, capped at $5 a run ($10 for the research). Each `/implement` run's implementer is capped at
+$20 in all, and each of its up to two checker runs at $5.
 
 [Try it](#try-it) · [How it works](#from-idea-to-merged-change) ·
 [A worked example](#a-worked-example) · [Safety and cost](#safety-and-cost)
@@ -52,7 +53,6 @@ How to read it:
 - Each numbered stage shows the command you run, what it does and where its output goes.
 - Under each command, it says whether the work runs in your session or in a *subagent*. A
   subagent is one of the agents: a separate Claude session that hasn't seen your conversation.
-  "Planned" there means the command isn't built yet.
 - Purple boxes are the agents and scripts that check the work.
 - The pink box is a check that runs only if the spec was edited after its review.
 - Dashed lines are shortcuts and loops off the main path.
@@ -62,10 +62,14 @@ How to read it:
 
 ### Requirements
 
-- **Claude Code 2.1.219 or later.** The agents rely on a sandbox setting added in that version.
-  Last tested on 2.1.285; don't assume the sandbox works on anything older.
+- **Claude Code 2.1.277 or later.** The agents rely on a sandbox rule that holds from that version
+  on. Before it, one command allowed to run outside the sandbox, such as `gh`, took any command run
+  along with it outside too. Last tested on 2.1.285; don't assume the sandbox works on anything
+  older.
 - **macOS.** Nothing has been tried anywhere else ([Linux notes](docs/containment.md#on-linux)).
 - **`python3`**, for the checking scripts. Some spikes also use `uv`.
+- **Your code in git repos under `~/code`**, such as `~/code/my-app`. `/spec` and `/implement`
+  work only on a repo there, and stop anywhere else.
 - **Optional: `gh` (logged in) and `jq`**, to check how well maintained an open-source project is,
   and **`gcloud` (logged in)** for Google Cloud prices. Without them, the research marks those
   figures *(unverified)*.
@@ -80,11 +84,11 @@ plugin from it:
 /plugin install claude-skills@claude-skills
 ```
 
-That gives you `idea`, `research`, `spec` and `cold-review`, and the hooks and agent files they
-use, from Claude Code's plugin cache. The commands are named `/claude-skills:idea`,
-`/claude-skills:research`, `/claude-skills:spec` and `/claude-skills:cold-review`, and the short
-names `/idea`, `/research`, `/spec` and `/cold-review` work too while no other skill has the name.
-This README writes the short ones.
+That gives you `idea`, `research`, `spec`, `cold-review` and `implement`, and the hooks and agent
+files they use, from Claude Code's plugin cache. The commands are named `/claude-skills:idea`,
+`/claude-skills:research`, `/claude-skills:spec`, `/claude-skills:cold-review` and
+`/claude-skills:implement`, and the short names `/idea`, `/research`, `/spec`, `/cold-review` and
+`/implement` work too while no other skill has the name. This README writes the short ones.
 
 **Two things a plugin can't install for you.**
 
@@ -111,8 +115,9 @@ links: `ls -l ~/.claude` shows any of `skills`, `hooks` or `agents` with an arro
 and `rm ~/.claude/<name>` removes one. Left in place, they define every skill a second time, and
 their commands are no longer pre-approved.
 
-`/research`, `/spec` and `/cold-review` start only when you type them, because each launches paid
-agents. `/idea` is cheap, so Claude may also start it when you ask it to jot something down.
+`/research`, `/spec`, `/cold-review` and `/implement` start only when you type them, because each
+launches paid agents. `/idea` is cheap, so Claude may also start it when you ask it to jot
+something down.
 
 #### Update
 
@@ -159,7 +164,7 @@ The research templates need the headings a research note must have, because `che
 fails a note without them. The `REQUIRED` list near the top of
 [`check-note.py`](skills/research/scripts/check-note.py) names them for each kind of note.
 
-Only `/cold-review` works without `~/notes`.
+Only `/cold-review` and `/implement` work without `~/notes`.
 
 ### Your first run
 

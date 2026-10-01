@@ -71,10 +71,10 @@ KINDS = {
 }
 
 
-def scan(args, cwd=None):
+def scan(args, cwd=None, env=None):
     run = subprocess.run(
         [sys.executable, str(SCRIPT), *args],
-        capture_output=True, text=True, check=False, cwd=cwd,
+        capture_output=True, text=True, check=False, cwd=cwd, env=env,
     )  # fmt: skip
     return run.returncode, run.stdout, run.stderr
 
@@ -161,7 +161,72 @@ def git(repo, *args):
     ).stdout.strip()  # fmt: skip
 
 
+def write(repo, files):
+    """Write each {path: text} under `repo`; a text of None deletes the file."""
+    for path, text in files.items():
+        file = repo / path
+        if text is None:
+            file.unlink()
+        else:
+            file.parent.mkdir(parents=True, exist_ok=True)
+            file.write_text(text)
+
+
 class StagedChanges(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.tmp = Path(tmp.name)
+
+    def commit(self, files):
+        """A new throwaway repo with `files` committed, and that commit's SHA."""
+        repo = Path(tempfile.mkdtemp(dir=self.tmp))
+        git(repo, "init", "-q")
+        write(repo, files)
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "--allow-empty", "-m", "base")
+        return repo, git(repo, "rev-parse", "HEAD")
+
+    def scan_staged(self, before, after, files=None):
+        """Commit `before`, write `after` over it and stage that, then scan it with --base.
+        --files is every path named, unless given."""
+        repo, base = self.commit(before)
+        write(repo, after)
+        git(repo, "add", "-A")
+        files = list({**before, **after}) if files is None else files
+        return scan(["--base", base, "--files", *files], cwd=repo)
+
+    def test_a_base_that_starts_with_a_dash_never_reaches_git(self):
+        # --base=--output=FILE made git diff write the staged diff over FILE. The scan then read
+        # nothing and exited 0, which reads as clean.
+        repo, _ = self.commit({"app.py": "x = 1\n"})
+        write(repo, {"app.py": "x = 2  # noqa\n"})
+        git(repo, "add", "-A")
+        victim = self.tmp / "victim.txt"
+        victim.write_text("keep me\n")
+        code, out, err = scan([f"--base=--output={victim}"], cwd=repo)
+        self.assertEqual((code, out), (2, ""), err)
+        self.assertIn("not a revision", err)
+        self.assertEqual(victim.read_text(), "keep me\n")
+
+    def test_base_must_name_a_commit(self):
+        repo, base = self.commit({"app.py": "x = 1\n"})
+        write(repo, {"app.py": "x = 2  # noqa\n"})
+        git(repo, "add", "-A")
+        tree = git(repo, "rev-parse", "HEAD^{tree}")
+        for rev in (tree, "no-such-rev", "HEAD..HEAD"):
+            with self.subTest(rev=rev):
+                code, out, err = scan(["--base", rev], cwd=repo)
+                self.assertEqual((code, out), (2, ""), err)
+                self.assertIn("is not a commit", err)
+        # Any name for a commit still works.
+        for rev in (base, base[:12], "HEAD", "HEAD~0"):
+            with self.subTest(rev=rev):
+                code, out, err = scan(["--base", rev], cwd=repo)
+                self.assertEqual(
+                    (code, out), (1, "FLAG silenced: app.py:1: x = 2  # noqa\n"), err
+                )
+
     def test_base_reads_staged_changes_including_a_new_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)

@@ -4,13 +4,16 @@
 Usage: scan-diff.py --base REV [--files PATH...] [--diff-file PATH]
 
 Reads `git diff --cached REV` in the current repo: the staged change against the work item's
-starting commit (stage new files first, or they aren't seen). --diff-file reads a saved unified
-diff instead, and then --base isn't needed. --files is the caller's whole allowed list: the work
-item's Files plus any file a logged departure added. Without --files, scope isn't checked.
+starting commit (stage new files first, or they aren't seen). REV must name a commit, and git diff
+gets its SHA; one that starts with `-` is refused, since git would read it as an option.
+--diff-file reads a saved unified diff instead, and then --base isn't needed. --files is the
+caller's whole allowed list: the work item's Files plus any file a logged departure added. Without
+--files, scope isn't checked.
 
 Prints one `FLAG <kind>: <file>:<line>: <text>` per hit and exits 1 if there are any; else prints
-nothing and exits 0. Exits 2 if the diff can't be read. The line is the new file's line for an
-added line, the old file's for a removed one, and 0 for a flag about the whole file.
+nothing and exits 0. Exits 2 if REV isn't a commit or the diff can't be read. The line is the new
+file's line for an added line, the old file's for a removed one, and 0 for a flag about the whole
+file.
 
 Kinds:
   scope         a changed file not in --files
@@ -178,9 +181,25 @@ def main():
             print(f"scan-diff: can't read {args.diff_file}: {e}", file=sys.stderr)
             return 2
     elif args.base:
+        # A value that starts with `-` would reach git as an option: --base=--output=FILE made git
+        # diff write the diff over FILE, and the scan then read nothing and exited 0. So, as
+        # prepare-verify.sh does, refuse it, resolve the rest to a commit, and give git the SHA.
+        if args.base.startswith("-"):
+            print(f"scan-diff: not a revision: {args.base}", file=sys.stderr)
+            return 2
+        run = subprocess.run(
+            ["git", "rev-parse", "--verify", "--quiet", "--end-of-options",
+             f"{args.base}^{{commit}}"],
+            capture_output=True, check=False,
+        )  # fmt: skip
+        if run.returncode != 0:
+            print(f"scan-diff: {args.base} is not a commit", file=sys.stderr)
+            sys.stderr.write(run.stderr.decode(errors="replace"))  # e.g. not a git repo
+            return 2
+        base = run.stdout.decode().strip()
         run = subprocess.run(
             ["git", "-c", "core.quotePath=off", "diff", "--cached", "--no-color", "--no-ext-diff",
-             "--no-renames", "--src-prefix=a/", "--dst-prefix=b/", args.base, "--"],
+             "--no-renames", "--src-prefix=a/", "--dst-prefix=b/", base, "--"],
             capture_output=True, check=False,
         )  # fmt: skip
         if run.returncode != 0:

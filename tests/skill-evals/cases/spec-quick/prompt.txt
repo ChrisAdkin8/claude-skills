@@ -1,3 +1,3 @@
-/claude-skills:spec quick add a --shout option to greet.py that prints the greeting in capitals
+/checked-plans:spec quick add a --shout option to greet.py that prints the greeting in capitals
 
 You are running unattended, so AskUserQuestion won't reach anyone. Where the skill would ask, take its recommended option; where it would offer something, take the answer as no. Don't commit anything. Run each agent without `run_in_background`, with the Bash tool's `timeout` set to 600000 (10 minutes, its maximum), and carry on in the same turn.

@@ -24,7 +24,7 @@ names_worktree = re.compile(
 )
 checks = {
     "the reply says to run /spec done from the implement/<basename> worktree": any(
-        re.search(r"(?i)/?(?:claude-skills:)?spec done", b) and names_worktree.search(b)
+        re.search(r"(?i)/?(?:checked-plans:)?spec done", b) and names_worktree.search(b)
         for b in blocks
     ),
     "the spec's status is unchanged (reviewed)": re.search(

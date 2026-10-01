@@ -10,7 +10,8 @@ what was written, not what was meant.
 
 **Is it for you?** It's for people who use Claude Code most days and want a plan checked before
 code gets written. It has only been tried on macOS. The research and each check run a paid
-agent, capped at $5 a run ($10 for the research).
+agent, capped at $5 a run ($10 for the research). Each `/implement` run's implementer is capped at
+$20 in all, and each of its up to two checker runs at $5.
 
 [Try it](#try-it) · [How it works](#from-idea-to-merged-change) ·
 [A worked example](#a-worked-example) · [Safety and cost](#safety-and-cost)
@@ -52,7 +53,6 @@ How to read it:
 - Each numbered stage shows the command you run, what it does and where its output goes.
 - Under each command, it says whether the work runs in your session or in a *subagent*. A
   subagent is one of the agents: a separate Claude session that hasn't seen your conversation.
-  "Planned" there means the command isn't built yet.
 - Purple boxes are the agents and scripts that check the work.
 - The pink box is a check that runs only if the spec was edited after its review.
 - Dashed lines are shortcuts and loops off the main path.
@@ -62,10 +62,14 @@ How to read it:
 
 ### Requirements
 
-- **Claude Code 2.1.219 or later.** The agents rely on a sandbox setting added in that version.
-  Last tested on 2.1.285; don't assume the sandbox works on anything older.
+- **Claude Code 2.1.277 or later.** The agents rely on a sandbox rule that holds from that version
+  on. Before it, one command allowed to run outside the sandbox, such as `gh`, took any command run
+  along with it outside too. Last tested on 2.1.285; don't assume the sandbox works on anything
+  older.
 - **macOS.** Nothing has been tried anywhere else ([Linux notes](docs/containment.md#on-linux)).
 - **`python3`**, for the checking scripts. Some spikes also use `uv`.
+- **Your code in git repos under `~/code`**, such as `~/code/my-app`. `/spec` and `/implement`
+  work only on a repo there, and stop anywhere else.
 - **Optional: `gh` (logged in) and `jq`**, to check how well maintained an open-source project is,
   and **`gcloud` (logged in)** for Google Cloud prices. Without them, the research marks those
   figures *(unverified)*.
@@ -77,14 +81,15 @@ plugin from it:
 
 ```
 /plugin marketplace add ChrisAdkin8/claude-skills
-/plugin install claude-skills@claude-skills
+/plugin install checked-plans@checked-plans
 ```
 
-That gives you `idea`, `research`, `spec` and `cold-review`, and the hooks and agent files they
-use, from Claude Code's plugin cache. The commands are named `/claude-skills:idea`,
-`/claude-skills:research`, `/claude-skills:spec` and `/claude-skills:cold-review`, and the short
-names `/idea`, `/research`, `/spec` and `/cold-review` work too while no other skill has the name.
-This README writes the short ones.
+The plugin is called `checked-plans`; the repo keeps the name `claude-skills`. That gives you
+`idea`, `research`, `spec`, `cold-review` and `implement`, and the hooks and agent files they use,
+from Claude Code's plugin cache. The commands are named `/checked-plans:idea`,
+`/checked-plans:research`, `/checked-plans:spec`, `/checked-plans:cold-review` and
+`/checked-plans:implement`, and the short names `/idea`, `/research`, `/spec`, `/cold-review` and
+`/implement` work too while no other skill has the name. This README writes the short ones.
 
 **Two things a plugin can't install for you.**
 
@@ -93,8 +98,10 @@ This README writes the short ones.
 - **Deny rules for your own sessions.** A plugin can't ship permission settings. What keeps the
   agents away from your credentials and session history, the sandbox settings and the guard,
   travels with the plugin. Your own sessions get none of it. To give them the same denies, copy
-  the `permissions.deny` list in [`hooks/agent-sandbox.json`](hooks/agent-sandbox.json) into
-  `permissions.deny` in your user settings file, `~/.claude/settings.json`.
+  the `permissions.deny` list in [`hooks/user-deny.json`](hooks/user-deny.json) into
+  `permissions.deny` in your user settings file, `~/.claude/settings.json`. It's the agents' list
+  without the rule that hides `~/.cache/agent-runs`, because `/research`, `/spec` and
+  `/cold-review` read each agent's reply there, and a deny rule would stop them.
 
 **To work on the repo** rather than use it, clone it anywhere and run Claude Code from the clone
 with the plugin loaded from that directory:
@@ -109,8 +116,37 @@ links: `ls -l ~/.claude` shows any of `skills`, `hooks` or `agents` with an arro
 and `rm ~/.claude/<name>` removes one. Left in place, they define every skill a second time, and
 their commands are no longer pre-approved.
 
-`/research`, `/spec` and `/cold-review` start only when you type them, because each launches paid
-agents. `/idea` is cheap, so Claude may also start it when you ask it to jot something down.
+**If you installed it as `claude-skills`**, before it was renamed on 2026-10-01, remove that
+install and its marketplace, then add and install it again as above:
+
+```
+/plugin uninstall claude-skills@claude-skills
+/plugin marketplace remove claude-skills
+```
+
+Claude Code's plugin checks now reject names that start with `claude-`, because they read as
+Anthropic's own.
+
+`/research`, `/spec`, `/cold-review` and `/implement` start only when you type them, because each
+launches paid agents. `/idea` is cheap, so Claude may also start it when you ask it to jot
+something down.
+
+#### Update
+
+Claude Code doesn't fetch new versions of this plugin by itself: for marketplaces like this one,
+auto-update starts turned off. To update it, run these in a terminal, outside Claude Code. The
+first fetches the marketplace's latest copy, and the second updates the plugin from it.
+
+```
+claude plugin marketplace update checked-plans
+claude plugin update checked-plans@checked-plans
+```
+
+Inside Claude Code, `/plugin marketplace update checked-plans` does the first, and **Update now**
+on the plugin in `/plugin`'s **Installed** tab does the second. Either way, the new version loads
+in your next session, or after `/reload-plugins` in one that's open. To have Claude Code update it
+for you, run `/plugin`, pick `checked-plans` on the **Marketplaces** tab and choose **Enable
+auto-update**.
 
 ### Set up `~/notes`
 
@@ -140,7 +176,7 @@ The research templates need the headings a research note must have, because `che
 fails a note without them. The `REQUIRED` list near the top of
 [`check-note.py`](skills/research/scripts/check-note.py) names them for each kind of note.
 
-Only `/cold-review` works without `~/notes`.
+Only `/cold-review` and `/implement` work without `~/notes`.
 
 ### Your first run
 
@@ -153,10 +189,11 @@ works.
    minutes and runs two paid agents: one researches, the other checks. You should get a short,
    cited note in `~/notes/research/` with a `## Verification` section at the end, and a rebuilt
    `~/notes/index.md`.
-3. **`/spec quick <a small change you want>`**, run from inside a git repo under `~/code`, the
-   only place `/spec` may edit files without asking. This runs one paid agent, the verifier. You
-   should get a spec in that repo's `docs/specs/`, or wherever the repo already keeps specs, and a
-   record of its checks beside it.
+3. **`/spec quick <a small change you want>`**, run from inside a git repo under `~/code`. This
+   runs one paid agent, the verifier. You should get a spec in that repo's `docs/specs/`, and a
+   record of its checks beside it. `/spec` may edit files there without asking. If the repo
+   already keeps its specs somewhere else, the spec goes there instead, and `/spec` asks before
+   each edit.
 
 If a step stops with a message about `~/notes`, look again at [Set up `~/notes`](#set-up-notes).
 
@@ -293,10 +330,16 @@ There are three ways to view it, easiest first:
    VS Code's normal preview. It shows the same tree as an indented list.
 
 To rebuild the index by hand, for example after `/idea` adds a note, run the script from the
-installed plugin, whose versioned folder the `*` fills in:
-`python3 ~/.claude/plugins/cache/claude-skills/claude-skills/*/skills/research/scripts/build-index.py ~/notes`
-(from a clone, `skills/research/scripts/build-index.py ~/notes`). Don't edit `index.md` itself:
-the next rebuild overwrites it.
+installed plugin. The plugin's folder changes with each update, so the first line looks it up in
+Claude Code's record of installed plugins, and the second runs the script from there:
+
+```
+plugin=$(python3 -c 'import json, sys; print(json.load(sys.stdin)["plugins"]["checked-plans@checked-plans"][0]["installPath"])' < ~/.claude/plugins/installed_plugins.json)
+python3 "$plugin/skills/research/scripts/build-index.py" ~/notes
+```
+
+From a clone, run `skills/research/scripts/build-index.py ~/notes` instead. Don't edit `index.md`
+itself: the next rebuild overwrites it.
 
 ## Safety and cost
 

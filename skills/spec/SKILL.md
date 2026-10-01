@@ -3,7 +3,7 @@ name: spec
 description: Turns a research note or a described change into an implementation spec in the repo it changes, grounded in file:line citations, then verifies it and gives it a cold review. Runs when the user types /spec.
 disable-model-invocation: true
 argument-hint: '[quick] <research note path> [direction] | [quick] <description of the change> | finish <spec path> | spike <spec path> | done <spec path>'
-allowed-tools: Read Grep Glob Edit(~/code/**/*.md) Edit(~/notes/**) Edit(~/.cache/spec-spikes/**) Bash(grep *) Bash(git rev-parse *) Bash(git status *) Bash(git ls-files *)
+allowed-tools: Read Grep Glob Edit(~/code/**/docs/specs/**) Edit(~/notes/**) Edit(~/.cache/spec-spikes/**) Bash(grep *) Bash(git rev-parse *) Bash(git status *) Bash(git ls-files *)
   Bash(git -C ~/notes status *) Bash(${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py *) Bash(git -C ~/notes add *) Bash(git -C ~/notes commit *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/check-spec.py *)
   Bash(${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/check-note.py *) Bash(${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.sh *) Edit(~/.cache/agent-runs/**)
   Bash(${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/prepare-spike.sh ~/.cache/spec-spikes/*) Bash(${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/run-spike.sh ~/.cache/spec-spikes/*)
@@ -31,7 +31,7 @@ An older spec keeps it inline (`## Cold review` at its end, `Not reviewed:` line
 
 Write no code in the repo, and don't branch or commit there.
 
-Run `git log`, `git diff` and any `git -C <dir>` read through `${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py`, and `git rev-parse`, `git status` and `git ls-files` too when the repo isn't the working directory.
+Run `git log`, `git diff` and any `git -C <dir>` read through `${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py`, and `git rev-parse`, `git status` and `git ls-files` too when the repo isn't the working directory. Run one command per Bash call, with each script's full path written out: a shell variable, a `cd` or a second command in the call isn't pre-approved, so it asks the user.
 
 The checking rules are in `${CLAUDE_PLUGIN_ROOT}/hooks/agents/spec-verifier.md`, and the cold review's prompt skeleton in `${CLAUDE_PLUGIN_ROOT}/skills/cold-review/SKILL.md`. Don't restate either in a brief.
 

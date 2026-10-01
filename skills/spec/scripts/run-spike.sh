@@ -7,6 +7,11 @@
 # Writes run.json (the --output-format json result) and run.err in the scratch dir. The spiker
 # writes results.md. A wrapper, not a bare `cd <scratch> && claude -p …`, because the permission
 # check won't pre-approve that compound command from allowed-tools (spike 2).
+#
+# Exit 2: the run couldn't start. Exit 4: the spike left results.md, run.json or run.err as a
+# symlink, or as anything else but a regular file. /spec's own session, which no sandbox limits,
+# reads those files, so the script removes the entry unread, and /spec records the spike as
+# BLOCKED. Any other exit is claude's own, with run.err saying why when it isn't 0.
 set -euo pipefail
 
 die() { echo "run-spike: $*" >&2; exit 2; }
@@ -41,10 +46,39 @@ export CLAUDE_CODE_DISABLE_AUTO_MEMORY=1
 # The spiker prompt sits beside this script's directory, wherever the skill is installed.
 spiker=$(cd "$(dirname "$0")/.." && pwd -P)/spiker.md
 cd "$scratch"
-exec claude -p --model sonnet --setting-sources user \
+status=0
+claude -p --model sonnet --setting-sources user \
   --append-system-prompt-file "$spiker" \
   --settings settings.json \
   --allowedTools "Read Grep Glob Bash Write(./**) Edit(./**)" \
   --max-budget-usd 2 --max-turns 60 \
   --output-format json --strict-mcp-config --no-session-persistence \
-  "$(cat brief.md)" < /dev/null > run.json 2> run.err
+  "$(cat brief.md)" < /dev/null > run.json 2> run.err || status=$?
+
+# The spike may write anything in its scratch dir, links included: the sandbox stops it reading
+# ~/.ssh, but not linking to it. /spec's own session then reads these three files and copies
+# results.md into a committed file, so each must be a regular file. Anything else is removed (a
+# link, not what it points to) before something downstream follows it. Its target isn't printed:
+# the spike chose it, and this output reaches /spec's session.
+refused=0
+for f in results.md run.json run.err; do
+  if [ -L "$f" ]; then
+    what="a symlink"
+  elif [ -e "$f" ] && [ ! -f "$f" ]; then
+    what="not a regular file"
+  else
+    continue
+  fi
+  refused=1
+  # rm's own errors stay quiet: inside a directory, they would print names the spike chose.
+  if rm -rf -- "$f" 2>/dev/null; then
+    echo "run-spike: $scratch/$f was $what; removed it unread" >&2
+  else
+    echo "run-spike: $scratch/$f was $what; couldn't remove it, so don't read it" >&2
+  fi
+done
+if [ "$refused" -eq 1 ]; then
+  echo "run-spike: exit 4: record this spike as BLOCKED, and read none of its files" >&2
+  exit 4
+fi
+exit "$status"

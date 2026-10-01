@@ -2,8 +2,9 @@
 HISTORY_HOME (hooks/agent-guard.py), the agents' sandbox settings (hooks/agent-sandbox.json), the
 spikes' (skills/spec/spike-settings.json) and the implement-verifier's
 (skills/implement/verify-settings.json), which denies what the spikes' does. Each file only knows
-its own copy, so a path added to one is easily missed in the others. Also that the skill evals'
-settings for cases that launch agents differ from the agents' only as planned.
+its own copy, so a path added to one is easily missed in the others. Likewise the secret
+environment variables the three sandboxes hide. Also that the skill evals' settings for cases
+that launch agents differ from the agents' only as planned.
 
 Run with: python3 -m unittest discover -s ~/code/github.com/claude-skills/tests
 """
@@ -123,9 +124,19 @@ class SandboxSettings(unittest.TestCase):
                     covered(path, known), f"~/{path} isn't in the guard's lists"
                 )
 
+    def test_spikes_hide_the_secret_env_vars_agents_do(self):
+        # A spike runs with no guard and may be given network hosts, and it inherits the
+        # environment of the session that launched it: CLAUDE_CODE_MESSAGING_TOKEN is set in
+        # every Claude Code session. So its commands may not see the variables the agents' can't.
+        self.assertEqual(
+            SPIKE["sandbox"].get("credentials", {}).get("envVars"),
+            AGENT["sandbox"]["credentials"]["envVars"],
+        )
+
     def test_verify_settings_deny_what_the_spike_settings_deny(self):
         # The verifier runs code in an export as a spike does, under the same sandbox: no
-        # network, the same denies, and writes only to the uv cache the spikes share.
+        # network, the same denies and hidden environment variables, and writes only to the uv
+        # cache the spikes share.
         for key in ("denyRead", "allowWrite"):
             with self.subTest(list=key):
                 self.assertEqual(
@@ -133,6 +144,9 @@ class SandboxSettings(unittest.TestCase):
                     SPIKE["sandbox"]["filesystem"][key],
                 )
         self.assertEqual(VERIFY["permissions"]["deny"], SPIKE["permissions"]["deny"])
+        self.assertEqual(
+            VERIFY["sandbox"].get("credentials"), SPIKE["sandbox"].get("credentials")
+        )
         self.assertEqual(VERIFY["sandbox"]["network"]["allowedDomains"], [])
 
     def test_os_and_read_denies_match(self):

@@ -1,14 +1,14 @@
 {
-  "name": "claude-skills",
-  "description": "Claude Code commands that turn an idea into a checked plan for changing your code: /idea, /research, /spec and /cold-review.",
+  "name": "checked-plans",
+  "description": "Claude Code commands that turn an idea into a checked plan for changing your code: /idea, /research, /spec, /cold-review and /implement, with separate agents checking the research, the plan and the implementation.",
   "owner": {
     "name": "Chris Adkin"
   },
   "plugins": [
     {
-      "name": "claude-skills",
+      "name": "checked-plans",
       "source": "./",
-      "description": "Capture an idea, research it, turn it into a plan grounded in file:line citations, and have fresh agents check the research and the plan."
+      "description": "Claude Code commands that turn an idea into a checked plan for changing your code: /idea, /research, /spec, /cold-review and /implement, with separate agents checking the research, the plan and the implementation."
     }
   ]
 }

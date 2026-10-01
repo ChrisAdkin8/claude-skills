@@ -910,7 +910,10 @@ class GateLoopholes(unittest.TestCase):
         out, result = check(prose)
         self.assertEqual(result, "RESULT: FAIL", out)
         self.assertIn("W1 has no 'Done when'", out)
-        for placeholder in ("TBD", "TODO", "?", "..."):
+        # A full stop or other punctuation after a placeholder leaves it a placeholder.
+        for placeholder in (
+            "TBD", "TODO", "?", "...", "TBD.", "TODO.", "n/a.", "TBC!", "TBD …",
+        ):  # fmt: skip
             with self.subTest(placeholder=placeholder):
                 out, result = check(base.replace("the tests pass.", placeholder))
                 self.assertIn("W1 has an empty 'Done when'", out)

@@ -1,10 +1,12 @@
-# The reply is complete, so an empty or cut-off reply can't pass.
-(?m)Confirmed:
-(?m)Plan holds:
-# A row for each of the spec's three citations, so a verifier that checked almost nothing fails.
-(?m)^\|.*\b31\b
-(?m)^\|.*\b187\b
-(?m)^\|.*\b394\b
+# The reply is complete, so an empty or cut-off reply can't pass: the closing lines
+# hooks/run-agent.sh's REPLY_SHAPES reads for the spec-verifier, copied here.
+Confirmed: \d+ of \d+
+Plan holds: (yes|no)
+# A CONFIRMED row for each of the spec's three citations, all true at c7adaf4, so a verifier that
+# checked almost nothing, or ruled everything wrong, fails. A verdict cell may go on after the word.
+(?m)^\|(?=[^\n]*\b31\s*[-–]\s*37\b)[^\n]*\|\s*\**CONFIRMED\b[^|\n]*\|
+(?m)^\|(?=[^\n]*\b187\s*[-–]\s*193\b)[^\n]*\|\s*\**CONFIRMED\b[^|\n]*\|
+(?m)^\|(?=[^\n]*\b394\s*[-–]\s*395\b)[^\n]*\|\s*\**CONFIRMED\b[^|\n]*\|
 # No table row checks the saved review's citation: the verifier skipped the section. A row that
 # only says it was skipped is fine.
 !(?im)^\|(?![^\n]*\b(SKIPPED|not checked)\b)[^\n]*\b999\b

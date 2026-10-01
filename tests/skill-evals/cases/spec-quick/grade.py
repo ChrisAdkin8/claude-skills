@@ -1,9 +1,12 @@
 """Grades the spec-quick case: python3 grade.py <fixture dir> <result.json>. Prints one line per check.
 
 The fixture is ~/code/eval-spec-quick-<stamp>, so the skill's run dirs are
-~/.cache/agent-runs/eval-spec-quick-<stamp>--<spec basename>/<agent>.
+~/.cache/agent-runs/eval-spec-quick-<stamp>--<spec basename>/<agent>. hooks/run-agent.sh writes a
+reply.md there even when the run fails, so the verifier counts as run only if its session ended in
+success with a reply in the spec-verifier's shape.
 """
 
+import json
 import re
 import subprocess
 import sys
@@ -48,6 +51,22 @@ def git(*args):
     ).stdout.strip()
 
 
+# The spec-verifier's reply shape, copied from hooks/run-agent.sh's REPLY_SHAPES, not imported.
+SHAPE = [r"\|\s*#\s*\|\s*Claim", r"Confirmed: \d+ of \d+", r"Plan holds: (yes|no)"]
+
+
+def finished(run):
+    """The run's session ended in success and its reply.md is in the agent's shape."""
+    try:
+        ok = json.loads((run / "run.json").read_text()).get("subtype") == "success"
+        reply = (run / "reply.md").read_text()
+    except (OSError, ValueError, AttributeError):
+        return False
+    return ok and all(re.search(p, reply) for p in SHAPE)
+
+
+verifiers = sorted(runs.glob(f"{repo.name}--*/spec-verifier*"))
+verified = bool(verifiers) and all(finished(r) for r in verifiers)
 checks = {
     "one spec under docs/specs": spec is not None,
     "check-spec passes": "RESULT: PASS" in check,
@@ -61,7 +80,7 @@ checks = {
             r"(?i)confirmed:?\s*\d+ of \d+|\d+ of \d+ claims confirmed", verification
         )
     ),
-    "the spec verifier ran": any(runs.glob(f"{repo.name}--*/spec-verifier*/reply.md")),
+    f"every spec-verifier run ended in success, with a reply in its shape ({len(verifiers)} runs)": verified,
     "no cold review was launched": not any(runs.glob(f"{repo.name}--*/cold-reviewer*")),
     "nothing committed": git("rev-parse", "--short", "HEAD") == head,
 }

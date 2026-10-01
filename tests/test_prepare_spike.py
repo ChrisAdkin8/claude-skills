@@ -1,10 +1,13 @@
 """Tests for skills/spec/scripts/prepare-spike.sh: it deletes and fills only a spike's own scratch
-directory under ~/.cache/spec-spikes, whatever arguments it's given.
+directory under ~/.cache/spec-spikes, whatever arguments it's given, and exports the repo as git
+stores it, whatever the repo's attributes say.
 
 Run with: python3 -m unittest discover -s ~/code/github.com/claude-skills/tests
 """
 
 import os
+import shlex
+import stat
 import subprocess
 import tempfile
 import unittest
@@ -24,6 +27,43 @@ def git(repo, *args):
     return subprocess.run(
         ["git", "-C", str(repo), *args], capture_output=True, text=True, check=True
     ).stdout.strip()
+
+
+def committed(repo, rev):
+    """{path: (mode, bytes)} for each file in rev's tree, as git stores it, before any attribute
+    or filter: a link's bytes are its target."""
+    tree = subprocess.run(
+        ["git", "-C", str(repo), "ls-tree", "-r", "-z", rev],
+        capture_output=True,
+        check=True,
+    ).stdout
+    files = {}
+    for entry in filter(None, tree.split(b"\0")):
+        meta, path = entry.split(b"\t", 1)
+        mode, _, oid = meta.decode().split()
+        blob = subprocess.run(
+            ["git", "-C", str(repo), "cat-file", "blob", oid],
+            capture_output=True,
+            check=True,
+        ).stdout
+        files[path.decode()] = (mode, blob)
+    return files
+
+
+def exported(root):
+    """The same map for a directory, in git's modes: a link is 120000 and its target, an
+    executable file 100755, any other file 100644."""
+    files = {}
+    for top, dirs, names in os.walk(root):
+        for name in dirs + names:
+            path = Path(top) / name
+            rel = path.relative_to(root).as_posix()
+            if path.is_symlink():
+                files[rel] = ("120000", os.fsencode(os.readlink(path)))
+            elif path.is_file():
+                executable = path.stat().st_mode & stat.S_IXUSR
+                files[rel] = ("100755" if executable else "100644", path.read_bytes())
+    return files
 
 
 class PrepareSpike(unittest.TestCase):
@@ -66,6 +106,43 @@ class PrepareSpike(unittest.TestCase):
         self.assertEqual(code, 0, out)
         self.assertEqual((self.scratch / "src" / "a.txt").read_text(), "at read-at\n")
         self.assertFalse((self.scratch / "old.txt").exists())
+
+    def test_exports_the_committed_bytes_whatever_the_attributes_say(self):
+        # `git archive` would leave tests/ out, rewrite VERSION and run the filter, whose smudge
+        # is set up after the commit, as a repo's own .git/config could hold it.
+        repo = self.repo
+        (repo / ".gitattributes").write_text(
+            "tests/** export-ignore\nVERSION export-subst\n*.txt filter=probe\n"
+        )
+        (repo / "VERSION").write_text("$Format:%H$\n")
+        (repo / "tests").mkdir()
+        (repo / "tests" / "test_a.py").write_text("assert True\n")
+        (repo / "run.sh").write_text("#!/bin/sh\necho run\n")
+        (repo / "run.sh").chmod(0o755)
+        (repo / "link").symlink_to("a.txt")
+        git(repo, "add", ".gitattributes", "VERSION", "tests", "run.sh", "link")
+        git(
+            repo,
+            "-c", "user.email=t@local", "-c", "user.name=t",
+            "commit", "-qm", "two",
+        )  # fmt: skip
+        sha = git(repo, "rev-parse", "--short", "HEAD")
+        ran = self.tmp / "ran"
+        git(
+            repo,
+            "config",
+            "filter.probe.smudge",
+            f"echo smudge >> {shlex.quote(str(ran))}; cat",
+        )
+        code, out = self.prepare(self.scratch, repo, sha)
+        self.assertEqual(code, 0, out)
+        src = self.scratch / "src"
+        self.assertTrue((src / "tests" / "test_a.py").is_file())
+        self.assertEqual((src / "VERSION").read_bytes(), b"$Format:%H$\n")
+        self.assertTrue(os.access(src / "run.sh", os.X_OK))
+        self.assertEqual(os.readlink(src / "link"), "a.txt")
+        self.assertEqual(exported(src), committed(repo, sha))
+        self.assertFalse(ran.exists(), ran.exists() and ran.read_text())
 
     def test_read_at_none_only_clears(self):
         code, out = self.prepare(self.scratch, "none", "none")

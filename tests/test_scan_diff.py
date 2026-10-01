@@ -313,6 +313,74 @@ function check(value) {
   test(value);
 }
 """
+XCTEST_ASSERT = """\
+import XCTest
+
+final class CalcTests: XCTestCase {
+    func testAdd() {
+        let x = Calc().add(1, 2)
+        XCTAssertEqual(x, 3)
+    }
+}
+"""
+
+# Lines that skip a test or silence a linter, a file at a time; and ordinary code that looks like
+# them, which must not be flagged.
+SKIPS = {
+    "src/calc.test.js": [
+        "xit('adds', () => {});",
+        "xdescribe('calc', () => {});",
+        "xtest('subtracts', () => {});",
+        "it.todo('multiplies');",
+        "test.todo('divides');",
+    ],
+    "src/test/java/CalcTest.java": [
+        '@Disabled("flaky")',
+        "@DisabledOnOs(OS.WINDOWS)",
+        "@Ignore",
+    ],
+    "Tests/CalcTests/CalcTests.swift": [
+        'throw XCTSkip("not on CI")',
+        "try XCTSkipIf(isCI)",
+    ],
+    "calc_test.go": [
+        't.Skipf("flaky: %v", err)',
+        "t.SkipNow()",
+        'b.Skip("slow")',
+    ],
+    "test/test_calc.py": [
+        "@unittest.expectedFailure",
+        'raise unittest.SkipTest("slow")',
+        '@pytest.mark.skipif(sys.platform == "win32", reason="posix only")',
+    ],
+}
+NOT_SKIPS = {
+    "src/main.js": ["process.exit(1);", "store.todo('milk');"],
+    "src/Paging.cs": ["var page = list.Skip(10).Take(5);"],
+    "src/User.java": ["@IgnoreExtraProperties", "button.setDisabled(true);"],
+    "src/report.py": ["print(result.expectedFailures)", "sys.exit(1)"],
+}
+SILENCERS = {
+    "src/calc.ts": ["// @ts-ignore", "// @ts-expect-error", "// @ts-nocheck"],
+    "src/calc.py": [
+        "import os  # pylint: disable=unused-import",
+        "# pylint: disable-next=invalid-name",
+    ],
+    "calc.go": ["defer f.Close() //nolint:errcheck", "//nolint"],
+    "Sources/Calc/Calc.swift": [
+        "// swiftlint:disable force_cast",
+        "let n = x as! Int // swiftlint:disable:this force_cast",
+    ],
+}
+NOT_SILENCERS = {
+    "Makefile": [
+        "lint:",
+        "\tpylint src",
+        "\tswiftlint lint --strict",
+        "\tgolangci-lint run",
+    ],
+    "src/config.ts": ["const nolinter = true;", "const tsIgnored = 0;"],
+}
 
 
 def git(repo, *args):
@@ -334,13 +402,16 @@ def write(repo, files):
 
 
 class StagedChanges(unittest.TestCase):
+    maxDiff = None  # show every flag when two lists of them differ
+
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.tmp = Path(tmp.name)
 
     def commit(self, files):
-        """A new throwaway repo with `files` committed, and that commit's SHA."""
+        """A new throwaway repo with `files` committed, and that commit's SHA. Paths in one repo
+        must differ in more than case: macOS's file system would put tests/ and Tests/ together."""
         repo = Path(tempfile.mkdtemp(dir=self.tmp))
         git(repo, "init", "-q")
         write(repo, files)
@@ -519,6 +590,53 @@ class StagedChanges(unittest.TestCase):
             ]),
             err,
         )  # fmt: skip
+
+    def scan_added_lines(self, flagged, unflagged, kind):
+        """Stage each {path: lines} as a new file, and check that each line of `flagged`, and
+        nothing else, gets a `kind` flag."""
+        files = {**flagged, **unflagged}
+        code, out, err = self.scan_staged(
+            {},
+            {
+                path: "".join(f"{line}\n" for line in lines)
+                for path, lines in files.items()
+            },
+        )
+        expected = [
+            f"FLAG {kind}: {path}:{n}: {line.strip()}"
+            for path, lines in flagged.items()
+            for n, line in enumerate(lines, 1)
+        ]
+        self.assertEqual(sorted(out.splitlines()), sorted(expected), err)
+        self.assertEqual(code, 1)
+
+    def test_more_ways_to_skip_a_test(self):
+        self.scan_added_lines(SKIPS, NOT_SKIPS, "skip")
+
+    def test_more_ways_to_silence_a_linter(self):
+        self.scan_added_lines(SILENCERS, NOT_SILENCERS, "silenced")
+
+    def test_xctassert_is_an_assertion(self):
+        # Dropping an XCTAssert loosens a test; changing one doesn't.
+        code, out, err = self.scan_staged(
+            {
+                "tests/LooseTests.swift": XCTEST_ASSERT,
+                "tests/KeptTests.swift": XCTEST_ASSERT,
+            },
+            {
+                "tests/LooseTests.swift": XCTEST_ASSERT.replace(
+                    "XCTAssertEqual(x, 3)\n", ""
+                ),
+                "tests/KeptTests.swift": XCTEST_ASSERT.replace(
+                    "(x, 3)", '(x, 3, "adds")'
+                ),
+            },
+        )
+        self.assertEqual(
+            (code, out.splitlines()),
+            (1, ["FLAG loosened: tests/LooseTests.swift:6: XCTAssertEqual(x, 3)"]),
+            err,
+        )
 
     def test_base_reads_staged_changes_including_a_new_file(self):
         with tempfile.TemporaryDirectory() as tmp:

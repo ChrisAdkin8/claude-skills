@@ -21,9 +21,14 @@ Kinds:
                 in the same file (a changed signature isn't a deletion): Python's `def test_`,
                 Go's `func TestX(`, Swift's `func testX()`, a `#[test]` or `@Test` (the test is
                 the function it marks), or, in a test file only, `describe(`, `it(` or `test(`
-  skip          an added @skip, skipIf, skipUnless, skipTest, xfail, .only(, .skip( or t.Skip(
-  silenced      an added noqa, type: ignore, eslint-disable, pragma: no cover or shellcheck disable
-  loosened      in a test file, a hunk that removes an assert or expect( line and adds none
+  skip          an added @skip, skipIf, skipUnless, skipTest, skipif, xfail, @expectedFailure,
+                raise SkipTest, .only(, .skip(, .todo(, xit(, xdescribe(, xtest(, @Disabled,
+                @Ignore, XCTSkip, or Go's t.Skip(, t.Skipf( or t.SkipNow(
+  silenced      an added noqa, type: ignore, pylint: disable, eslint-disable, @ts-ignore,
+                @ts-expect-error, @ts-nocheck, nolint, swiftlint:disable, pragma: no cover or
+                shellcheck disable
+  loosened      in a test file, a hunk that removes an assert, expect( or XCTAssert line and adds
+                none
   mocked        in a test file, an added mock.patch, MagicMock or jest.mock
 
 A test file is one under tests/, test/, __tests__/ or spec/, in any case (Swift's Tests/), or
@@ -55,11 +60,19 @@ JS_TEST_DEF = re.compile(r"""^\s*(?:describe|it|test)\s*\(\s*(?:(['"`])(.*?)\1)?
 # #[test] (Rust) or @Test (JUnit, Swift Testing): the test is the function on its line or below.
 TEST_ATTR = re.compile(r"^\s*(?:#\[test\]|@Test\b)")
 FUNC_NAME = re.compile(r"\b(?:fn|func|fun|void)\s+(`[^`]+`|\w+)")
-SKIP = re.compile(r"@skip|skipIf|skipUnless|skipTest|xfail|\.only\(|\.skip\b|t\.Skip\(")
-SILENCED = re.compile(
-    r"noqa|type:\s*ignore|eslint-disable|pragma:\s*no cover|shellcheck disable"
+SKIP = re.compile(
+    r"@skip|skipIf|skipUnless|skipTest|\.skipif\b|xfail|@(?:unittest\.)?expectedFailure\b"
+    r"|raise\s+(?:\w+\.)*SkipTest\b|\.only\(|\.skip\b|\b(?:describe|it|test)\.todo\("
+    r"|\bx(?:describe|it|test)\(|@Disabled|@Ignore\b|XCTSkip"
+    # Go's Skip, Skipf and SkipNow on a test's t, a benchmark's b, a TB or a suite's T(): not
+    # C#'s list.Skip(n).
+    r"|(?:\b(?:t|b|tb)|\.T\(\))\.Skip(?:f|Now)?\("
 )
-ASSERTION = re.compile(r"\bassert|\bexpect\(")
+SILENCED = re.compile(
+    r"noqa|type:\s*ignore|pylint:\s*disable|eslint-disable|@ts-(?:ignore|expect-error|nocheck)"
+    r"|\bnolint\b|swiftlint:disable|pragma:\s*no cover|shellcheck disable"
+)
+ASSERTION = re.compile(r"\bassert|\bexpect\(|\bXCTAssert")
 MOCKED = re.compile(r"mock\.patch|MagicMock|jest\.mock")
 
 

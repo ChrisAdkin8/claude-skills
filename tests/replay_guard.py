@@ -21,7 +21,10 @@ user's own transcripts: don't paste its output anywhere public.
 
 Last, it replays every Bash command from the headless runs, of any date, through the guard as it
 is now, and compares that with what the guard decided at the time: a transcript records the hook's
-"Blocked by agent-guard" reply. This half keeps up with the agents as they run today.
+"Blocked by agent-guard" reply. This half keeps up with the agents as they run today. The guard
+finds its scripts from its own location, so a path under the plugin root the run's guard lived in
+(another checkout, a worktree or the plugin cache) is moved to this checkout first; the run dir's
+agents.json names that root, or for an earlier session in the same run dir, its transcript does.
 
 Exits 1 if a command the guard at --base blocked is allowed now, if any recorded Read, Grep or
 Glob call is refused now, or if a headless run's command gets a different verdict now than it got
@@ -110,33 +113,85 @@ def session_results(path):
 
 # A run from the symlink install wrote a skill script by its link: ~, $HOME or the home path, then
 # .claude/skills or .claude/hooks. The plugin writes the same script under its root instead.
-OLD_INSTALL = re.compile(
-    r"(?:~|\$HOME|\$\{HOME\}|"
-    + re.escape(str(Path.home()))
-    + r")/\.claude/(skills|hooks)/"
-)
+HOME_SPELLING = r"(?:~|\$HOME|\$\{HOME\}|" + re.escape(str(Path.home())) + ")"
+OLD_INSTALL = re.compile(HOME_SPELLING + r"/\.claude/(skills|hooks)/")
 
 
 def plugin_spelling(command, root):
-    """The command as the run would write it under the plugin: an old-install script path moved
-    to the root, so the replay shows rule changes rather than that install-layout difference."""
-    return OLD_INSTALL.sub(lambda m: f"{root or REPO}/{m.group(1)}/", command)
+    """The command as the run would write it with its plugin at this checkout: an old-install
+    script path, or a path under the run's own plugin root (another checkout, a worktree or the
+    plugin cache), moved here. The guard finds its scripts from its own location, so the replay
+    then shows rule changes rather than where the plugin lived."""
+    command = OLD_INSTALL.sub(lambda m: f"{REPO}/{m.group(1)}/", command)
+    if not root:
+        return command
+    home = str(Path.home())
+    spellings = []
+    for path in dict.fromkeys((root, os.path.realpath(root))):
+        spellings.append(re.escape(path))
+        if path.startswith(home + "/"):
+            spellings.append(HOME_SPELLING + re.escape(path[len(home) :]))
+    # The root as a whole path: not the start of a sibling's name, nor the end of a longer path.
+    at_root = re.compile(rf"(?<![\w./~$-])(?:{'|'.join(spellings)})(?![\w.-])")
+    return at_root.sub(lambda m: str(REPO), command)
+
+
+# A transcript names its own guard in two places: the guard's reply when it refused a call, which
+# quotes the hook command, and the researcher's prompt, which Claude Code saves as the run saw it.
+HOOK_REPLY = re.compile(
+    r'PreToolUse:\w+ hook error: \[python3 "([^"]+)/hooks/agent-guard\.py"'
+)
+NAMED_GUARD = re.compile(
+    r"(?<![\w./~$-])((?:~|\$HOME|\$\{HOME\})?/[^\s\"'`\\]*)/hooks/agent-guard\.py"
+)
+
+
+def transcript_root(path):
+    """The one plugin root a transcript names for its own guard, or None if it names none or
+    several. Not any mention: the agent may have read a file that names another checkout's."""
+    roots = set()
+    try:
+        lines = path.read_text(errors="replace").splitlines()
+    except OSError:
+        return None
+    for line in lines:
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        prompt = (entry.get("attachment") or {}).get("systemPrompt")
+        for text in prompt if isinstance(prompt, list) else [prompt]:
+            if isinstance(text, str):
+                roots.update(m.group(1) for m in NAMED_GUARD.finditer(text))
+        content = (entry.get("message") or {}).get("content")
+        for item in content if isinstance(content, list) else []:
+            if not isinstance(item, dict) or not item.get("is_error"):
+                continue
+            reply = item.get("content")
+            if isinstance(reply, list):
+                reply = "".join(p.get("text", "") for p in reply if isinstance(p, dict))
+            if isinstance(reply, str) and (found := HOOK_REPLY.match(reply.lstrip())):
+                roots.add(found.group(1))
+    return roots.pop() if len(roots) == 1 else None
 
 
 def guard_root(path):
     """The plugin root the guard of a headless run lived in, or None: run-agent.sh renders it
-    into the run dir's agents.json, which is where the run's hooks were configured from."""
+    into the run dir's agents.json, which is where the run's hooks were configured from. A run
+    dir keeps only its latest session, so an earlier one's root comes from its transcript."""
+    root = None
     for f in RUNS.glob("*/*/session_id"):
         if f.read_text().strip() == path.stem:
-            try:
+            with contextlib.suppress(OSError):
                 text = (f.parent / "agents.json").read_text()
-            except OSError:
-                return None
-            found = re.search(r'python3 \\"([^"\\]+)/hooks/agent-guard\.py\\"', text)
-            root = found and found.group(1)
-            # The symlink install's guard lived in its link, so the run had no plugin root.
-            return None if root and OLD_INSTALL.match(f"{root}/hooks/") else root
-    return None
+                found = re.search(
+                    r'python3 \\"([^"\\]+)/hooks/agent-guard\.py\\"', text
+                )
+                root = found and found.group(1)
+            break
+    root = root or transcript_root(path)
+    # The symlink install's guard lived in its link, so the run had no plugin root.
+    return None if root and OLD_INSTALL.match(f"{root}/hooks/") else root
 
 
 def with_root(guard, root):
@@ -360,11 +415,11 @@ def main():
     changed = []
     seen = set()
     for f in sorted(headless):
+        root = guard_root(f)
         for command, blocked_then in recorded_bash(f):
             if (command, blocked_then) in seen:
                 continue
             seen.add((command, blocked_then))
-            root = guard_root(f)
             now, reason = verdict(
                 new, plugin_spelling(command, root), session_results(f), root
             )

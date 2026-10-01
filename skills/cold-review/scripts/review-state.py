@@ -27,9 +27,9 @@ from, and each `placeholder:` line is a record-template token left in the record
 
 The review commit is the oldest commit that added the review's "Reviewed on <date> by" line,
 searched in the record found and the document (each followed through renames), so it survives a
-later move of the review into a record, or a rename of either. If the review is now in a record and that commit also changed a document
-that already existed, the diff base is the commit's parent, so folds saved in the same commit
-aren't missed. The diff names the document's old path too, if it was renamed since, and is
+later move of the review into a record, or a rename of either. If the review is now in a record
+and that commit also changed a document that already existed, the diff base is the commit's
+parent, so folds saved in the same commit aren't missed. The diff names the document's old path too, if it was renamed since, and is
 printed as a git-read.py command, which /cold-review may run without a prompt. `changed:` is yes
 only if a line was added or deleted: a rename with no edits isn't a change.
 In a shallow clone, a review commit with no parent may be the clone's cut-off rather than the

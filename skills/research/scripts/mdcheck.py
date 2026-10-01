@@ -2,9 +2,10 @@
 skills/spec/scripts/check-spec.py and skills/cold-review/scripts/review-state.py.
 
 Not run on its own. Each script loads it by path, so a fix here reaches all of them: frontmatter,
-code fences (and a fence left open), headings and the one rule that matches them, sections, citations, template leftovers, the topic
-form, the `Not reviewed:` and delta-review patterns, the record path, word and line counts, and the
-secret and account-ID patterns.
+code fences (and a fence left open), headings and the one rule that matches them, sections,
+citations, template leftovers, the topic form, the `Not reviewed:` pattern, the record path and
+the record under a document's earlier name, the saved cold review's parser, word and line
+counts, and the secret and account-ID patterns.
 """
 
 import re
@@ -37,8 +38,6 @@ NOT_REVIEWED = re.compile(r"\s*(?:[-*]\s+)?[*_]*not reviewed[*_]*\s*:", re.IGNOR
 # A research note's `topic`: area or area/sub-area, each lowercase and hyphenated. check-note.py
 # fails anything else, and build-index.py files anything else as Unfiled.
 TOPIC = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*(?:/[a-z0-9]+(?:-[a-z0-9]+)*)?")
-# A delta review's heading inside a saved cold review, in any case.
-DELTA_REVIEW = re.compile(r"###\s+delta review", re.IGNORECASE)
 # A frontmatter line: `key: value`, a list item, an indented continuation, a comment or blank.
 # Anything else means the opening `---` was a horizontal rule, not frontmatter.
 FRONTMATTER_LINE = re.compile(r"\s*$|\s*#|\s*-(?:\s|$)|\s+\S|[\w.-][\w .-]*:(?:\s|$)")

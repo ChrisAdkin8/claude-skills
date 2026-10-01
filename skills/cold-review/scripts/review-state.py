@@ -16,13 +16,22 @@ Prints `key: value` lines, then `state:` last:
   done       the full review and its delta review have both run: no third round
 
 The review lives in the record, records/<basename>-record.md beside the document, or in an
-older document under its own `## Cold review`. The review commit is the oldest commit that
-added the review's "Reviewed on <date> by" line, searched in the record and the document
-(each followed through renames), so it survives a later move of the review into a record, or
-a rename of either. If the review is now in a record and that commit also changed a document
+older document under its own `## Cold review`. mdcheck.read_review() reads it, the same parser
+check-spec.py uses: a review counts only with `Reviewed on <date> by` as its first line, a delta
+only with its own such line under `### Delta review, <date>`, and `Not reviewed:` lines only
+under a document's `## Open questions` or a record's `## Changes since the review`, `## Changes
+after the delta review` or `## Spikes`, never inside the reviewer's reply. If the document was
+moved without its record (a committed or a staged `git mv`), the record under its earlier name
+is used and `record-moved:` names it. `not-reviewed-from:` says which sections the lines came
+from, and each `placeholder:` line is a record-template token left in the record.
+
+The review commit is the oldest commit that added the review's "Reviewed on <date> by" line,
+searched in the record found and the document (each followed through renames), so it survives a
+later move of the review into a record, or a rename of either. If the review is now in a record and that commit also changed a document
 that already existed, the diff base is the commit's parent, so folds saved in the same commit
 aren't missed. The diff names the document's old path too, if it was renamed since, and is
-printed as a git-read.py command, which /cold-review may run without a prompt.
+printed as a git-read.py command, which /cold-review may run without a prompt. `changed:` is yes
+only if a line was added or deleted: a rename with no edits isn't a change.
 In a shallow clone, a review commit with no parent may be the clone's cut-off rather than the
 commit that added the review, so there is no base. Read-only: runs git log, show, cat-file,
 merge-base, rev-parse and diff, nothing else.
@@ -32,20 +41,19 @@ import re
 import shlex
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "research" / "scripts"))
 from mdcheck import (  # shared with the checkers
-    DELTA_REVIEW,
-    NOT_REVIEWED,
+    earlier_paths,
     in_code,
     is_heading,
+    read_review,
+    record_for,
     record_path,
-    section,
-    strip_code,
 )
 
-DATE_LINE = re.compile(r"Reviewed on (\d{4}-\d{2}-\d{2}) by")
 HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", re.MULTILINE)
 
 
@@ -125,44 +133,46 @@ def main():
     if not doc.is_file():
         sys.exit(f"review-state: no such file: {doc}")
     out = {"document": str(doc)}
-    record = record_path(doc)
-    doc_lines = doc.read_text(errors="replace").splitlines()
-    rec_lines = (
-        record.read_text(errors="replace").splitlines() if record.is_file() else []
-    )
-    out["record"] = str(record) if record.is_file() else "none"
-
-    review, where = section(rec_lines, "## Cold review"), "record"
-    if review is None:
-        review, where = section(doc_lines, "## Cold review"), "document"
-    if review is None:
-        where = "none"
-    out["review"] = where
-    date = next((m.group(1) for l in review or [] if (m := DATE_LINE.search(l))), None)
-    out["review-date"] = date or "none"
-    delta = any(DELTA_REVIEW.match(l) for l in strip_code(review or []))
-    out["delta-review"] = "yes" if delta else "no"
-    if where == "record" or rec_lines:
-        logged = [l.strip() for l in rec_lines if NOT_REVIEWED.match(l)]
-    else:
-        logged = [
-            l.strip()
-            for l in section(doc_lines, "## Open questions") or []
-            if NOT_REVIEWED.match(l)
-        ]
-    out["not-reviewed"] = str(len(logged))
-
     root = git(doc.parent, "rev-parse", "--show-toplevel")
     root = Path(root.strip()) if root else None
+    rel = doc.relative_to(root).as_posix() if root else None
+    earlier = (
+        [root / p for p in earlier_paths(lambda *a: git(root, *a), rel)] if root else []
+    )
+    record = record_for(doc, earlier)
+    doc_lines = doc.read_text(errors="replace").splitlines()
+    rec_lines = record.read_text(errors="replace").splitlines() if record else []
+    out["record"] = str(record) if record else "none"
+    if record and record != record_path(doc):
+        out["record-moved"] = str(record)
+
+    review = read_review(doc_lines, rec_lines)
+    where, date = review.where or "none", review.date
+    out["review"] = where
+    out["review-date"] = date or "none"
+    delta = review.delta_date is not None
+    out["delta-review"] = "yes" if delta else "no"
+    logged = [text for _, _, text in review.not_reviewed]
+    out["not-reviewed"] = str(len(logged))
+    if logged:
+        files = {"document": doc.name, "record": record.name if record else "none"}
+        counts = Counter(
+            tuple(source.split(" ", 1)) for source, _, _ in review.not_reviewed
+        )
+        out["not-reviewed-from"] = "; ".join(
+            f"{files[file]} {heading} ({n})" for (file, heading), n in counts.items()
+        )
+
     out["repo"] = str(root) if root else "none"
     base = None
     if root:
         out["head"] = (git(root, "rev-parse", "--short", "HEAD") or "none").strip()
-        rel = doc.relative_to(root).as_posix()
         if where != "none":
-            needle = f"Reviewed on {date} by" if date else "## Cold review"
+            needle = f"Reviewed on {date} by"
             paths = [
-                p.relative_to(root).as_posix() for p in (record, doc) if p.is_file()
+                p.relative_to(root).as_posix()
+                for p in (record, doc)
+                if p and p.is_file()
             ]
             # One path at a time, following renames: otherwise a later `git mv` of the record
             # is the oldest commit that "added" the line, and the edits before it are missed.
@@ -211,9 +221,19 @@ def main():
                 + " "
                 + shlex.join(["-C", str(root), "diff", "-M", base, "--", *names])
             )
-            stat = (git(root, "diff", "-M", "--stat", base, "--", *names) or "").strip()
-            out["changed"] = "yes" if stat else "no"
-            if stat:
+            # --numstat, not --stat: a rename with no edits is a 0-line rename line in --stat,
+            # but no change to the document.
+            numstat = git(root, "diff", "-M", "--numstat", base, "--", *names) or ""
+            changed = any(
+                line.split("\t")[:2] != ["0", "0"]
+                for line in numstat.splitlines()
+                if line
+            )
+            out["changed"] = "yes" if changed else "no"
+            if changed:
+                stat = (
+                    git(root, "diff", "-M", "--stat", base, "--", *names) or ""
+                ).strip()
                 out["stat"] = stat.splitlines()[-1].strip()
                 hunks = git(root, "diff", "-M", "-U0", base, "--", *names) or ""
                 out["headings"] = "; ".join(
@@ -235,6 +255,8 @@ def main():
         print(f"{key}: {value}")
     for line in logged:
         print(f"logged: {line}")
+    for line, token in review.placeholders:
+        print(f"placeholder: {line}: {token}")
     print(f"state: {state}")
 
 

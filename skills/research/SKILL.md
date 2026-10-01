@@ -71,7 +71,7 @@ If `git -C ~/notes status` fails or `~/notes/templates/research.md` is missing, 
 
 1. Run `${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/check-note.py --headroom <note>`. If the agent failed, or the note is missing or has no Sources, tell the user and stop; don't commit.
    - Run `git -C ~/notes status --porcelain --untracked-files=all`: it lists every new file, where plain `--porcelain` shows a new directory as one line. The researcher may write only its note: flag any other changed file under `~/notes/research` not in the output kept at launch, and any change to `~/notes/projects/mindshare/attention-evidence.md` or `~/notes/ideas/`.
-   - A flagged note another run's brief names (`grep -l 'Output file: <its absolute path>' ~/.cache/agent-runs/*/researcher*/brief.md`, in another run dir) is that run's; leave it. For any other, show the user the diff and ask. Commit neither.
+   - Leave a flagged note only if a brief in another run dir with no `reply.md` yet names it (`grep -l 'Output file: <its absolute path>' ~/.cache/agent-runs/*/researcher*/brief.md`): that run is still going. Show the user the diff of any other as this run's change, and ask. Commit neither.
 2. On FAIL, send the FAIL lines to the researcher as a follow-up (`${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.md`, Follow-ups) to fix. After two rounds, carry on and report what still fails.
 3. Run the `research-verifier` agent (Agent runs) with the brief `Note: <absolute path>. Today's date: <YYYY-MM-DD>.`, adding `Depth: ideas: run the prior-art hunt first.` at ideas depth. Tell the user in one line that it's being verified. End your turn.
 

@@ -177,10 +177,11 @@ works.
    minutes and runs two paid agents: one researches, the other checks. You should get a short,
    cited note in `~/notes/research/` with a `## Verification` section at the end, and a rebuilt
    `~/notes/index.md`.
-3. **`/spec quick <a small change you want>`**, run from inside a git repo under `~/code`, the
-   only place `/spec` may edit files without asking. This runs one paid agent, the verifier. You
-   should get a spec in that repo's `docs/specs/`, or wherever the repo already keeps specs, and a
-   record of its checks beside it.
+3. **`/spec quick <a small change you want>`**, run from inside a git repo under `~/code`. This
+   runs one paid agent, the verifier. You should get a spec in that repo's `docs/specs/`, and a
+   record of its checks beside it. `/spec` may edit files there without asking. If the repo
+   already keeps its specs somewhere else, the spec goes there instead, and `/spec` asks before
+   each edit.
 
 If a step stops with a message about `~/notes`, look again at [Set up `~/notes`](#set-up-notes).
 

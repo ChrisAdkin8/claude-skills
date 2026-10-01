@@ -9,15 +9,24 @@ each step, and expect a skill you're editing to be the one you're running.
 
 - `python3 -m unittest discover -s tests` — deterministic tests for the guard, both checkers,
   `build-index.py`, `review-state.py`, `git-read.py`, `prepare-spike.sh`, `run-spike.sh`,
-  `run-agent.sh`, `agent-def.py`, `agent-settings.py`, `mdcheck.py`, `mine-sessions.py`, `scan-diff.py`, `prepare-verify.sh`, `run-verify.sh`, `run-implementer.sh` and the research scripts, that the eval runners exit 1 on a failure, and that the
-  guard's and all three sandbox settings' deny lists agree. CI runs these, with ruff and shellcheck.
-- `python3 tests/replay_guard.py` — the guard against real recorded commands and file reads.
+  `run-agent.sh`, `agent-def.py`, `agent-settings.py`, `mdcheck.py`, `mine-sessions.py`,
+  `scan-diff.py`, `prepare-verify.sh`, `run-verify.sh`, `run-implementer.sh` and the research
+  scripts; that the eval runners exit 1 on a failure; that the guard's and all three sandbox
+  settings' deny lists agree, and `hooks/user-deny.json` with them; that no skill's allowed-tools
+  holds a path rule Claude Code ignores; and the README's index-rebuild command. CI runs these,
+  with ruff, shellcheck and `claude plugin validate`.
+- `python3 tests/replay_guard.py` — the guard against real recorded commands and file reads. It
+  exits 0 when every difference is listed in `tests/replay-accepted.txt`, by fingerprint, never by
+  the command (the transcripts are private). Add an entry, with its reason, only for a change the
+  guard means.
 - After changing an agent or skill file, run `tests/agent-evals/run.sh` by hand. A full run cost
-  $3.70 to $4.68 on 2026-09-27 and each case is capped at $5 (`research-ideas` at $10), so it
-  isn't automatic. Add a dated section to `tests/agent-evals/BASELINE.md` with every case's result
-  and cost, including the cases you didn't expect to change.
-- After changing a skill's steps, run `tests/skill-evals/run.sh` by hand too (about $0.30 a case,
-  capped at $3), and record its results in the same `BASELINE.md` section.
+  $1.89 on Sonnet and $4.22 on Opus on 2026-10-01, and each case is capped at $5 (`research-ideas`
+  at $10), so it isn't automatic. Add a dated section to `tests/agent-evals/BASELINE.md` with every
+  case's result and cost, including the cases you didn't expect to change.
+- After changing a skill's steps, run `tests/skill-evals/run.sh` by hand too (about $0.40 a case
+  for the skill's own session, capped at $3, plus the agents a case launches, capped at $2 each),
+  and record its results in the same `BASELINE.md` section. A case fails on any call the skill's
+  allowed-tools refused, so a call a skill needs must be pre-approved.
 - Run both eval sets once per model the skills run on: Sonnet and Opus, with `EVAL_MODEL=sonnet`
   and `EVAL_MODEL=opus`. Record each model's results in the same dated `BASELINE.md` section, with a
   column for the model. Run one set after the other, never at the same time: each checks that
@@ -34,7 +43,14 @@ each step, and expect a skill you're editing to be the one you're running.
 - Commit messages: `spec:`, `research:`, `cold-review:`, `implement:`, `evals:`, `tests:`, `guard:`,
   `repo:`, `readme:` — the area, then what changed. Branch before committing; never push unless asked.
 - Commit from this checkout, not GitHub's web editor: its commits carry no prefix, skip the README
-  record, and may use another email address.
+  record, and may use another email address. Merge pull requests here too, with
+  `git merge --no-ff` and a push of `main`: GitHub's merge button authors the merge commit with
+  another email address.
+- `.claude-plugin/plugin.json` has no `version` on purpose: each commit on `main` is a new version
+  for installed users (README, Update), so merge only what's ready to ship.
+- In a skill's `allowed-tools`, pre-approve writes with `Edit(path)`, which also covers the Write
+  tool. Claude Code never consults a `Write(path)`, `Glob(path)` or `NotebookEdit(path)` rule
+  (`tests/test_skill_frontmatter.py`).
 - Skills and the files they load refer to the repo's files as `${CLAUDE_PLUGIN_ROOT}/...`, which
   Claude Code expands to the plugin root: this checkout, or the plugin cache. Don't rewrite them as
   repo-relative or `~` paths; the guard finds its root from its own location to recognise its

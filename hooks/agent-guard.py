@@ -238,7 +238,7 @@ MAX_QUERY = 200
 GIT_READ = {
     "log", "show", "diff", "blame", "grep", "ls-files", "ls-tree", "rev-parse", "status",
     "cat-file", "describe", "shortlog", "rev-list", "merge-base", "name-rev", "for-each-ref",
-    "show-ref", "branch", "tag", "remote", "reflog", "count-objects",
+    "show-ref", "branch", "tag", "remote", "reflog", "count-objects", "worktree",
 }  # fmt: skip
 GIT_BAD_ARGS = (
     "--output", "-O", "--open-files-in-pager", "--exec-path", "--ext-diff", "--textconv",
@@ -887,6 +887,8 @@ def check_git(args):
         block("`git remote` may only show remotes")
     if sub == "reflog" and positional and positional[0] != "show":
         block("`git reflog` may only show the reflog")
+    if sub == "worktree" and positional[:1] != ["list"]:
+        block("`git worktree` may only list worktrees")
 
 
 def check_url(url):

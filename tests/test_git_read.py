@@ -77,6 +77,24 @@ class GitRead(unittest.TestCase):
         )
         self.assertEqual(run.returncode, 2)
 
+    def test_worktree_list(self):
+        # From the 2026-10-01 review (M15): /spec's done step and /implement list worktrees
+        # through git-read.py; the other worktree commands change things.
+        code, out = self.git_read("worktree", "list", "--porcelain")
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"worktree {self.repo.resolve()}\n", out)
+        other = self.repo.parent / "other"
+        for args in (
+            ("worktree", "add", str(other)),
+            ("worktree", "prune"),
+            ("worktree",),
+        ):
+            with self.subTest(args=args):
+                code, out = self.git_read(*args)
+                self.assertEqual(code, 2, out)
+                self.assertIn("may only list worktrees", out)
+        self.assertFalse(other.exists())
+
 
 class RepoOwnConfig(unittest.TestCase):
     """From the 2026-10-01 review (M1): git runs programs that the repo's own config names, and
@@ -349,7 +367,10 @@ class RepoOwnConfig(unittest.TestCase):
         spec.loader.exec_module(guard)
         subs = sorted(guard.GIT_READ | {"whatchanged"})
         self.config(*((f"alias.{sub}", f"!{self.payload}") for sub in subs))
-        self.assertNothingRuns(*((sub, "-h") for sub in subs), code=None)
+        self.assertNothingRuns(
+            *((sub, "list") if sub == "worktree" else (sub, "-h") for sub in subs),
+            code=None,
+        )
 
 
 if __name__ == "__main__":

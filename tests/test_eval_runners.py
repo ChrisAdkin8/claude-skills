@@ -29,6 +29,8 @@ with open(os.environ["STUB_ARGV"] + ".model", "a") as f:
     f.write(os.environ.get("RUN_AGENT_MODEL", "<unset>") + "\\n")
 with open(os.environ["STUB_ARGV"] + ".implement", "a") as f:
     f.write(os.environ.get("IMPLEMENT_MAX_USD", "<unset>") + "\\n")
+with open(os.environ["STUB_ARGV"] + ".memory", "a") as f:
+    f.write(os.environ.get("CLAUDE_CODE_DISABLE_AUTO_MEMORY", "<unset>") + "\\n")
 # A skill that writes the eval note, leaves an agent run dir named after it, and changes another
 # file in ~/notes, as a skill eval's research case might.
 m = re.search(r"\\S*/eval-[^/\\s]*\\.md", sys.argv[-1])
@@ -63,7 +65,7 @@ class Runners(unittest.TestCase):
             "EVAL_OUT": str(self.tmp / "out"),
             "STUB_ARGV": str(self.tmp / "argv.jsonl"),
         }
-        for var in ("EVAL_MODEL", "RUN_AGENT_MODEL"):
+        for var in ("EVAL_MODEL", "RUN_AGENT_MODEL", "CLAUDE_CODE_DISABLE_AUTO_MEMORY"):
             self.env.pop(var, None)
 
     def run_script(self, script, *cases):
@@ -311,6 +313,13 @@ class Runners(unittest.TestCase):
         self.run_script(AGENT_RUN)
         (argv,) = self.argv()
         self.assertEqual(self.flag(argv, "--model"), "opus")
+
+    def test_agent_evals_turn_off_auto_memory(self):
+        # As run-agent.sh does, so an eval's agent sees what a skill's would.
+        self.agent_case("plain", "says yes\n")
+        self.run_script(AGENT_RUN)
+        memory = (self.tmp / "argv.jsonl.memory").read_text().splitlines()
+        self.assertEqual(memory, ["1"])
 
     def home(self):
         """A HOME of its own, with ~/notes a git repo, so no real ~/code or ~/notes is touched."""

@@ -22,7 +22,8 @@ import json, os, sys
 calls = os.environ["STUB_CALLS"]
 with open(calls, "a") as f:
     f.write(json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd(),
-                        "root": os.environ.get("CLAUDE_PLUGIN_ROOT")}) + "\\n")
+                        "root": os.environ.get("CLAUDE_PLUGIN_ROOT"),
+                        "memory": os.environ.get("CLAUDE_CODE_DISABLE_AUTO_MEMORY")}) + "\\n")
 n = sum(1 for _ in open(calls))
 tail = os.environ.get("STUB_TAIL", "Implementer: done")
 print(json.dumps({"session_id": "sess-1", "result": f"reply {n}\\n{tail}", "subtype": "success",
@@ -55,7 +56,12 @@ class RunImplementer(unittest.TestCase):
             "PATH": f"{bin_dir}:{os.environ['PATH']}",
             "STUB_CALLS": str(self.calls),
         }
-        for var in ("RUN_AGENT_MODEL", "IMPLEMENT_MAX_USD"):
+        # CLAUDE_CODE_DISABLE_AUTO_MEMORY is unset here, so only the script can turn it on.
+        for var in (
+            "RUN_AGENT_MODEL",
+            "IMPLEMENT_MAX_USD",
+            "CLAUDE_CODE_DISABLE_AUTO_MEMORY",
+        ):
             self.env.pop(var, None)
         # A repo under ~/code, and the worktree /implement would add beside it.
         self.repo = self.home / "code" / "proj"
@@ -181,6 +187,8 @@ class RunImplementer(unittest.TestCase):
         self.assertEqual(argv[-1], "Implement it.")
         self.assertEqual(Path(call["cwd"]).resolve(), self.worktree.resolve())
         self.assertEqual(call["root"], str(REPO))
+        # No auto memory: it would read, and could write, the memory the user's own sessions load.
+        self.assertEqual(call["memory"], "1")
         self.assertTrue((self.run_dir / "reply.md").read_text().startswith("reply 1\n"))
         self.assertEqual((self.run_dir / "session_id").read_text(), "sess-1")
         self.assertTrue((self.run_dir / "run.json").exists())

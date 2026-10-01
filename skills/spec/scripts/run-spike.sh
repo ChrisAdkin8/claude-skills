@@ -32,6 +32,8 @@ done
 # package it doesn't hold yet lists pypi.org and files.pythonhosted.org in its Box hosts.
 export UV_CACHE_DIR="$HOME/.cache/spec-spikes/.uv-cache"
 mkdir -p "$UV_CACHE_DIR"
+# No auto memory, as in hooks/run-agent.sh: a spike works from its brief alone.
+export CLAUDE_CODE_DISABLE_AUTO_MEMORY=1
 
 # --setting-sources user, as in hooks/run-agent.sh: a spike starts in its scratch dir, which has
 # no .claude/ of its own, but the flag keeps any project settings or CLAUDE.md above or beside it

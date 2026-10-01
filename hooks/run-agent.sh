@@ -56,6 +56,10 @@ here=$(cd "$(dirname "$0")" && pwd -P)
 # so nothing here depends on where the plugin is installed.
 plugin_root=$(dirname "$here")
 export CLAUDE_PLUGIN_ROOT=$plugin_root
+# No auto memory. Claude Code would load the work dir's MEMORY.md into the agent's context, even
+# under --agent, through no tool call the guard sees, and a checker that reads the notes the
+# authoring sessions kept isn't cold.
+export CLAUDE_CODE_DISABLE_AUTO_MEMORY=1
 # The agent files live in hooks/agents, not the user's agents directory, so no session loads them as
 # subagents it could launch outside this sandbox. Each run passes its one agent by --agents.
 file="$here/agents/$agent.md"

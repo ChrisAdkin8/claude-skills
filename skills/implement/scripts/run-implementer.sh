@@ -44,6 +44,9 @@ work=$1 run=$2 mode=${3:-}
 # skills/implement/scripts/.
 plugin_root=$(cd "$(dirname "$0")/../../.." && pwd -P)
 export CLAUDE_PLUGIN_ROOT=$plugin_root
+# No auto memory: the implementer works from the spec and the repo. With memory on it would also
+# read, and could write, the memory the user's own sessions in this repo load.
+export CLAUDE_CODE_DISABLE_AUTO_MEMORY=1
 file="$plugin_root/hooks/agents/implementer.md"
 [ -f "$file" ] || die "no agent file: $file"
 

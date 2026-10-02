@@ -13,7 +13,8 @@ each step, and expect a skill you're editing to be the one you're running.
   `scan-diff.py`, `prepare-verify.sh`, `run-verify.sh`, `run-implementer.sh` and the research
   scripts; that the eval runners exit 1 on a failure; that the guard's and all three sandbox
   settings' deny lists agree, and `hooks/user-deny.json` with them; that no skill's allowed-tools
-  holds a path rule Claude Code ignores; and the README's index-rebuild command. CI runs these,
+  holds a path rule Claude Code ignores; that `/implement`'s own git commands turn off the file
+  watcher and hooks and match its allowed-tools; and the README's index-rebuild command. CI runs these,
   with ruff, shellcheck and `claude plugin validate`.
 - `python3 tests/replay_guard.py` — the guard against real recorded commands and file reads. It
   exits 0 when every difference is listed in `tests/replay-accepted.txt`, by fingerprint, never by

@@ -1469,3 +1469,21 @@ hand that graded nothing. $18.34 in all.
   files on Sonnet (the spec accepted that only on Opus), and on Opus a `run-cost.py` that no skill
   names. Both reruns passed. Both are the same class as the 2026-10-01 Wave 1 failures, which the
   spend ledger planned for the implementer (stream S2) replaces.
+
+## /implement's own git commands with the file watcher and hooks off (2026-10-02)
+
+W1 of `docs/specs/2026-10-02-implement-git-safeguard.md`, on
+`implement/2026-10-02-implement-git-safeguard`: every `git -C` command in `skills/implement/SKILL.md`
+outside `git-read.py` now carries `-c core.fsmonitor=false -c core.hooksPath=/dev/null`.
+`tests/test_implement_skill.py` checks each still matches a `Bash(...)` rule in its allowed-tools.
+
+Skill evals, with the agents a case launches:
+
+| Case | Sonnet | Opus |
+|---|---|---|
+| implement-basic | not run: paid, run by hand | not run: paid, run by hand |
+| implement-trap | not run: paid, run by hand | not run: paid, run by hand |
+
+- **Not run yet.** The implementer runs no paid checks. Run
+  `EVAL_MODEL=sonnet tests/skill-evals/run.sh implement-basic implement-trap`, then the same with
+  `EVAL_MODEL=opus`, and put each case's result and cost, agents included, in the table above.

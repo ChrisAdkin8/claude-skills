@@ -11,3 +11,9 @@ What happened to [2026-10-02-implement-git-safeguard](../2026-10-02-implement-gi
 ## Evidence
 
 - Started at 297394a
+- Baseline: `python3 -m unittest discover -s tests` -> pass (552 tests)
+- Baseline: `ruff check --isolated --select E9,F .` (ruff 0.16.7, as CI pins) -> pass
+- Baseline: `git ls-files -z '*.sh' | xargs -0 shellcheck -S warning` -> pass
+- Baseline: `claude plugin validate . --json` -> pass (only the expected plugin.json version warning)
+- Baseline: `claude plugin validate .claude-plugin/plugin.json` -> pass (expected warnings only)
+- Baseline: `python3 tests/replay_guard.py` -> pass

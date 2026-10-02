@@ -30,7 +30,7 @@ You frame, relay and verify; you don't write the code. The work items are done b
 **Tool calls.** `allowed-tools` pre-approves only the command shapes this file gives, so use them exactly:
 - In every Bash call, write paths under the home directory with `~` (`~/code/…`, `~/.cache/…`), not expanded. The exception is this plugin's own files: `${CLAUDE_PLUGIN_ROOT}` is already expanded to an absolute path where this file gives it, so write that path exactly as you see it.
 - Run one command per Bash call: a script directly, not through `python3` or `bash`, by the full path this file gives, never through a shell variable or after a `cd`, and never joined to another with `;`, `&&`, `||` or a pipe. Anything else isn't pre-approved, so it asks the user.
-- Read git through `${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py -C <dir> …` (`rev-parse`, `log`, `show`, `branch --list`, `worktree list`). The only git commands that change anything are `git -C <dir> worktree add`, `add`, `commit` and `revert`.
+- Read git through `${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py -C <dir> …` (`rev-parse`, `log`, `show`, `branch --list`, `worktree list`). The only git commands that change anything are `git -C <dir> -c core.fsmonitor=false -c core.hooksPath=/dev/null worktree add …`, `add`, `commit` and `revert`. Keep both `-c` flags on every `git -C` command, `status` and `revert` included, though no step gives a `revert`: they stop a file watcher (`core.fsmonitor`) or a hook planted in the repo's git config from running in this session, as `git-read.py` does for reads.
 - Read files with the Read tool and find them with Glob; make them with Write or Edit, never `ls`, `cp` or a redirect.
 - In `~/code`, edit only the spec's status line and its record, and only in the worktree: `allowed-tools` pre-approves edits under a worktree's `docs/specs/` and nowhere else there, so a spec kept outside `docs/specs/` asks the user for each edit.
 - If a call this skill needs is refused anyway, stop and tell the user which call was refused and why. Don't work around it with another command.
@@ -47,7 +47,7 @@ You frame, relay and verify; you don't write the code. The work items are done b
 
 In order, from the repo's checkout, stopping at the first failure with what to do:
 
-1. `git -C <repo> status --porcelain -- <spec> <record> <spikes>` prints nothing, so all three are committed at HEAD. Else: "commit them, then run `/implement <spec>` again". Name any other uncommitted files in the checkout in one line and leave them alone: the worktree starts from HEAD.
+1. `git -C <repo> -c core.fsmonitor=false -c core.hooksPath=/dev/null status --porcelain -- <spec> <record> <spikes>` prints nothing, so all three are committed at HEAD. Else: "commit them, then run `/implement <spec>` again". Name any other uncommitted files in the checkout in one line and leave them alone: the worktree starts from HEAD.
 2. The spec's frontmatter says `status: reviewed`.
 3. `${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/check-spec.py <spec> --repo <repo>` prints `RESULT: PASS`.
 4. `${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/check-spec.py <spec> --repo <repo> --drift-at HEAD` prints no `DRIFT:` line. Else: "run `/spec finish <spec>`, which re-reads those ranges and moves read-at, then commit it". Keep any file its drift WARN names, for step 3.
@@ -56,8 +56,8 @@ On resume, run the Gate in the worktree instead, where the status must be `in-pr
 
 ## 3. Worktree
 
-- **New:** `git -C <repo> worktree add <worktree> -b <branch>`. Then, in the worktree only: set the spec's `status: in-progress`, and add a `## Evidence` section to the record, between `## Spikes` and `## Implementation` as `${CLAUDE_PLUGIN_ROOT}/skills/spec/record-template.md` orders them (after the last section before them if those are missing), starting with `- Started at <short HEAD it branched from>` and, if step 2 kept any, `- Drift WARN, no DRIFT line: <files>`. `git -C <worktree> add <spec> <record>`, then `git -C <worktree> commit -m '<area>: <spec title> is in progress'`, the area as the repo's convention asks (its `CLAUDE.md` or recent `git log`), following this session's attribution rules.
-- **Resume:** reuse `<worktree>`, or, if the directory is gone, `git -C <repo> worktree add <worktree> <branch>` (no `-b`). Run the Gate there (step 2).
+- **New:** `git -C <repo> -c core.fsmonitor=false -c core.hooksPath=/dev/null worktree add <worktree> -b <branch>`. Then, in the worktree only: set the spec's `status: in-progress`, and add a `## Evidence` section to the record, between `## Spikes` and `## Implementation` as `${CLAUDE_PLUGIN_ROOT}/skills/spec/record-template.md` orders them (after the last section before them if those are missing), starting with `- Started at <short HEAD it branched from>` and, if step 2 kept any, `- Drift WARN, no DRIFT line: <files>`. `git -C <worktree> -c core.fsmonitor=false -c core.hooksPath=/dev/null add <spec> <record>`, then `git -C <worktree> -c core.fsmonitor=false -c core.hooksPath=/dev/null commit -m '<area>: <spec title> is in progress'`, the area as the repo's convention asks (its `CLAUDE.md` or recent `git log`), following this session's attribution rules.
+- **Resume:** reuse `<worktree>`, or, if the directory is gone, `git -C <repo> -c core.fsmonitor=false -c core.hooksPath=/dev/null worktree add <worktree> <branch>` (no `-b`). Run the Gate there (step 2).
 
 ## 4. The implementer
 
@@ -96,5 +96,5 @@ On resume, run the Gate in the worktree instead, where the status must be `in-pr
 
 ## 6. Evidence and report
 
-1. `git -C <worktree> add <record>`, then `git -C <worktree> commit -m '<area>: implementation evidence'`: the branch's last commit. The verifier ran on the commit before it, which changes only the record. `git -C <worktree> status --porcelain` must then print nothing; if it doesn't, name what's left.
+1. `git -C <worktree> -c core.fsmonitor=false -c core.hooksPath=/dev/null add <record>`, then `git -C <worktree> -c core.fsmonitor=false -c core.hooksPath=/dev/null commit -m '<area>: implementation evidence'`: the branch's last commit. The verifier ran on the commit before it, which changes only the record. `git -C <worktree> -c core.fsmonitor=false -c core.hooksPath=/dev/null status --porcelain` must then print nothing; if it doesn't, name what's left.
 2. **Report**, one short line each: each work item, its commit and Done when result, and, for one no verifier row passed, that only the implementer checked it (`implementer-run:`) or no one did; the clean-up commits and any revert; the verifier's `Verified` and `Implementation holds` lines, per round, or that a round was refused and why; any departure or question and its answer; the cost of every run, from `total_cost_usd` in each `<run dir>/run-<n>.json` and each `<scratch V<n>>/run.json` but a refused round's (find them with Glob, read them with Read), and their total. Then: "run `/spec done <spec>` from `<worktree>`". Don't push, merge or remove the worktree.

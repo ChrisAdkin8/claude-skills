@@ -3,6 +3,38 @@
 What changed, by day, drawn from the commit history. The repo has no releases or tags, so each
 section is a date. Within a day, changes are grouped by area.
 
+## 2026-10-02
+
+Two specs built with `/implement` and merged locally, with no pull request:
+`docs/specs/2026-10-01-review-parser.md` and `docs/specs/2026-10-02-guard-path-identity.md`. The
+second changed the agents' sandbox and an agent file, but the agent and skill evals weren't run
+for it, by choice; its record says so and gives the commands.
+
+### Security
+
+- The guard judges paths as macOS does, ignoring upper and lower case. `~/.Claude/projects`,
+  `~/.AWS/credentials`, `K.PEM`, `X.TFVARS` and `curl FILE:///...` all got through before, since
+  every comparison was case-sensitive; they're refused like their lowercase spellings now. The
+  researcher's `write` mode accepts `~/NOTES/research` as its own folder.
+- The guard checks the file an input redirect reads (`cat < ~/.claude/projects/x.jsonl` passed
+  before) and paths that start with `$PWD`.
+- `~/.claude` is private to the agents by default. It was a deny list, so `settings.json`,
+  `usage-data`, `jobs`, `plans`, `todos`, `debug` and `daemon` were readable. Now the guard allows
+  only the agent's own saved tool output and the plugin's own folder, and the sandbox refuses all
+  of `~/.claude` to the agents' shell commands except the plugin's folder. An agent reads its saved
+  output with the Read tool; a shell read of it is refused.
+- `run-agent.sh` and the agent evals no longer add `~/.claude` as a working directory.
+
+### Fixed
+
+- `review-state.py` and `check-spec.py` read a saved cold review through one parser,
+  `mdcheck.read_review()`, so they can't disagree, and text inside the reviewer's reply can no
+  longer end the review early, count as a delta review or add `Not reviewed:` lines. Headings match
+  by one rule, so `## Cold review of any document` is no longer taken for `## Cold review`.
+- An older spec with `Not reviewed:` lines in its Open questions can be moved to `reviewed` again,
+  a document moved without its record still finds it (and says to move it), and an unfilled record
+  template doesn't count as a review.
+
 ## 2026-10-01
 
 Fixes from a full review of the repo on 2026-10-01, PRs #35 to #46.

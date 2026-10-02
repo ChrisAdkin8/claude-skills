@@ -347,11 +347,12 @@ Every agent runs as its own session, with no one at the keyboard, and two layers
 can do:
 
 - **A sandbox,** built into Claude Code and enforced by the operating system. It stops the
-  agent's shell commands reading credentials, writing to your code, notes or settings, or reaching
-  websites that aren't on an allowed list.
+  agent's shell commands reading credentials or anything in `~/.claude` but the plugin itself,
+  writing to your code, notes or settings, or reaching websites that aren't on an allowed list.
 - **A guard,** a script that checks each action before it runs and can refuse it. It keeps
-  credentials out of reach, and hides past conversations, so a checker can't see how the document
-  it checks was written.
+  credentials out of reach, and hides past conversations and the rest of `~/.claude`, so a checker
+  can't see how the document it checks was written. In `~/.claude` an agent may read only its own
+  saved tool output and the plugin's files.
 
 A few things run outside the sandbox, and one, the researcher's AWS and Terraform documentation
 servers, isn't checked by the guard either. The biggest is `/implement`'s implementer: it has to

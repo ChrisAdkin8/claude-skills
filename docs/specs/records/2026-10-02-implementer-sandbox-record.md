@@ -109,3 +109,9 @@ Needs a run: 2, 3, 4
 ## Evidence
 
 - Started at 365258c
+- Baseline: python3 -m unittest discover -s tests -> pass (557 tests)
+- Baseline: python3 tests/replay_guard.py -> pass
+- Baseline: ruff check --isolated --select E9,F . -> pass (local ruff 0.16.7, the version CI pins, in place of `pipx run`, which downloads it)
+- Baseline: git ls-files -z '*.sh' | xargs -0 shellcheck -S warning -> pass
+- Baseline: claude plugin validate . --json -> pass (only the expected plugin.json version warning)
+- Baseline: claude plugin validate .claude-plugin/plugin.json -> pass

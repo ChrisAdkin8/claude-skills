@@ -1,7 +1,7 @@
 ---
 title: The guard judges paths as macOS resolves them, and keeps ~/.claude private
 created: 2026-10-02
-status: in-progress # draft | reviewed | in-progress | done | superseded
+status: done # draft | reviewed | in-progress | done | superseded
 research: none
 idea: none
 read-at: b9a37ae

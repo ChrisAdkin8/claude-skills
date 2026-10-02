@@ -91,6 +91,10 @@ Needs a run: none
 ## Implementation
 
 - 2026-10-02, W5 (98fd911): `tests/test_run_agent.py` asserts no added dir but the plugin root is `~/.claude` or under it, not no added dir at all: `RunAgentFromACache` runs from a root under `~/.claude/plugins/cache`, which must stay added (the existing check at :138-141), so the literal assertion would fail there.
+- 2026-10-02, W4 (12ccccd) and W5 (98fd911): the paid eval checks were dropped by the user's decision, not run: `tests/agent-evals/run.sh` and the six sandboxed `tests/skill-evals/run.sh` cases on Sonnet and Opus, and the dated `tests/agent-evals/BASELINE.md` section they record. Nothing has run a real agent review under W4's sandbox; hand-run S3 ran the cold-reviewer once, as a tool test, and it read its saved output. To run them later: `EVAL_MODEL=sonnet tests/agent-evals/run.sh`, then `EVAL_MODEL=opus`, then `tests/skill-evals/run.sh` for every case but `implement-basic` and `implement-trap`, on each model in turn.
+- 2026-10-02, W1, W2, W3 (6a3fb3c, b8bb0c3, ae734bb) and W5 (98fd911): the guard replay and the `test_eval_runners` assertion were checked only by the implementer (`implementer-run:` lines under Evidence), because the verifier's sandbox had no git history and refused `mktemp -d`; the user accepted them as passed.
+- 2026-10-02, clean-up (12db788): code review found that W3's plugin-root exemption returned before the credential-name checks, so a `.env`, `*.pem` or `.aws/` file inside an installed plugin root was readable; fixed, with `PluginRoot.test_secret_files_in_the_root_stay_refused`. The spec didn't say the exemption must keep those checks.
+- 2026-10-02, W5 (98fd911): the commit's prefix is `implement:`, not `guard:` or `evals:` as `CLAUDE.md` asks; left, since rewriting it would rewrite the branch.
 
 ## Evidence
 

@@ -213,6 +213,17 @@ class PluginRoot(unittest.TestCase):
         )
         self.assertEqual(self.tool("Glob", pattern="~/.claude/plugins/**/x"), 2)
 
+    def test_secret_files_in_the_root_stay_refused(self):
+        # The root is exempt from the ~/.claude allow-list, not from the credentials names.
+        for rel in (".env", "k.pem", ".aws/credentials"):
+            path = Path(self.cache, "tests", rel)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("x\n")
+            with self.subTest(rel=rel):
+                self.assertBlocked(f"cat {path}")
+                self.assertEqual(self.tool("Read", file_path=str(path)), 2)
+        self.assertAllowed(f"cat {self.cache}/skills/spec/SKILL.md")
+
     def test_link_out_of_the_root_is_followed(self):
         other = f"{self.home}/.claude/plugins/cache/other-plugin/other-plugin/1.0.0"
         os.symlink(other, f"{self.cache}/skills/leak")
@@ -1296,7 +1307,9 @@ class SessionHistory(unittest.TestCase):
 
     def test_own_results_readable_and_another_sessions_not(self):
         own = f"{self.PROJECT}/{self.SESSION}/tool-results/b.txt"
-        other = f"{self.PROJECT}/66666666-0000-0000-0000-000000000000/tool-results/b.txt"
+        other = (
+            f"{self.PROJECT}/66666666-0000-0000-0000-000000000000/tool-results/b.txt"
+        )
         self.assertEqual(self.tool("Read", file_path=own), 0)
         self.assertEqual(self.bash(f"sed -n 1p {own}")[0], 0)
         self.assertEqual(self.tool("Read", file_path=other), 2)

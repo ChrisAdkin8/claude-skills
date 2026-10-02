@@ -1200,9 +1200,11 @@ def secret_path(path):
             return f"{secret} holds credentials"
     if SESSION_RESULTS and any(under(path, form) for form in results_spellings()):
         return None
-    if any(under(path, form) for form in spellings(CLAUDE_HOME)):
-        if OWN_ROOT and under(os.path.realpath(path), OWN_ROOT):
-            return None
+    # The plugin root is exempt from the ~/.claude allow-list only: a `.env` or key file inside
+    # it is still refused by the name checks below.
+    if any(under(path, form) for form in spellings(CLAUDE_HOME)) and not (
+        OWN_ROOT and under(os.path.realpath(path), OWN_ROOT)
+    ):
         return CLAUDE_REASON
     for history in HISTORY_HOME:
         if any(under(path, form) for form in spellings(history)):

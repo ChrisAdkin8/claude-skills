@@ -120,6 +120,7 @@ tmp=$(getconf DARWIN_USER_TEMP_DIR 2>/dev/null) && [ -d "$tmp" ] && tmp=$(cd "$t
   die "couldn't find the per-user temp dir (getconf DARWIN_USER_TEMP_DIR)"
 
 # A user setting that could widen the --settings sandbox: whether it would is untested, so refuse.
+# Any sandbox.network key that isn't empty is refused too, and strictAllowlist unless it's true.
 python3 - "$HOME/.claude/settings.json" <<'PY' || exit 2
 import json, sys
 try:
@@ -132,12 +133,17 @@ except (OSError, ValueError) as e:
 box = settings.get("sandbox") if isinstance(settings, dict) else None
 box = box if isinstance(box, dict) else {}
 fs = box.get("filesystem") if isinstance(box.get("filesystem"), dict) else {}
+net = box.get("network") if isinstance(box.get("network"), dict) else {}
 widening = [
     key for key, bad in (
         ("sandbox.enabled", box.get("enabled") is False),
         ("sandbox.allowUnsandboxedCommands", box.get("allowUnsandboxedCommands") is True),
         ("sandbox.excludedCommands", bool(box.get("excludedCommands"))),
         ("sandbox.filesystem.allowWrite", bool(fs.get("allowWrite"))),
+        *(
+            (f"sandbox.network.{k}", v is not True if k == "strictAllowlist" else bool(v))
+            for k, v in sorted(net.items())
+        ),
     ) if bad
 ]
 if widening:

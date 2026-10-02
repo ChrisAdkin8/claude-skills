@@ -55,3 +55,10 @@ Needs a run: 3
 ## Evidence
 
 - Started at 87b2aed
+- Baseline: `python3 -m unittest discover -s tests` -> pass (589 tests)
+- Baseline: `ruff check --isolated --select E9,F .` (local ruff, not `pipx run`) -> pass
+- Baseline: `git ls-files -z '*.sh' | xargs -0 shellcheck -S warning` -> pass
+- Baseline: `python3 tests/replay_guard.py` -> 1 failing: one recorded headless command, a `jq` read of `~/.claude/settings.json`, now blocked and not in `tests/replay-accepted.txt`
+- Baseline: `claude plugin validate . --json` -> pass
+- Baseline: `claude plugin validate .claude-plugin/plugin.json` -> pass (with the expected root `CLAUDE.md` warning)
+- Baseline: `tests/agent-evals/run.sh` and `tests/skill-evals/run.sh` -> not run: paid, by hand only (`CLAUDE.md`)

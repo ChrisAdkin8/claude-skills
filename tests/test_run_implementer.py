@@ -189,7 +189,9 @@ class RunImplementer(unittest.TestCase):
         # Only the user's settings load, under a sandbox of the run's own.
         self.assertEqual(self.flag(argv, "--setting-sources"), "user")
         self.assertEqual(self.flag(argv, "--permission-mode"), "acceptEdits")
-        self.assertEqual(Path(self.flag(argv, "--settings")), self.run_dir / "settings.json")
+        self.assertEqual(
+            Path(self.flag(argv, "--settings")), self.run_dir / "settings.json"
+        )
         self.assertEqual(argv.count("--add-dir"), 1)
         self.assertEqual(Path(self.flag(argv, "--add-dir")), scratch)
         self.assertTrue(argv[argv.index("--add-dir") + 2].startswith("--"))
@@ -226,7 +228,10 @@ class RunImplementer(unittest.TestCase):
         common = (self.repo / ".git").resolve()
         git_dir = common / "worktrees" / "spec"
         tmp = subprocess.run(
-            ["getconf", "DARWIN_USER_TEMP_DIR"], capture_output=True, text=True, check=True
+            ["getconf", "DARWIN_USER_TEMP_DIR"],
+            capture_output=True,
+            text=True,
+            check=True,
         ).stdout.strip()
         allow = sandbox["filesystem"]["allowWrite"]
         deny = sandbox["filesystem"]["denyWrite"]
@@ -259,7 +264,12 @@ class RunImplementer(unittest.TestCase):
                 self.assertIn(str(path), deny)
         self.assertIn("~/.cache/implement-ledger", deny)
         deny_rules = settings["permissions"]["deny"]
-        for rule in ("Bash(gh *)", "WebFetch", "WebSearch", "Edit(~/.cache/implement-ledger/**)"):
+        for rule in (
+            "Bash(gh *)",
+            "WebFetch",
+            "WebSearch",
+            "Edit(~/.cache/implement-ledger/**)",
+        ):
             self.assertIn(rule, deny_rules)
 
     def test_other_worktrees_are_denied_to_the_call(self):
@@ -284,15 +294,41 @@ class RunImplementer(unittest.TestCase):
             ({"enabled": False}, "enabled"),
             ({"allowUnsandboxedCommands": True}, "allowUnsandboxedCommands"),
             ({"filesystem": {"allowWrite": ["~/code"]}}, "allowWrite"),
+            ({"network": {"allowedDomains": ["github.com"]}}, "allowedDomains"),
+            ({"network": {"allowLocalBinding": True}}, "allowLocalBinding"),
+            ({"network": {"strictAllowlist": False}}, "strictAllowlist"),
+            ({"network": {"strictAllowlist": None}}, "strictAllowlist"),
         ):
             with self.subTest(sandbox=sandbox):
                 settings.write_text(json.dumps({"sandbox": sandbox}))
                 code, out = self.launch(self.worktree, self.run_dir)
                 self.assertEqual(code, 2, out)
                 self.assertIn(key, out)
+        settings.write_text(
+            json.dumps(
+                {
+                    "sandbox": {
+                        "network": {"strictAllowlist": True, "httpProxyPort": 8080}
+                    }
+                }
+            )
+        )
+        code, out = self.launch(self.worktree, self.run_dir)
+        self.assertEqual(code, 2, out)
+        self.assertIn("httpProxyPort", out)
+        self.assertNotIn("strictAllowlist", out)
         self.assertEqual(self.calls_made(), [])
         settings.write_text(
-            json.dumps({"sandbox": {"enabled": True, "excludedCommands": []}, "model": "x"})
+            json.dumps(
+                {
+                    "sandbox": {
+                        "enabled": True,
+                        "excludedCommands": [],
+                        "network": {"allowedDomains": [], "strictAllowlist": True},
+                    },
+                    "model": "x",
+                }
+            )
         )
         self.assertEqual(self.launch(self.worktree, self.run_dir)[0], 0)
 
@@ -380,7 +416,9 @@ class RunImplementer(unittest.TestCase):
         code, out = self.launch(self.worktree, self.run_dir)
         self.assertEqual(code, 0, out)
         self.assertIn(f"moved during the run: refs/heads/{branch} ", out)
-        self.assertNotIn("implement/spec", out.split("moved during the run:", 1)[1].splitlines()[0])
+        self.assertNotIn(
+            "implement/spec", out.split("moved during the run:", 1)[1].splitlines()[0]
+        )
 
     def test_cap_and_model_from_the_environment(self):
         self.brief()
@@ -622,7 +660,11 @@ class RunImplementer(unittest.TestCase):
         for name in ("brief.md", "spec.md", "diff.patch"):
             (scratch / name).write_text("x\n")
         verify = subprocess.run(
-            [str(VERIFY), str(scratch)], capture_output=True, text=True, env=self.env, check=False
+            [str(VERIFY), str(scratch)],
+            capture_output=True,
+            text=True,
+            env=self.env,
+            check=False,
         )
         # The stub's reply has no verdict lines, so 3; its cost still reaches the ledger.
         self.assertEqual(verify.returncode, 3, verify.stdout + verify.stderr)
@@ -631,6 +673,7 @@ class RunImplementer(unittest.TestCase):
         self.assertEqual(self.launch(self.worktree, self.run_dir, "--resume")[0], 0)
         second = self.calls_made()[-1]["argv"]
         self.assertEqual(self.flag(second, "--max-budget-usd"), "8")
+
 
 if __name__ == "__main__":
     unittest.main()

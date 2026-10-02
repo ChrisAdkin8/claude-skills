@@ -28,8 +28,8 @@
 #
 # Why headless: Claude Code's sandbox can't be set per subagent, and these agents read untrusted
 # web pages and repos. Run this way, each gets its agent file (prompt, tools, hooks) plus
-# hooks/agent-sandbox.json (rendered into the run dir): OS-level read denies for credentials, no writes under ~/code,
-# ~/notes or ~/.claude (its work dir included), secret environment variables removed, and Bash network limited to an allowlist. The
+# hooks/agent-sandbox.json (rendered into the run dir): OS-level read denies for credentials and all
+# of ~/.claude but the plugin root, no writes under ~/code, ~/notes or ~/.claude (its work dir included), secret environment variables removed, and Bash network limited to an allowlist. The
 # PreToolUse guard in the agent's frontmatter still runs, for what the sandbox can't see (gh and
 # the excluded scripts, git and curl semantics, WebFetch URL sizes, WebSearch queries). The agent evals run the
 # agents the same way (tests/agent-evals/run.sh).
@@ -113,7 +113,7 @@ fi
 cd "$work"
 status=0
 claude -p --agents "$run/agents.json" --agent "$agent" --output-format json --max-turns 200 --max-budget-usd "$max_usd" \
-  --allowedTools "$tools" --add-dir "$HOME/.claude" "$HOME/notes" "$work" "$plugin_root" \
+  --allowedTools "$tools" --add-dir "$HOME/notes" "$work" "$plugin_root" \
   --append-system-prompt-file "$run/sandbox.md" \
   --setting-sources user --settings "$run/settings.json" ${mcp[@]+"${mcp[@]}"} ${model[@]+"${model[@]}"} ${resume[@]+"${resume[@]}"} \
   "$prompt" < /dev/null > "$run/run.json" 2> "$run/run.err" || status=$?

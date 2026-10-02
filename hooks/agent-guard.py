@@ -19,9 +19,11 @@ So credentials are kept out of reach instead (see SECRET_HOME): no command word 
 nor may grep -r or rg search a directory that holds them, and the `read` mode refuses them to
 the Read, Grep and Glob tools. For Bash this is best effort, since a path built at run time from
 variables gets past it; for the tools it is exact, since the path arrives whole. Session history
-(HISTORY_HOME) is refused the same way: the verifiers and the cold reviewer are only worth
-running if they can't see how the document they check was written. The exception is the
-agent's own saved tool output (SESSION_RESULTS).
+is refused the same way: the verifiers and the cold reviewer are only worth running if they
+can't see how the document they check was written. All of ~/.claude (CLAUDE_HOME) is an
+allow-list: an agent may read only its own saved tool output (SESSION_RESULTS) and the plugin's
+own root when that lives there (OWN_ROOT). The agents' earlier runs (HISTORY_HOME) are refused
+too.
 
 Environment variables are checked too, because they change what an allowed command runs: git
 runs GIT_EXTERNAL_DIFF through a shell, bash sources BASH_ENV, Python reads PYTHONPATH. A
@@ -37,7 +39,8 @@ itself (by assignment, `for`, `read` or `printf -v`) and a few harmless ones the
 (SAFE_VARS). Indirect expansion (`${!name}`) and jq's `env` and `$ENV` are refused outright.
 
 Paths are compared after resolving symlinks too, so a link that points into ~/.aws is refused
-like ~/.aws itself.
+like ~/.aws itself, and through `path_key`, which folds case and Unicode normalisation as macOS's
+default APFS volume does, so `~/.AWS` is refused like `~/.aws` and `K.PEM` like `k.pem`.
 
 Request URLs are limited in size, since a GET request's URL is where data would leave. The limits
 apply to what curl or gh actually sends, so a curl or gh argument may not expand anything whose
@@ -68,6 +71,7 @@ import os
 import re
 import shlex
 import sys
+import unicodedata
 from pathlib import Path
 from typing import NoReturn
 from urllib.parse import urlsplit
@@ -286,30 +290,22 @@ SECRET_HOME = tuple(
         "Library/Application Support/Google/Chrome",
     )
 )  # fmt: skip
-# Session history: transcripts, prompt history, file snapshots and the agents' own briefs and
-# replies. No agent needs it, and a cold reviewer that could read the session that wrote a
-# document wouldn't be cold. Also denied in agent-sandbox.json, except ~/.claude/projects: the
-# agent's own tool output is saved there (SESSION_RESULTS), so only this guard covers it. The
-# same goes for ~/.claude/plugins: other plugins' caches, marketplace clones and plugins/data are
-# private, but this guard's own root, when it lives there, is not (OWN_ROOT), and a sandbox deny
-# can't say that.
-HISTORY_HOME = tuple(
-    HOME / p
-    for p in (
-        ".claude/plugins", ".claude/projects", ".claude/history.jsonl", ".claude/file-history", ".claude/sessions",
-        ".claude/session-env", ".claude/shell-snapshots", ".claude/paste-cache",
-        ".cache/agent-runs",
-    )
-)  # fmt: skip
-PRIVATE_HOME = SECRET_HOME + HISTORY_HOME
-PLUGINS_HOME = HOME / ".claude/plugins"
-# The one directory under ~/.claude/plugins an agent may read: the plugin this guard is part of.
-# Under --plugin-dir or the hooks symlink the root is a checkout outside it, so nothing is exempt.
-OWN_ROOT = (
-    str(ROOT)
-    if any(parent in (PLUGINS_HOME, PLUGINS_HOME.resolve()) for parent in ROOT.parents)
-    else None
+# Session history outside ~/.claude: the agents' own briefs and replies from earlier runs. No
+# agent needs it, and a cold reviewer that could read the session that wrote a document wouldn't
+# be cold. Also denied in agent-sandbox.json.
+HISTORY_HOME = (HOME / ".cache/agent-runs",)
+# Transcripts, prompt history, file snapshots, plans, todos, settings and the rest of Claude
+# Code's own state. An allow-list: only the agent's own saved tool output (SESSION_RESULTS) and
+# this guard's own root, when it lives under ~/.claude/plugins (OWN_ROOT), may be read. The
+# sandbox denies it all to Bash but the plugin root; only this guard lets the Read tool reach the
+# agent's own output, since a Read deny would beat any allow.
+CLAUDE_HOME = HOME / ".claude"
+CLAUDE_REASON = (
+    f"{CLAUDE_HOME} holds session history and Claude Code's own state; agents may read only "
+    "their own saved tool output and the plugin's files"
 )
+PRIVATE_HOME = SECRET_HOME + HISTORY_HOME + (CLAUDE_HOME,)
+PLUGINS_HOME = CLAUDE_HOME / "plugins"
 # The one part of the history an agent may read: its own session's saved tool output, which
 # Claude Code writes under ~/.claude/projects and points the agent at when a result is too long
 # to show. Set from the hook input's transcript path and session ID in main().
@@ -329,10 +325,11 @@ SECRET_NAMES = {
 SECRET_FILE = re.compile(
     r"(?:^|/)(?:\.env(?:\.(?!example$|sample$|template$|dist$)[\w.-]+)?"
     r"|[^/]*\.tfvars(?:\.json)?|[^/]*\.tfstate(?:\.backup)?|[^/]*\.(?:pem|p12|pfx)"
-    r"|id_(?:rsa|dsa|ecdsa|ed25519))$"
+    r"|id_(?:rsa|dsa|ecdsa|ed25519))$",
+    re.IGNORECASE,
 )
 # curl reads local files through file:// URLs; other URLs are fetched, not read.
-FILE_URL = re.compile(r"^file://(?:localhost)?(?=[/~$])")
+FILE_URL = re.compile(r"^file://(?:localhost)?(?=[/~$])", re.IGNORECASE)
 URL = re.compile(r"[a-zA-Z][\w+.-]*://")
 CWD = os.getcwd()  # replaced by the hook input's cwd in main()
 
@@ -641,6 +638,10 @@ def simple_commands(toks):
                 i += 2
                 continue
             if set(tok) <= {"<"}:  # input redirection or a here-string: reads only
+                # `<` reads a file; after `<<` and `<<<` the word is text, not a path.
+                target = toks[i + 1] if i + 1 < len(toks) else ""
+                if tok == "<" and (reason := secret_word(target)):
+                    block(f"{reason}. {SECRET_BLOCK}")
                 i += 2
                 continue
             commands.append(current)
@@ -1115,10 +1116,16 @@ def check_reader(name, args):
 
 
 def expand_home(text):
-    """`~`, `$HOME` and `${HOME}` at the start of a path, as the shell would expand them."""
+    """`~`, `$HOME` and `${HOME}` at the start of a path, as the shell would expand them, and
+    `$PWD` or `${PWD}` as the hook's working directory."""
     for prefix in ("~/", "$HOME/", "${HOME}/"):
         if text.startswith(prefix):
             return str(HOME) + "/" + text[len(prefix) :]
+    for prefix in ("$PWD/", "${PWD}/"):
+        if text.startswith(prefix):
+            return CWD.rstrip("/") + "/" + text[len(prefix) :]
+    if text in ("$PWD", "${PWD}"):
+        return CWD
     return str(HOME) if text in ("~", "$HOME", "${HOME}") else text
 
 
@@ -1138,8 +1145,37 @@ def absolute(text):
     return lexical
 
 
+def fold(text):
+    """A path's text as APFS compares names: case-folded, in Unicode NFD."""
+    return unicodedata.normalize("NFD", os.fspath(text)).casefold()
+
+
+def path_key(path):
+    """What makes two spellings of a path the same path on macOS's default, case-insensitive
+    APFS volume. Folded on every volume: a fold that refuses more is safe for a deny, and on
+    APFS the allow side only gains spellings of the same directory."""
+    key = fold(path)
+    return key.rstrip("/") or key
+
+
 def under(path, parent):
+    path, parent = path_key(path), path_key(parent)
     return path == parent or path.startswith(parent.rstrip("/") + "/")
+
+
+def own_root(root):
+    """The resolved plugin root if it lives under ~/.claude/plugins (as written or resolved),
+    else None: under --plugin-dir or the hooks symlink the root is a checkout outside it."""
+    real = os.path.realpath(root)
+    homes = (PLUGINS_HOME, os.path.realpath(PLUGINS_HOME))
+    if any(under(real, h) and path_key(real) != path_key(h) for h in homes):
+        return real
+    return None
+
+
+# The one directory under ~/.claude/plugins an agent may read: the plugin this guard is part of.
+# Under --plugin-dir or the hooks symlink the root is a checkout outside it, so nothing is exempt.
+OWN_ROOT = own_root(ROOT)
 
 
 def spellings(private):
@@ -1164,16 +1200,18 @@ def secret_path(path):
             return f"{secret} holds credentials"
     if SESSION_RESULTS and any(under(path, form) for form in results_spellings()):
         return None
+    # The plugin root is exempt from the ~/.claude allow-list only: a `.env` or key file inside
+    # it is still refused by the name checks below.
+    if any(under(path, form) for form in spellings(CLAUDE_HOME)) and not (
+        OWN_ROOT and under(os.path.realpath(path), OWN_ROOT)
+    ):
+        return CLAUDE_REASON
     for history in HISTORY_HOME:
-        if (
-            history == PLUGINS_HOME
-            and OWN_ROOT
-            and under(os.path.realpath(path), OWN_ROOT)
-        ):
-            continue
         if any(under(path, form) for form in spellings(history)):
             return f"{history} holds session history, which would show how a document was written"
-    if hidden := next((p for p in Path(path).parts if p in SECRET_NAMES), None):
+    if hidden := next(
+        (p for p in Path(path).parts if p.casefold() in SECRET_NAMES), None
+    ):
         return f"`{hidden}` holds credentials"
     if SECRET_FILE.search(path):
         return f"`{Path(path).name}` is a credentials or state file"
@@ -1191,6 +1229,14 @@ def secret_reason(path):
     return None
 
 
+# The variables a path may start with that secret_word can still judge: expand_home knows them.
+KNOWN_VARS = ("$HOME", "${HOME}", "$PWD", "${PWD}")
+SECRET_BLOCK = (
+    "These agents read untrusted content, so they may not read secrets, which could leave in "
+    "a request URL, nor session history"
+)
+
+
 def secret_word(word):
     """Why a command word names a secret file or directory, or None.
 
@@ -1201,9 +1247,9 @@ def secret_word(word):
         text = FILE_URL.sub("", text or "")
         if not text or URL.match(text):
             continue
-        if "$" in text and not text.startswith(("$HOME", "${HOME}")):
+        if "$" in text and not text.startswith(KNOWN_VARS):
             continue
-        pathlike = "/" in text or text.startswith(("~", "$HOME", "${HOME}"))
+        pathlike = "/" in text or text.startswith(("~", *KNOWN_VARS))
         glob_at = next((i for i, ch in enumerate(text) if ch in "*?["), None)
         if glob_at is not None:
             if not pathlike:
@@ -1212,7 +1258,9 @@ def secret_word(word):
             stem = absolute(text[:glob_at]) if glob_at else CWD
             stem += "/" if text[glob_at - 1 : glob_at] in ("/", "") else ""
             if any(
-                form.startswith(stem) for s in PRIVATE_HOME for form in spellings(s)
+                fold(form).startswith(fold(stem))
+                for s in PRIVATE_HOME
+                for form in spellings(s)
             ):
                 return (
                     f"`{text}` can expand to a credentials or session history directory"
@@ -1231,7 +1279,7 @@ def ancestor_of_secret(path):
     reaches it."""
     paths = {path, os.path.realpath(path)}
     return any(
-        under(form, p) and form != p
+        under(form, p) and path_key(form) != path_key(p)
         for secret in PRIVATE_HOME
         for form in spellings(secret)
         for p in paths
@@ -1255,10 +1303,7 @@ def check_secrets(raw, argv):
         if word is pattern:
             continue
         if reason := secret_word(word):
-            block(
-                f"{reason}. These agents read untrusted content, so they may not read "
-                "secrets, which could leave in a request URL, nor session history"
-            )
+            block(f"{reason}. {SECRET_BLOCK}")
     recursive = name == "rg" or (
         searcher
         and any(
@@ -1510,7 +1555,7 @@ def check_write(path, allowed_dir):
         block("a write with no file path")
     target = Path(path).expanduser().resolve()
     root = Path(allowed_dir).expanduser().resolve()
-    if not target.is_relative_to(root):
+    if not under(target, root):
         block(f"this agent may only write under {root}, not {target}")
 
 

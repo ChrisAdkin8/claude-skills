@@ -10,7 +10,8 @@
     "filesystem": {
       "denyRead": ["~/.ssh", "~/.aws", "~/.kube", "~/.gnupg", "~/.docker", "~/.azure", "~/.netrc", "~/.git-credentials", "~/.npmrc", "~/.pypirc", "~/.config", "~/.claude.json", "~/.claude/.credentials.json", "~/.zsh_history", "~/.bash_history", "~/Library/Keychains", "~/Library/Application Support/Google/Chrome", "~/Library/Cookies",
                  "~/.claude/backups", "~/.claude/remote-settings.json", "~/.claude/remote-settings-consent.json",
-                 "~/.claude/history.jsonl", "~/.claude/file-history", "~/.claude/sessions", "~/.claude/session-env", "~/.claude/shell-snapshots", "~/.claude/paste-cache", "~/.cache/agent-runs"],
+                 "~/.claude/history.jsonl", "~/.claude/file-history", "~/.claude/sessions", "~/.claude/session-env", "~/.claude/shell-snapshots", "~/.claude/paste-cache", "~/.claude", "~/.cache/agent-runs"],
+      "allowRead": ["${CLAUDE_PLUGIN_ROOT}"],
       "denyWrite": ["~/.claude", "~/notes", "~/code"]
     },
     "credentials": {

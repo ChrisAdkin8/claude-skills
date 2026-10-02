@@ -17,7 +17,7 @@ until the next command or the end of the session. Eval runs aren't in the logs: 
 
 It only reads, and prints to stdout. The logs hold everything the sessions saw, so the report can
 too: examples are cut to 120 characters, but read it before you share it. Don't run it from a
-sandboxed agent: the guard refuses reads of these logs (hooks/agent-guard.py HISTORY_HOME).
+sandboxed agent: the guard refuses reads of these logs (hooks/agent-guard.py CLAUDE_HOME).
 
 Exits 0, or 2 on a bad argument or no logs to read.
 """

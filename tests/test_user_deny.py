@@ -33,6 +33,8 @@ USER_DENY = REPO / "hooks" / "user-deny.json"
 AGENT_RUNS = "Read(~/.cache/agent-runs/**)"
 # A reply as the skills read it, in a run dir laid out as hooks/run-agent.md says.
 REPLY = "~/.cache/agent-runs/<name>/<agent>/reply.md"
+# An agent's own saved tool output, which it reads back with the Read tool.
+TOOL_RESULT = "~/.claude/projects/<slug>/<session>/tool-results/b.txt"
 FENCE = re.compile(r"^```[^\n]*\n(.*?)^```", re.MULTILINE | re.DOTALL)
 
 
@@ -78,6 +80,16 @@ class UserDeny(unittest.TestCase):
                 self.assertFalse(
                     fnmatch.fnmatchcase(REPLY, path),
                     f"{rule} hides the agents' replies",
+                )
+
+    def test_saved_tool_output_stays_readable(self):
+        # The agents read their own overflowed output there; no rule may hide it.
+        for rule in self.user["permissions"]["deny"]:
+            with self.subTest(rule=rule):
+                path = rule.removeprefix("Read(").removesuffix(")")
+                self.assertFalse(
+                    fnmatch.fnmatchcase(TOOL_RESULT, path),
+                    f"{rule} hides the agents' saved tool output",
                 )
 
 

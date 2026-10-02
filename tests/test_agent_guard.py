@@ -125,7 +125,7 @@ class PluginRoot(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         self.home = os.path.realpath(tmp.name)
         self.cache = (
-            f"{self.home}/.claude/plugins/cache/claude-skills/claude-skills/0.1.0"
+            f"{self.home}/.claude/plugins/cache/checked-plans/checked-plans/0.1.0"
         )
         self.copy(self.cache)
         for other in (
@@ -189,12 +189,12 @@ class PluginRoot(unittest.TestCase):
             "cat $HOME/.claude/plugins/data/d/x",
             f"cat {self.cache}/../0.0.9/x",  # a sibling version of this plugin
             f"cat {self.cache}/../../x",
-            f"ls {self.home}/.claude/plugins/cache/claude-skills",
+            f"ls {self.home}/.claude/plugins/cache/checked-plans",
             "ls ~/.claude/plugins/*",
             "ls ~/.claude/plugins/cache/*",
             "grep -rn x ~/.claude/plugins",
             f"grep -rn x {self.home}/.claude/plugins/cache",
-            f"grep -rn x {self.home}/.claude/plugins/cache/claude-skills",
+            f"grep -rn x {self.home}/.claude/plugins/cache/checked-plans",
         ):
             with self.subTest(command=command):
                 self.assertBlocked(command)
@@ -212,6 +212,17 @@ class PluginRoot(unittest.TestCase):
             self.tool("Grep", pattern="x", path=f"{self.home}/.claude/plugins"), 2
         )
         self.assertEqual(self.tool("Glob", pattern="~/.claude/plugins/**/x"), 2)
+
+    def test_secret_files_in_the_root_stay_refused(self):
+        # The root is exempt from the ~/.claude allow-list, not from the credentials names.
+        for rel in (".env", "k.pem", ".aws/credentials"):
+            path = Path(self.cache, "tests", rel)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("x\n")
+            with self.subTest(rel=rel):
+                self.assertBlocked(f"cat {path}")
+                self.assertEqual(self.tool("Read", file_path=str(path)), 2)
+        self.assertAllowed(f"cat {self.cache}/skills/spec/SKILL.md")
 
     def test_link_out_of_the_root_is_followed(self):
         other = f"{self.home}/.claude/plugins/cache/other-plugin/other-plugin/1.0.0"
@@ -1012,6 +1023,126 @@ class Secrets(unittest.TestCase):
         self.assertEqual(self.tool("Glob", pattern="**/*.py", path=f"{home}/code"), 0)
 
 
+class CaseInsensitive(unittest.TestCase):
+    """macOS's default APFS volume ignores case, so `~/.AWS` is `~/.aws` and `K.PEM` is a .pem
+    file: every path comparison folds case, or a different spelling would get past a deny."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.home = os.path.realpath(tmp.name)
+        os.makedirs(f"{self.home}/notes/research")
+
+    def run_guard(self, mode, event, *extra, guard=GUARD):
+        run = subprocess.run(
+            [sys.executable, str(guard), mode, *extra],
+            input=json.dumps({"cwd": self.home, **event}),
+            capture_output=True,
+            text=True,
+            check=False,
+            env={**os.environ, "HOME": self.home},
+        )
+        return run.returncode, run.stderr
+
+    def bash(self, command):
+        return self.run_guard("bash", {"tool_input": {"command": command}})[0]
+
+    def tool(self, name, **tool_input):
+        return self.run_guard("read", {"tool_name": name, "tool_input": tool_input})[0]
+
+    def write(self, path, allowed):
+        event = {"tool_name": "Write", "tool_input": {"file_path": path}}
+        return self.run_guard("write", event, allowed)[0]
+
+    def test_case_variants_blocked_to_bash(self):
+        for command in (
+            "cat ~/.Claude/projects/x.jsonl",
+            "cat ~/.AWS/credentials",
+            "cat /tmp/X.TFVARS",
+            "cat /tmp/K.PEM",
+            "curl FILE:///tmp/k.pem",
+            "cat ~/.AW*/credentials",  # a glob's fixed stem
+            "cat x/.SSH/config",  # a credentials directory anywhere
+        ):
+            with self.subTest(command=command):
+                self.assertEqual(
+                    self.bash(command), 2, f"expected blocked: {command!r}"
+                )
+
+    def test_case_variants_blocked_to_read_tools(self):
+        self.assertEqual(self.tool("Read", file_path="~/.AWS/credentials"), 2)
+        self.assertEqual(self.tool("Grep", pattern="x", path="~/.AWS"), 2)
+        self.assertEqual(self.tool("Glob", pattern="*", path="~/.AWS"), 2)
+        self.assertEqual(self.tool("Glob", pattern="~/.AWS/*"), 2)
+
+    def test_write_folds_case_of_the_allowed_directory(self):
+        allowed = f"{self.home}/notes/research"
+        self.assertEqual(self.write("~/NOTES/research/x.md", allowed), 0)
+        self.assertEqual(self.write(f"{self.home}/notes/research/x.md", allowed), 0)
+        self.assertEqual(self.write(f"{self.home}/notes/x.md", allowed), 2)
+        self.assertEqual(self.write("~/NOTES/x.md", allowed), 2)
+
+    def test_plugin_root_under_a_case_variant_is_own_root(self):
+        cache = f"{self.home}/.Claude/plugins/cache/checked-plans/checked-plans/0.1.0"
+        other = f"{self.home}/.Claude/plugins/cache/other-plugin/other-plugin/1.0.0"
+        guard = Path(cache, "hooks", "agent-guard.py")
+        guard.parent.mkdir(parents=True)
+        guard.write_text(GUARD.read_text())
+        Path(cache, "SKILL.md").write_text("x\n")
+        os.makedirs(other)
+        Path(other, "x").write_text("x\n")
+        probe = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import importlib.util, sys; "
+                "s = importlib.util.spec_from_file_location('g', sys.argv[1]); "
+                "m = importlib.util.module_from_spec(s); s.loader.exec_module(m); "
+                "print(m.OWN_ROOT)",
+                str(guard),
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+            env={**os.environ, "HOME": self.home},
+        )
+        self.assertEqual(probe.stdout.strip(), os.path.realpath(cache))
+        event = {"tool_name": "Read", "tool_input": {"file_path": f"{cache}/SKILL.md"}}
+        self.assertEqual(self.run_guard("read", event, guard=guard)[0], 0)
+        event = {"tool_name": "Read", "tool_input": {"file_path": f"{other}/x"}}
+        self.assertEqual(self.run_guard("read", event, guard=guard)[0], 2)
+
+
+class RedirectsAndPwd(unittest.TestCase):
+    """An input redirect reads its target as surely as an argument does, and `$PWD` is the
+    hook's working directory, so both are judged like any other path."""
+
+    HOME = str(Path.home())
+
+    def bash(self, command, cwd=HOME):
+        return hook("bash", {"tool_input": {"command": command}, "cwd": cwd})[0]
+
+    def test_redirect_and_pwd_targets_blocked(self):
+        for command in (
+            "cat < ~/.claude/projects/x.jsonl",
+            "wc -l < ~/.aws/credentials",
+            "cat $PWD/.claude/projects/x",
+            "cat ${PWD}/.aws/config",
+        ):
+            with self.subTest(command=command):
+                self.assertEqual(
+                    self.bash(command), 2, f"expected blocked: {command!r}"
+                )
+
+    def test_ordinary_redirects_and_pwd_allowed(self):
+        for command in ('grep x <<< "$PWD"', "sort < /dev/null"):
+            with self.subTest(command=command):
+                self.assertEqual(
+                    self.bash(command), 0, f"expected allowed: {command!r}"
+                )
+        self.assertEqual(self.bash("cat < README.md", cwd=str(REPO)), 0)
+
+
 class HomeBehindALink(unittest.TestCase):
     """A home directory that is itself reached through a symlink (macOS's /var is /private/var):
     a path written either way is private, and a search from a link to the home is refused."""
@@ -1144,11 +1275,45 @@ class SessionHistory(unittest.TestCase):
                 self.assertIn("session history", err)
 
     def test_recursive_search_over_history_blocked(self):
-        for command in ("grep -rn spec ~/.claude", "rg spec ~/.cache"):
+        # ~/.claude itself is refused as a path before the recursive-search check runs.
+        code, err = self.bash("grep -rn spec ~/.claude")
+        self.assertEqual(code, 2)
+        self.assertIn("Claude Code's own state", err)
+        for command in ("grep -rn spec ~", "rg spec ~/.cache"):
             with self.subTest(command=command):
                 code, err = self.bash(command)
                 self.assertEqual(code, 2, f"expected blocked: {command!r}")
                 self.assertIn("narrower directory", err)
+
+    STATE = (
+        "usage-data/x",
+        "settings.json",
+        "jobs/x",
+        "plans/x.md",
+        "todos/x",
+        "debug/x",
+        "daemon/x",
+    )
+
+    def test_the_rest_of_claude_home_blocked(self):
+        # ~/.claude is an allow-list: only the session's own saved output and the plugin root.
+        for rel in self.STATE:
+            path = f"{self.HOME}/.claude/{rel}"
+            with self.subTest(path=path):
+                self.assertEqual(self.tool("Read", file_path=path), 2)
+                code, err = self.bash(f"cat ~/.claude/{rel}")
+                self.assertEqual(code, 2, f"expected blocked: cat ~/.claude/{rel}")
+                self.assertIn("Claude Code's own state", err)
+
+    def test_own_results_readable_and_another_sessions_not(self):
+        own = f"{self.PROJECT}/{self.SESSION}/tool-results/b.txt"
+        other = (
+            f"{self.PROJECT}/66666666-0000-0000-0000-000000000000/tool-results/b.txt"
+        )
+        self.assertEqual(self.tool("Read", file_path=own), 0)
+        self.assertEqual(self.bash(f"sed -n 1p {own}")[0], 0)
+        self.assertEqual(self.tool("Read", file_path=other), 2)
+        self.assertEqual(self.bash(f"sed -n 1p {other}")[0], 2)
 
     def test_skills_agents_and_own_results_readable(self):
         own = f"{self.PROJECT}/{self.SESSION}/tool-results/b1.txt"

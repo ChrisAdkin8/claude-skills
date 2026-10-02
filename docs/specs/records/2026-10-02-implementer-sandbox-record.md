@@ -106,6 +106,10 @@ Needs a run: 2, 3, 4
 - Question 6: Route: deferred. Needs a nested `claude -p` session with its own sandbox, which the spike sandbox can't start (no login, no API host); run by hand as the 2026-10-01 experiments were.
 - Question 7: Route: deferred. Needs a nested `claude -p` session with its own sandbox, which the spike sandbox can't start (no login, no API host); run by hand as the 2026-10-01 experiments were.
 
+## Implementation
+
+- 2026-10-02, W2 (pending): `ledger.py` has a fourth command, `next-call <run name>`, beside Design's `append`, `spent` and `path`, so the launcher takes its call number from the helper rather than parsing the ledger itself; `append` also refuses a line the ledger's rules would refuse (a repeated call number, an end with no start), so a bad line is never written.
+
 ## Evidence
 
 - Started at 365258c
@@ -115,3 +119,4 @@ Needs a run: 2, 3, 4
 - Baseline: git ls-files -z '*.sh' | xargs -0 shellcheck -S warning -> pass
 - Baseline: claude plugin validate . --json -> pass (only the expected plugin.json version warning)
 - Baseline: claude plugin validate .claude-plugin/plugin.json -> pass
+- W1 (166b752): Done when python3 -m unittest tests.test_agent_settings -> OK (9 tests); failed first on the `X=/a b` and `${Y}` tests; the `x=1`/`X` test passed before the change too, since the old script refused any third argument; suite pass; scan clean

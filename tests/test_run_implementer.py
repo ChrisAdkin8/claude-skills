@@ -25,10 +25,15 @@ with open(calls, "a") as f:
                         "root": os.environ.get("CLAUDE_PLUGIN_ROOT"),
                         "memory": os.environ.get("CLAUDE_CODE_DISABLE_AUTO_MEMORY")}) + "\\n")
 n = sum(1 for _ in open(calls))
+exec(os.environ.get("STUB_EXEC", ""))
 tail = os.environ.get("STUB_TAIL", "Implementer: done")
-print(json.dumps({"session_id": "sess-1", "result": f"reply {n}\\n{tail}", "subtype": "success",
-                  "total_cost_usd": float(os.environ.get("STUB_COST", "0.5"))}))
+out = {"session_id": "sess-1", "result": f"reply {n}\\n{tail}", "subtype": "success"}
+cost = os.environ.get("STUB_COST", "0.5")
+if cost != "none":
+    out["total_cost_usd"] = float(cost)
+print(json.dumps(out))
 """
+LEDGER = REPO / "skills" / "implement" / "scripts" / "ledger.py"
 
 
 def git(repo, *args):
@@ -185,6 +190,7 @@ class RunImplementer(unittest.TestCase):
         self.assertNotIn("--resume", argv)
         self.assertNotIn("--model", argv)
         self.assertEqual(argv[-1], "Implement it.")
+        self.assertEqual(argv[-2], "--")
         self.assertEqual(Path(call["cwd"]).resolve(), self.worktree.resolve())
         self.assertEqual(call["root"], str(REPO))
         # No auto memory: it would read, and could write, the memory the user's own sessions load.
@@ -243,7 +249,7 @@ class RunImplementer(unittest.TestCase):
         self.assertEqual(self.flag(second, "--max-budget-usd"), "7.5")
         self.assertEqual(self.flag(third, "--max-budget-usd"), "3.5")
         self.assertEqual(self.flag(second, "--resume"), "sess-1")
-        self.assertEqual(second[-1], "The user says yes.")
+        self.assertEqual(second[-2:], ["--", "The user says yes."])
         # Every call's result is kept, and every earlier reply.
         for n in (1, 2, 3):
             self.assertTrue((self.run_dir / f"run-{n}.json").exists(), n)
@@ -273,16 +279,156 @@ class RunImplementer(unittest.TestCase):
         self.assertEqual(code, 2, out)
         self.assertIn("followup.md", out)
 
-    def test_a_fresh_run_starts_the_count_again(self):
+    def ledger(self):
+        return self.home / ".cache" / "implement-ledger" / "proj--spec.jsonl"
+
+    def ledger_lines(self):
+        return [json.loads(line) for line in self.ledger().read_text().splitlines()]
+
+    def plant(self, *lines):
+        self.ledger().parent.mkdir(parents=True, exist_ok=True)
+        with self.ledger().open("a") as f:
+            for line in lines:
+                f.write(json.dumps({"at": "2026-10-02T00:00:00+00:00", **line}) + "\n")
+
+    def spent(self):
+        run = subprocess.run(
+            [str(LEDGER), "spent", "proj--spec"],
+            capture_output=True, text=True, env=self.env, check=True,
+        )  # fmt: skip
+        return run.stdout.strip()
+
+    def test_a_fresh_run_keeps_the_count(self):
         self.brief()
         self.env["IMPLEMENT_MAX_USD"] = "5"
-        self.env["STUB_COST"] = "4"
+        self.env["STUB_COST"] = "3"
         self.assertEqual(self.launch(self.worktree, self.run_dir)[0], 0)
         self.assertEqual(self.launch(self.worktree, self.run_dir)[0], 0)
-        self.assertFalse((self.run_dir / "run-2.json").exists())
+        # Every call's result is kept, fresh runs' included.
+        self.assertTrue((self.run_dir / "run-2.json").exists())
         second = self.calls_made()[1]["argv"]
-        self.assertEqual(self.flag(second, "--max-budget-usd"), "5")
+        self.assertEqual(self.flag(second, "--max-budget-usd"), "2")
+        code, out = self.launch(self.worktree, self.run_dir)
+        self.assertEqual(code, 2, out)
+        self.assertIn("implement-ledger", out)
+        self.assertIn("IMPLEMENT_MAX_USD", out)
+        self.assertEqual(len(self.calls_made()), 2)
 
+    def test_a_bad_cap_is_refused(self):
+        self.brief()
+        for cap in ("inf", "nan", "abc", "-1", "0", "1e3", "0.0", " 5", "5."):
+            with self.subTest(cap=cap):
+                self.env["IMPLEMENT_MAX_USD"] = cap
+                code, out = self.launch(self.worktree, self.run_dir)
+                self.assertEqual(code, 2, out)
+                self.assertIn("IMPLEMENT_MAX_USD", out)
+                self.assertNotIn("Traceback", out)
+        self.assertEqual(self.calls_made(), [])
+        self.env["IMPLEMENT_MAX_USD"] = ""
+        self.assertEqual(self.launch(self.worktree, self.run_dir)[0], 0)
+        (call,) = self.calls_made()
+        self.assertEqual(self.flag(call["argv"], "--max-budget-usd"), "20")
+
+    def test_a_run_with_no_cost_is_charged_its_budget(self):
+        self.brief()
+        self.env["IMPLEMENT_MAX_USD"] = "10"
+        for cost in ("none", "-3", "nan", "inf"):
+            with self.subTest(cost=cost):
+                self.ledger().unlink(missing_ok=True)
+                self.env["STUB_COST"] = cost
+                self.assertEqual(self.launch(self.worktree, self.run_dir)[0], 0)
+                self.assertEqual(self.ledger_lines()[-1]["usd"], 10)
+                self.assertEqual(self.spent(), "10")
+
+    def test_a_planted_run_file_changes_nothing(self):
+        self.brief()
+        self.env["IMPLEMENT_MAX_USD"] = "10"
+        self.env["STUB_COST"] = "2.5"
+        self.assertEqual(self.launch(self.worktree, self.run_dir)[0], 0)
+        (self.run_dir / "run-1.json").write_text('{"total_cost_usd": -100}')
+        (self.run_dir / "run-7.json").write_text("")
+        (self.run_dir / "followup.md").write_text("Carry on.\n")
+        self.assertEqual(self.launch(self.worktree, self.run_dir, "--resume")[0], 0)
+        second = self.calls_made()[1]["argv"]
+        self.assertEqual(self.flag(second, "--max-budget-usd"), "7.5")
+
+    def test_the_ledger_records_each_call(self):
+        self.brief()
+        self.env["IMPLEMENT_MAX_USD"] = "20"
+        self.env["STUB_COST"] = "1"
+        self.assertEqual(self.launch(self.worktree, self.run_dir)[0], 0)
+        self.assertEqual(self.launch(self.worktree, self.run_dir)[0], 0)
+        lines = self.ledger_lines()
+        self.assertEqual(
+            [(l["event"], l["call"]) for l in lines],
+            [("start", 1), ("end", 1), ("start", 2), ("end", 2)],
+        )
+        self.assertEqual([l.get("budget") for l in lines[::2]], [20, 19])
+        self.assertEqual(oct(self.ledger().parent.stat().st_mode & 0o777), "0o700")
+        # With the second's end line gone, it's charged its whole budget, the first its cost.
+        self.ledger().write_text("".join(json.dumps(l) + "\n" for l in lines[:3]))
+        self.assertEqual(self.spent(), "20")
+        code, out = self.launch(self.worktree, self.run_dir)
+        self.assertEqual(code, 2, out)
+        self.assertEqual(len(self.calls_made()), 2)
+
+    def test_a_start_with_no_end_counts_its_budget(self):
+        self.brief()
+        self.env["IMPLEMENT_MAX_USD"] = "10"
+        self.plant({"who": "implementer", "call": 1, "event": "start", "budget": 4})
+        self.assertEqual(self.launch(self.worktree, self.run_dir)[0], 0)
+        (call,) = self.calls_made()
+        self.assertEqual(self.flag(call["argv"], "--max-budget-usd"), "6")
+        self.assertEqual(self.ledger_lines()[1]["call"], 2)
+
+    def test_a_bad_ledger_is_refused(self):
+        self.brief()
+        start = {"who": "implementer", "call": 1, "event": "start", "budget": 4}
+        for lines in (
+            [start, {"who": "implementer", "call": 1, "event": "end", "usd": -1}],
+            [start, {"who": "implementer", "call": 7, "event": "end", "usd": 1}],
+            [start, {"who": "implementer", "call": 1, "event": "end", "usd": 1}]
+            + [{"who": "implementer", "call": 1, "event": "end", "usd": 1}],
+            [{**start, "budget": -4}],
+            [{"who": "someone", "usd": 1}],
+            [{"who": "verifier V1", "usd": -1, "note": ""}],
+        ):
+            with self.subTest(lines=lines):
+                self.ledger().unlink(missing_ok=True)
+                self.plant(*lines)
+                code, out = self.launch(self.worktree, self.run_dir)
+                self.assertEqual(code, 2, out)
+                self.assertIn("implement-ledger", out)
+        self.ledger().write_text("not json\n")
+        self.assertEqual(self.launch(self.worktree, self.run_dir)[0], 2)
+        self.assertEqual(self.calls_made(), [])
+
+    def test_a_ledger_written_during_the_call_exits_4(self):
+        self.brief()
+        self.env["STUB_EXEC"] = (
+            "import pathlib\n"
+            "p = pathlib.Path(os.environ['HOME'], '.cache/implement-ledger/proj--spec.jsonl')\n"
+            "p.write_text(p.read_text() + p.read_text().splitlines()[-1] + '\\n')\n"
+        )
+        code, out = self.launch(self.worktree, self.run_dir)
+        self.assertEqual(code, 4, out)
+        self.assertIn("implement-ledger", out)
+        self.assertNotIn("end", [l.get("event") for l in self.ledger_lines()])
+        self.assertFalse((self.run_dir / "reply.md").exists())
+
+    def test_verifier_lines_dont_change_the_budget(self):
+        self.brief()
+        self.env["IMPLEMENT_MAX_USD"] = "10"
+        self.env["STUB_COST"] = "2"
+        self.assertEqual(self.launch(self.worktree, self.run_dir)[0], 0)
+        self.plant(
+            {"who": "verifier V1", "usd": 1.5, "note": "finished"},
+            {"who": "verifier V2", "usd": None, "note": "refused"},
+        )
+        (self.run_dir / "followup.md").write_text("Carry on.\n")
+        self.assertEqual(self.launch(self.worktree, self.run_dir, "--resume")[0], 0)
+        second = self.calls_made()[1]["argv"]
+        self.assertEqual(self.flag(second, "--max-budget-usd"), "8")
 
 if __name__ == "__main__":
     unittest.main()

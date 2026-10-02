@@ -16,13 +16,17 @@
 # Exit 0: reply.md's last line is `Implementer: done`, `Implementer: question: <text>` or
 # `Implementer: stopped: <reason>`. Exit 3: the run finished, but it isn't (an API error, a budget
 # stop, a reply out of format): don't act on it. Exit 2: the run couldn't start (a bad path, no
-# brief, no session to resume, the cap spent). Any other non-zero exit is claude's own, with run.err
-# saying why.
+# brief, no session to resume, the cap spent, a bad cap or ledger). Exit 4: the ledger changed
+# during the call, which nothing but this script should write: no reply.md is written, so act on
+# nothing. Any other non-zero exit is claude's own, with run.err saying why.
 #
-# The cap is for the whole run: $IMPLEMENT_MAX_USD (default $20), shared by the first call and
-# every --resume. Each resume gets the cap less the total_cost_usd in the run-<n>.json files
-# already kept, and is refused once that reaches the cap. A fresh run (no --resume) clears them and
-# starts the count again. --max-budget-usd stops a call only after the turn that crosses it.
+# The cap is for every implementer call ever made for this spec: $IMPLEMENT_MAX_USD (default $20,
+# digits with an optional decimal part, above 0). Spent is read from the ledger,
+# ~/.cache/implement-ledger/<repo dir>--<spec basename>.jsonl (ledger.py beside this script), which
+# no run resets, fresh or resumed: each call gets the cap less what's spent, and is refused once
+# that reaches the cap. A call with no valid total_cost_usd is charged its whole budget, as is one
+# that never wrote its end line. To go past the cap, raise IMPLEMENT_MAX_USD or remove the ledger
+# by hand. --max-budget-usd stops a call only after the turn that crosses it.
 #
 # On the user's default model, or on $RUN_AGENT_MODEL if it's set, as hooks/run-agent.sh does, so
 # the skill evals' per-model runs reach it.
@@ -72,39 +76,27 @@ run=$(cd "$run" && pwd -P)
 case "$run/" in "$(cd "$root" && pwd -P)"/?*/?*/) ;; *) die "$run is outside $root" ;; esac
 
 max_usd=${IMPLEMENT_MAX_USD:-20}
-# What the kept run-<n>.json files have spent, and what's left of the cap.
-spent() {
-  python3 - "$run" <<'PY'
-import json, sys
-from pathlib import Path
-total = 0.0
-for p in Path(sys.argv[1]).glob("run-*.json"):
-    try:
-        total += float(json.loads(p.read_text()).get("total_cost_usd") or 0)
-    except (OSError, ValueError, AttributeError):
-        pass
-print(total)
-PY
-}
-left() {
-  python3 -c 'import sys; c, s = float(sys.argv[1]), float(sys.argv[2]); print(f"{c - s:g}" if c > s else "")' "$1" "$2"
-}
+[[ $max_usd =~ ^[0-9]+(\.[0-9]+)?$ ]] && [[ $max_usd =~ [1-9] ]] ||
+  die "IMPLEMENT_MAX_USD must be a number above 0, such as 20 or 7.5, not '$max_usd'"
+ledger_py="$plugin_root/skills/implement/scripts/ledger.py"
+run_name=$(basename "$(dirname "$run")")
+ledger=$("$ledger_py" path "$run_name") || die "no ledger path for $run_name"
+used=$("$ledger_py" spent "$run_name") || die "couldn't read the ledger $ledger; it's refused until fixed or removed by hand"
+budget=$(python3 -c 'import sys; c, s = float(sys.argv[1]), float(sys.argv[2]); print(f"{c - s:g}" if c > s else "")' "$max_usd" "$used")
+[ -n "$budget" ] ||
+  die "this spec's implementer calls have spent \$$used of the \$$max_usd cap (ledger: $ledger)." \
+    "To go on, raise IMPLEMENT_MAX_USD or remove the ledger by hand."
 
 if [ "$mode" = --resume ]; then
   [ -s "$run/session_id" ] || die "no session_id in $run to resume"
   [ -s "$run/followup.md" ] || die "write $run/followup.md first"
-  used=$(spent)
-  budget=$(left "$max_usd" "$used")
-  [ -n "$budget" ] || die "the run has spent \$$used of its \$$max_usd cap; no resume"
   n=1; while [ -e "$run/reply-$n.md" ]; do n=$((n + 1)); done
   [ -e "$run/reply.md" ] && mv "$run/reply.md" "$run/reply-$n.md"
   prompt=$(cat "$run/followup.md")
   resume=(--resume "$(cat "$run/session_id")")
 else
   [ -s "$run/brief.md" ] || die "write $run/brief.md first"
-  rm -f "$run/reply.md" "$run/reply-"*.md "$run/run-"*.json "$run/session_id"
-  budget=$(left "$max_usd" 0)
-  [ -n "$budget" ] || die "IMPLEMENT_MAX_USD must be above 0, not $max_usd"
+  rm -f "$run/reply.md" "$run/reply-"*.md "$run/session_id"
   prompt=$(cat "$run/brief.md")
   resume=()
 fi
@@ -118,13 +110,42 @@ tools=$(python3 -c 'import json,sys;(a,)=json.load(open(sys.argv[1])).values();p
 [ -n "$tools" ] || die "no tools in $file"
 model=(${RUN_AGENT_MODEL:+--model "$RUN_AGENT_MODEL"})
 
+# The ledger's start line, then its hash: nothing but this script writes the ledger, so a change
+# by the end of the call is a write the sandbox should have stopped.
+sha() { shasum -a 256 < "$ledger" | cut -d' ' -f1; }
+call=$("$ledger_py" next-call "$run_name") || die "couldn't read the ledger $ledger"
+"$ledger_py" append "$run_name" \
+  "{\"who\": \"implementer\", \"call\": $call, \"event\": \"start\", \"budget\": $budget}" ||
+  die "couldn't write the ledger $ledger"
+before=$(sha)
+
 cd "$work"
 status=0
 claude -p --agents "$run/agents.json" --agent implementer --output-format json --max-turns 400 \
   --max-budget-usd "$budget" --allowedTools "$tools" --permission-mode acceptEdits \
   --setting-sources user,project --add-dir "$(dirname "$run")" "$plugin_root" --strict-mcp-config \
   ${model[@]+"${model[@]}"} ${resume[@]+"${resume[@]}"} \
-  "$prompt" < /dev/null > "$run/run.json" 2> "$run/run.err" || status=$?
+  -- "$prompt" < /dev/null > "$run/run.json" 2> "$run/run.err" || status=$?
+
+if [ "$(sha)" != "$before" ]; then
+  echo "run-implementer: exit 4: the ledger $ledger changed during the call; no end line or" \
+    "reply was written, so act on nothing from this run" >&2
+  exit 4
+fi
+# The call's cost, or its whole budget if run.json has no finite, non-negative total_cost_usd.
+usd=$(python3 - "$run/run.json" "$budget" <<'PY'
+import json, math, sys
+try:
+    cost = json.load(open(sys.argv[1])).get("total_cost_usd")
+except (OSError, ValueError, AttributeError):
+    cost = None
+ok = isinstance(cost, (int, float)) and not isinstance(cost, bool) and math.isfinite(cost) and cost >= 0
+print(cost if ok else sys.argv[2])
+PY
+)
+"$ledger_py" append "$run_name" \
+  "{\"who\": \"implementer\", \"call\": $call, \"event\": \"end\", \"usd\": $usd}" ||
+  die "couldn't write the ledger's end line for call $call to $ledger"
 
 n=1; while [ -e "$run/run-$n.json" ]; do n=$((n + 1)); done
 cp "$run/run.json" "$run/run-$n.json"

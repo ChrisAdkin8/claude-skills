@@ -1,7 +1,8 @@
 """Tests that the lists of paths agents may not read stay in step: the guard's SECRET_HOME,
 HISTORY_HOME and PRIVATE_HOME, which adds all of ~/.claude (hooks/agent-guard.py), the agents' sandbox settings (hooks/agent-sandbox.json), the
 spikes' (skills/spec/spike-settings.json) and the implement-verifier's
-(skills/implement/verify-settings.json), which denies what the spikes' does. Each file only knows
+(skills/implement/verify-settings.json), which denies what the spikes' does, and the implementer's
+(skills/implement/implementer-settings.json), which denies what the agents' does. Each file only knows
 its own copy, so a path added to one is easily missed in the others. Likewise the secret
 environment variables the three sandboxes hide. Also that the skill evals' settings for cases
 that launch agents differ from the agents' only as planned.
@@ -29,6 +30,9 @@ VERIFY = json.loads(
 )
 AGENT_CASE = json.loads(
     (REPO / "tests" / "skill-evals" / "agent-case-settings.json").read_text()
+)
+IMPLEMENTER = json.loads(
+    (REPO / "skills" / "implement" / "implementer-settings.json").read_text()
 )
 IMPLEMENT_CASE = json.loads(
     (REPO / "tests" / "skill-evals" / "implement-case-settings.json").read_text()
@@ -162,6 +166,25 @@ class SandboxSettings(unittest.TestCase):
             with self.subTest(file=name):
                 self.assertEqual(os_deny, read_deny)
 
+    def test_implementer_settings_deny_what_agents_are_denied(self):
+        # The implementer's Bash may not read secrets, history or any of ~/.config but git's own;
+        # its Read tool is denied what the agents' is, and ~/notes; it hides what they hide.
+        fs = IMPLEMENTER["sandbox"]["filesystem"]
+        os_deny = entries(fs["denyRead"])
+        for path in sorted(self.secrets | self.history | {".config"}):
+            with self.subTest(path=path):
+                self.assertTrue(
+                    covered(path, os_deny), f"~/{path} missing from denyRead"
+                )
+        self.assertEqual(fs["allowRead"], ["${CLAUDE_PLUGIN_ROOT}", "~/.config/git"])
+        reads = [r for r in IMPLEMENTER["permissions"]["deny"] if r.startswith("Read(")]
+        self.assertEqual(reads, AGENT["permissions"]["deny"] + ["Read(~/notes/**)"])
+        self.assertEqual(
+            IMPLEMENTER["sandbox"]["credentials"], AGENT["sandbox"]["credentials"]
+        )
+        self.assertEqual(IMPLEMENTER["sandbox"]["network"]["allowedDomains"], [])
+        self.assertNotIn("excludedCommands", IMPLEMENTER["sandbox"])
+
     def test_agent_sandbox_reopens_only_the_plugin_root(self):
         # The plugin's files sit under ~/.claude when installed, so the ~/.claude deny needs this
         # one exception for Bash to run the skill scripts.
@@ -170,7 +193,9 @@ class SandboxSettings(unittest.TestCase):
             ("agent-case-settings.json", AGENT_CASE),
         ):
             with self.subTest(file=name):
-                self.assertIn("~/.claude", settings["sandbox"]["filesystem"]["denyRead"])
+                self.assertIn(
+                    "~/.claude", settings["sandbox"]["filesystem"]["denyRead"]
+                )
                 self.assertEqual(
                     settings["sandbox"]["filesystem"].get("allowRead"),
                     ["${CLAUDE_PLUGIN_ROOT}"],
@@ -195,9 +220,15 @@ class SandboxSettings(unittest.TestCase):
         # The implement eval cases run /implement, whose worktree, commits and
         # ~/.cache/implement-runs writes the sandbox refuses (spike S1 of
         # docs/specs/2026-09-26-implement-skill-2-skill.md). So they keep the agents' permission
-        # denies, which the Read tool obeys, and turn the OS sandbox off. Nothing else.
+        # denies, which the Read tool obeys, and turn the OS sandbox off. And the Write and Edit
+        # tools may not touch the implement ledger, which the implementer's cap is read from.
+        # Nothing else.
         expected = json.loads(json.dumps(AGENT))
         expected["sandbox"] = {"enabled": False}
+        expected["permissions"]["deny"] += [
+            "Write(~/.cache/implement-ledger/**)",
+            "Edit(~/.cache/implement-ledger/**)",
+        ]
         self.assertEqual(IMPLEMENT_CASE, expected)
 
     def test_no_settings_file_locates_the_repo_through_home(self):

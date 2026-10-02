@@ -481,6 +481,27 @@ class RunVerify(Home):
         self.assertEqual(secret.read_text(), "a secret\n")
         self.assertEqual(list(outside.iterdir()), [])
 
+    def ledger_lines(self):
+        path = self.home / ".cache" / "implement-ledger" / f"{self.name}--spec.jsonl"
+        return [json.loads(line) for line in path.read_text().splitlines()]
+
+    def test_a_run_leaves_its_cost_in_the_ledger(self):
+        self.verify_that_does(1, "true")
+        (line,) = self.ledger_lines()
+        self.assertEqual(line["who"], "verifier V1")
+        self.assertEqual(line["usd"], 0.01)
+        self.verify_that_does(2, "true", status=1)
+        self.assertEqual(
+            [(l["who"], l["usd"]) for l in self.ledger_lines()],
+            [("verifier V1", 0.01), ("verifier V2", 0.01)],
+        )
+
+    def test_a_refused_run_leaves_a_null_cost(self):
+        _, code, out = self.verify_that_does(1, f"ln -s {shlex.quote(str(self.secret()))} reply.md")
+        self.assertEqual(code, 4, out)
+        (line,) = self.ledger_lines()
+        self.assertEqual((line["who"], line["usd"]), ("verifier V1", None))
+
     def test_refuses_and_removes_what_isnt_a_regular_file(self):
         # A directory can hold links of its own, and a FIFO stalls whoever opens it.
         secret = self.secret()

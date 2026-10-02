@@ -1,0 +1,176 @@
+{
+  "sandbox": {
+    "enabled": true,
+    "allowUnsandboxedCommands": false,
+    "network": {
+      "allowedDomains": [],
+      "strictAllowlist": true
+    },
+    "filesystem": {
+      "denyRead": [
+        "~/notes",
+        "~/.claude",
+        "~/.claude.json",
+        "~/.ssh",
+        "~/.aws",
+        "~/.kube",
+        "~/.gnupg",
+        "~/.docker",
+        "~/.azure",
+        "~/.netrc",
+        "~/.git-credentials",
+        "~/.npmrc",
+        "~/.pypirc",
+        "~/.config",
+        "~/.zsh_history",
+        "~/.bash_history",
+        "~/Library/Keychains",
+        "~/Library/Cookies",
+        "~/Library/Application Support/Google/Chrome",
+        "~/.cache/agent-runs"
+      ],
+      "allowRead": [
+        "${CLAUDE_PLUGIN_ROOT}",
+        "~/.config/git"
+      ],
+      "allowWrite": [
+        "${IMPLEMENT_WORKTREE}",
+        "${IMPLEMENT_GIT_DIR}",
+        "${IMPLEMENT_COMMON_DIR}/objects",
+        "${IMPLEMENT_COMMON_DIR}/refs/heads/implement",
+        "${IMPLEMENT_COMMON_DIR}/logs/refs/heads/implement",
+        "${IMPLEMENT_SCRATCH}",
+        "${IMPLEMENT_TMP}"
+      ],
+      "denyWrite": [
+        "${IMPLEMENT_COMMON_DIR}/config",
+        "${IMPLEMENT_COMMON_DIR}/hooks",
+        "${IMPLEMENT_COMMON_DIR}/HEAD",
+        "${IMPLEMENT_COMMON_DIR}/index",
+        "${IMPLEMENT_COMMON_DIR}/packed-refs",
+        "${IMPLEMENT_GIT_DIR}/config.worktree",
+        "${IMPLEMENT_GIT_DIR}/commondir",
+        "${IMPLEMENT_GIT_DIR}/gitdir",
+        "${IMPLEMENT_WORKTREE}/.git",
+        "${IMPLEMENT_WORKTREE}/.claude",
+        "~/.cache/implement-ledger",
+        "~/.claude",
+        "~/notes",
+        "${IMPLEMENT_COMMON_DIR}/modules"
+      ]
+    },
+    "credentials": {
+      "envVars": [
+        {
+          "name": "CLAUDE_CODE_MESSAGING_TOKEN",
+          "mode": "deny"
+        },
+        {
+          "name": "ANTHROPIC_API_KEY",
+          "mode": "deny"
+        },
+        {
+          "name": "GH_TOKEN",
+          "mode": "deny"
+        },
+        {
+          "name": "GITHUB_TOKEN",
+          "mode": "deny"
+        },
+        {
+          "name": "TFE_TOKEN",
+          "mode": "deny"
+        },
+        {
+          "name": "AWS_ACCESS_KEY_ID",
+          "mode": "deny"
+        },
+        {
+          "name": "AWS_SECRET_ACCESS_KEY",
+          "mode": "deny"
+        },
+        {
+          "name": "AWS_SESSION_TOKEN",
+          "mode": "deny"
+        }
+      ]
+    }
+  },
+  "permissions": {
+    "deny": [
+      "Read(~/.ssh/**)",
+      "Read(~/.aws/**)",
+      "Read(~/.kube/**)",
+      "Read(~/.gnupg/**)",
+      "Read(~/.docker/**)",
+      "Read(~/.netrc)",
+      "Read(~/.git-credentials)",
+      "Read(~/.azure/**)",
+      "Read(~/.npmrc)",
+      "Read(~/.pypirc)",
+      "Read(~/.config/**)",
+      "Read(~/.claude.json)",
+      "Read(~/.claude/.credentials.json)",
+      "Read(~/.zsh_history)",
+      "Read(~/.bash_history)",
+      "Read(~/Library/Keychains/**)",
+      "Read(~/Library/Cookies/**)",
+      "Read(~/Library/Application Support/Google/Chrome/**)",
+      "Read(~/.claude/backups/**)",
+      "Read(~/.claude/remote-settings.json)",
+      "Read(~/.claude/remote-settings-consent.json)",
+      "Read(~/.claude/history.jsonl)",
+      "Read(~/.claude/file-history/**)",
+      "Read(~/.claude/sessions/**)",
+      "Read(~/.claude/session-env/**)",
+      "Read(~/.claude/shell-snapshots/**)",
+      "Read(~/.claude/paste-cache/**)",
+      "Read(~/.cache/agent-runs/**)",
+      "Read(~/notes/**)",
+      "Write(~/notes/**)",
+      "Write(~/.claude/**)",
+      "Write(~/.ssh/**)",
+      "Write(~/.aws/**)",
+      "Edit(~/notes/**)",
+      "Edit(~/.claude/**)",
+      "Edit(~/.ssh/**)",
+      "Edit(~/.aws/**)",
+      "Write(~/.zshrc)",
+      "Write(~/.zprofile)",
+      "Write(~/.bashrc)",
+      "Write(~/.profile)",
+      "Edit(~/.zshrc)",
+      "Edit(~/.zprofile)",
+      "Edit(~/.bashrc)",
+      "Edit(~/.profile)",
+      "Write(./.git)",
+      "Edit(./.git)",
+      "Write(./.claude/**)",
+      "Edit(./.claude/**)",
+      "Write(~/.cache/implement-ledger/**)",
+      "Edit(~/.cache/implement-ledger/**)",
+      "Bash(gh *)",
+      "WebFetch",
+      "WebSearch",
+      "Bash(aws *)",
+      "Bash(gcloud *)",
+      "Bash(az *)",
+      "Bash(kubectl *)",
+      "Bash(terraform *)",
+      "Bash(docker *)",
+      "Bash(helm install *)",
+      "Bash(helm upgrade *)",
+      "Bash(helm uninstall *)",
+      "Bash(helm rollback *)",
+      "Bash(helm test *)",
+      "Bash(helm status *)",
+      "Bash(helm list *)",
+      "Bash(helm get *)",
+      "Bash(helm history *)",
+      "Bash(helm status)",
+      "Bash(helm list)",
+      "Bash(helm get)",
+      "Bash(helm history)"
+    ]
+  }
+}

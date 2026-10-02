@@ -147,8 +147,11 @@ class SandboxSettings(unittest.TestCase):
         self.assertEqual(VERIFY["sandbox"]["network"]["allowedDomains"], [])
 
     def test_os_and_read_denies_match(self):
+        # The agents' sandbox also denies all of ~/.claude to Bash. The Read tool can't take that
+        # deny: it would beat any allow and hide the agent's own saved tool output, so the guard
+        # is the Read tool's allow-list there.
         for name, os_deny, read_deny in (
-            ("agent-sandbox.json", self.agent_os, self.agent_read),
+            ("agent-sandbox.json", self.agent_os, self.agent_read | {".claude"}),
             ("spike-settings.json", self.spike_os, self.spike_read),
             (
                 "verify-settings.json",
@@ -158,6 +161,20 @@ class SandboxSettings(unittest.TestCase):
         ):
             with self.subTest(file=name):
                 self.assertEqual(os_deny, read_deny)
+
+    def test_agent_sandbox_reopens_only_the_plugin_root(self):
+        # The plugin's files sit under ~/.claude when installed, so the ~/.claude deny needs this
+        # one exception for Bash to run the skill scripts.
+        for name, settings in (
+            ("agent-sandbox.json", AGENT),
+            ("agent-case-settings.json", AGENT_CASE),
+        ):
+            with self.subTest(file=name):
+                self.assertIn("~/.claude", settings["sandbox"]["filesystem"]["denyRead"])
+                self.assertEqual(
+                    settings["sandbox"]["filesystem"].get("allowRead"),
+                    ["${CLAUDE_PLUGIN_ROOT}"],
+                )
 
     def test_agent_case_settings_differ_only_as_planned(self):
         # The skill evals that launch agents use tests/skill-evals/agent-case-settings.json. It is
@@ -200,15 +217,10 @@ class SandboxSettings(unittest.TestCase):
             ("agent-sandbox.json", AGENT),
             ("agent-case-settings.json", AGENT_CASE),
         ):
+            allowed = list(settings["sandbox"]["excludedCommands"])
+            allowed += settings["sandbox"]["filesystem"].get("allowRead", [])
             with self.subTest(file=name):
-                self.assertEqual(
-                    [
-                        e
-                        for e in settings["sandbox"]["excludedCommands"]
-                        if "~/.claude" in e
-                    ],
-                    [],
-                )
+                self.assertEqual([e for e in allowed if "~/.claude" in e], [])
 
 
 if __name__ == "__main__":

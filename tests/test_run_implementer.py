@@ -34,6 +34,7 @@ if cost != "none":
 print(json.dumps(out))
 """
 LEDGER = REPO / "skills" / "implement" / "scripts" / "ledger.py"
+VERIFY = REPO / "skills" / "implement" / "scripts" / "run-verify.sh"
 
 
 def git(repo, *args):
@@ -428,6 +429,26 @@ class RunImplementer(unittest.TestCase):
         (self.run_dir / "followup.md").write_text("Carry on.\n")
         self.assertEqual(self.launch(self.worktree, self.run_dir, "--resume")[0], 0)
         second = self.calls_made()[1]["argv"]
+        self.assertEqual(self.flag(second, "--max-budget-usd"), "8")
+
+    def test_a_verifiers_line_leaves_the_resume_budget_as_it_was(self):
+        self.brief()
+        self.env["IMPLEMENT_MAX_USD"] = "10"
+        self.env["STUB_COST"] = "2"
+        self.assertEqual(self.launch(self.worktree, self.run_dir)[0], 0)
+        scratch = self.home / ".cache" / "implement-verify" / "proj" / "spec" / "V1"
+        (scratch / "src").mkdir(parents=True)
+        for name in ("brief.md", "spec.md", "diff.patch"):
+            (scratch / name).write_text("x\n")
+        verify = subprocess.run(
+            [str(VERIFY), str(scratch)], capture_output=True, text=True, env=self.env, check=False
+        )
+        # The stub's reply has no verdict lines, so 3; its cost still reaches the ledger.
+        self.assertEqual(verify.returncode, 3, verify.stdout + verify.stderr)
+        self.assertEqual(self.ledger_lines()[-1]["who"], "verifier V1")
+        (self.run_dir / "followup.md").write_text("Carry on.\n")
+        self.assertEqual(self.launch(self.worktree, self.run_dir, "--resume")[0], 0)
+        second = self.calls_made()[-1]["argv"]
         self.assertEqual(self.flag(second, "--max-budget-usd"), "8")
 
 if __name__ == "__main__":

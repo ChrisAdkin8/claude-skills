@@ -108,7 +108,7 @@ Needs a run: 2, 3, 4
 
 ## Implementation
 
-- 2026-10-02, W2 (pending): `ledger.py` has a fourth command, `next-call <run name>`, beside Design's `append`, `spent` and `path`, so the launcher takes its call number from the helper rather than parsing the ledger itself; `append` also refuses a line the ledger's rules would refuse (a repeated call number, an end with no start), so a bad line is never written.
+- 2026-10-02, W2 (fc3c551): `ledger.py` has a fourth command, `next-call <run name>`, beside Design's `append`, `spent` and `path`, so the launcher takes its call number from the helper rather than parsing the ledger itself; `append` also refuses a line the ledger's rules would refuse (a repeated call number, an end with no start), so a bad line is never written.
 
 ## Evidence
 
@@ -120,3 +120,4 @@ Needs a run: 2, 3, 4
 - Baseline: claude plugin validate . --json -> pass (only the expected plugin.json version warning)
 - Baseline: claude plugin validate .claude-plugin/plugin.json -> pass
 - W1 (166b752): Done when python3 -m unittest tests.test_agent_settings -> OK (9 tests); failed first on the `X=/a b` and `${Y}` tests; the `x=1`/`X` test passed before the change too, since the old script refused any third argument; suite pass; scan clean
+- W2 (fc3c551): Done when python3 -m unittest tests.test_run_implementer -> OK (19 tests); failed first (19 failures, 5 errors) on every new test but the verifier-line one, which passed before since the old launcher read no ledger, and on the `nan`, `-1` and `0` caps, which the old script already refused; new tests/test_ledger.py OK (9 tests); suite pass; scan: `deleted-test` for test_a_fresh_run_starts_the_count_again, cleared by the user (W2 lists :276-284 to change; replaced by test_a_fresh_run_keeps_the_count)

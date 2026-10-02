@@ -19,13 +19,27 @@
 # status, and stays 4 even if the removal fails. Any other non-zero exit is claude's own, with
 # run.err saying why.
 #
+# Each run appends a `verifier V<n>` line to the spec's implement ledger (ledger.py beside this
+# script; run name `<repo>--<spec>` from the scratch layout): run.json's total_cost_usd, or null on
+# exit 4, when it reads nothing. The line doesn't count toward the implementer's cap; it's there so
+# the cost report reads one file. A ledger that refuses the line is reported, not fatal.
+#
 # Capped at $5 and 100 turns. On the user's default model, or on $RUN_AGENT_MODEL if it's set, as
 # hooks/run-agent.sh does, so the evals' per-model runs reach it. The sandbox is
 # verify-settings.json beside this script's directory: the spike settings, with no network.
 set -euo pipefail
 
 die() { echo "run-verify: $*" >&2; exit 2; }
+# The ledger line for this run: its cost (a number, or null) and a note. Set once the scratch path
+# is checked; until then there is no run to record.
+ledger() {
+  [ -n "${run_name:-}" ] || return 0
+  "$here/scripts/ledger.py" append "$run_name" \
+    "{\"who\": \"verifier $verifier_n\", \"usd\": $1, \"note\": \"$2\"}" ||
+    echo "run-verify: couldn't add this run's line to the ledger of $run_name" >&2
+}
 refuse() {
+  ledger null "refused: exit 4, nothing read"
   echo "run-verify: exit 4: record this verification as refused, and read none of its files" >&2
   exit 4
 }
@@ -114,6 +128,11 @@ export CLAUDE_CODE_DISABLE_AUTO_MEMORY=1
 # The prompt and settings sit beside this script's directory, wherever the skill is installed.
 here=$(cd "$(dirname "$0")/.." && pwd -P)
 verifier=$here/verifier.md
+# <repo>/<spec>/V<n> under the root, as checked above.
+rel=${scratch#"$real_root"/}
+verifier_n=${rel##*/}
+rel=${rel%/*}
+run_name="${rel%%/*}--${rel#*/}"
 settings=$here/verify-settings.json
 model=(${RUN_AGENT_MODEL:+--model "$RUN_AGENT_MODEL"})
 
@@ -171,14 +190,16 @@ fi
 # Neither the read nor the write follows a link, in case a process the run left running makes
 # one after the check above: run.json's reply is copied into the record, which gets committed.
 written=0
-python3 - <<'PY' || written=$?
+cost=$(python3 - <<'PY'
 import errno, json, os, stat, sys
 
 def refuse(name):
     print(f"run-verify: {name} changed into a link or another entry after the check", file=sys.stderr)
     sys.exit(4)
 
+import math
 reply = "run-verify: no result; see run.err"
+cost = "null"
 try:
     fd = os.open("run.json", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     if not stat.S_ISREG(os.fstat(fd).st_mode):
@@ -186,6 +207,9 @@ try:
     with open(fd, "rb") as f:
         d = json.loads(f.read())
     reply = d.get("result") or f"run-verify: the run ended with subtype {d.get('subtype')!r} and no reply"
+    usd = d.get("total_cost_usd")
+    if isinstance(usd, (int, float)) and not isinstance(usd, bool) and math.isfinite(usd) and usd >= 0:
+        cost = json.dumps(usd)
 except OSError as e:
     if e.errno == errno.ELOOP:
         refuse("run.json")
@@ -204,9 +228,12 @@ except OSError:
     refuse("reply.md")
 with open(fd, "w") as f:
     f.write(reply + "\n")
+print(cost)
 PY
+) || written=$?
 [ "$written" -ne 4 ] || refuse
 [ "$written" -eq 0 ] || exit "$written"
+ledger "$cost" "finished: claude exit $status"
 
 # The closing lines verifier.md tells it to reply with. A reply without them is not a verdict.
 shape_ok() {

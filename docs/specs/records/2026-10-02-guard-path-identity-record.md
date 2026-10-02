@@ -91,4 +91,11 @@ Needs a run: none
 ## Evidence
 
 - Started at d7dea8b
+- Baseline: python3 -m unittest discover -s tests -> pass (510 tests)
+- Baseline: python3 tests/replay_guard.py -> pass
+- Baseline: ruff check --isolated --select E9,F . (local ruff; CI's `pipx run ruff==0.16.7` needs the network) -> pass
+- Baseline: git ls-files -z '*.sh' | xargs -0 shellcheck -S warning -> pass
+- Baseline: claude plugin validate . --json -> pass (only the expected plugin.json version warning)
+- Baseline: claude plugin validate .claude-plugin/plugin.json -> pass (warnings only)
+- Baseline: tests/agent-evals/run.sh and tests/skill-evals/run.sh -> not run: paid, by hand (CLAUDE.md)
 - Drift WARN, no DRIFT line: docs/specs/spikes/2026-10-01-review-fixes-hand-run-results.md (added after read-at b9a37ae, committed in d7dea8b)

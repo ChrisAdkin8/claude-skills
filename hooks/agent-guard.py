@@ -37,7 +37,8 @@ itself (by assignment, `for`, `read` or `printf -v`) and a few harmless ones the
 (SAFE_VARS). Indirect expansion (`${!name}`) and jq's `env` and `$ENV` are refused outright.
 
 Paths are compared after resolving symlinks too, so a link that points into ~/.aws is refused
-like ~/.aws itself.
+like ~/.aws itself, and through `path_key`, which folds case and Unicode normalisation as macOS's
+default APFS volume does, so `~/.AWS` is refused like `~/.aws` and `K.PEM` like `k.pem`.
 
 Request URLs are limited in size, since a GET request's URL is where data would leave. The limits
 apply to what curl or gh actually sends, so a curl or gh argument may not expand anything whose
@@ -68,6 +69,7 @@ import os
 import re
 import shlex
 import sys
+import unicodedata
 from pathlib import Path
 from typing import NoReturn
 from urllib.parse import urlsplit
@@ -305,11 +307,8 @@ PRIVATE_HOME = SECRET_HOME + HISTORY_HOME
 PLUGINS_HOME = HOME / ".claude/plugins"
 # The one directory under ~/.claude/plugins an agent may read: the plugin this guard is part of.
 # Under --plugin-dir or the hooks symlink the root is a checkout outside it, so nothing is exempt.
-OWN_ROOT = (
-    str(ROOT)
-    if any(parent in (PLUGINS_HOME, PLUGINS_HOME.resolve()) for parent in ROOT.parents)
-    else None
-)
+# Set from own_root(ROOT) below, once path_key is defined.
+OWN_ROOT = None
 # The one part of the history an agent may read: its own session's saved tool output, which
 # Claude Code writes under ~/.claude/projects and points the agent at when a result is too long
 # to show. Set from the hook input's transcript path and session ID in main().
@@ -329,10 +328,11 @@ SECRET_NAMES = {
 SECRET_FILE = re.compile(
     r"(?:^|/)(?:\.env(?:\.(?!example$|sample$|template$|dist$)[\w.-]+)?"
     r"|[^/]*\.tfvars(?:\.json)?|[^/]*\.tfstate(?:\.backup)?|[^/]*\.(?:pem|p12|pfx)"
-    r"|id_(?:rsa|dsa|ecdsa|ed25519))$"
+    r"|id_(?:rsa|dsa|ecdsa|ed25519))$",
+    re.IGNORECASE,
 )
 # curl reads local files through file:// URLs; other URLs are fetched, not read.
-FILE_URL = re.compile(r"^file://(?:localhost)?(?=[/~$])")
+FILE_URL = re.compile(r"^file://(?:localhost)?(?=[/~$])", re.IGNORECASE)
 URL = re.compile(r"[a-zA-Z][\w+.-]*://")
 CWD = os.getcwd()  # replaced by the hook input's cwd in main()
 
@@ -1138,8 +1138,35 @@ def absolute(text):
     return lexical
 
 
+def fold(text):
+    """A path's text as APFS compares names: case-folded, in Unicode NFD."""
+    return unicodedata.normalize("NFD", os.fspath(text)).casefold()
+
+
+def path_key(path):
+    """What makes two spellings of a path the same path on macOS's default, case-insensitive
+    APFS volume. Folded on every volume: a fold that refuses more is safe for a deny, and on
+    APFS the allow side only gains spellings of the same directory."""
+    key = fold(path)
+    return key.rstrip("/") or key
+
+
 def under(path, parent):
+    path, parent = path_key(path), path_key(parent)
     return path == parent or path.startswith(parent.rstrip("/") + "/")
+
+
+def own_root(root):
+    """The resolved plugin root if it lives under ~/.claude/plugins (as written or resolved),
+    else None: under --plugin-dir or the hooks symlink the root is a checkout outside it."""
+    real = os.path.realpath(root)
+    homes = (PLUGINS_HOME, os.path.realpath(PLUGINS_HOME))
+    if any(under(real, h) and path_key(real) != path_key(h) for h in homes):
+        return real
+    return None
+
+
+OWN_ROOT = own_root(ROOT)
 
 
 def spellings(private):
@@ -1173,7 +1200,9 @@ def secret_path(path):
             continue
         if any(under(path, form) for form in spellings(history)):
             return f"{history} holds session history, which would show how a document was written"
-    if hidden := next((p for p in Path(path).parts if p in SECRET_NAMES), None):
+    if hidden := next(
+        (p for p in Path(path).parts if p.casefold() in SECRET_NAMES), None
+    ):
         return f"`{hidden}` holds credentials"
     if SECRET_FILE.search(path):
         return f"`{Path(path).name}` is a credentials or state file"
@@ -1212,7 +1241,9 @@ def secret_word(word):
             stem = absolute(text[:glob_at]) if glob_at else CWD
             stem += "/" if text[glob_at - 1 : glob_at] in ("/", "") else ""
             if any(
-                form.startswith(stem) for s in PRIVATE_HOME for form in spellings(s)
+                fold(form).startswith(fold(stem))
+                for s in PRIVATE_HOME
+                for form in spellings(s)
             ):
                 return (
                     f"`{text}` can expand to a credentials or session history directory"
@@ -1231,7 +1262,7 @@ def ancestor_of_secret(path):
     reaches it."""
     paths = {path, os.path.realpath(path)}
     return any(
-        under(form, p) and form != p
+        under(form, p) and path_key(form) != path_key(p)
         for secret in PRIVATE_HOME
         for form in spellings(secret)
         for p in paths
@@ -1510,7 +1541,7 @@ def check_write(path, allowed_dir):
         block("a write with no file path")
     target = Path(path).expanduser().resolve()
     root = Path(allowed_dir).expanduser().resolve()
-    if not target.is_relative_to(root):
+    if not under(target, root):
         block(f"this agent may only write under {root}, not {target}")
 
 

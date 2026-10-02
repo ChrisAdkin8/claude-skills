@@ -201,17 +201,9 @@ def guard_root(path):
 
 def with_root(guard, root):
     """Point the guard's own-root exemption where the run's guard had it: the plugin root, if
-    that lives under ~/.claude/plugins, as the guard itself decides."""
-    root = os.path.realpath(root) if root else None  # the guard's own ROOT is resolved
-    guard.OWN_ROOT = (
-        root
-        if root
-        and any(
-            p in (guard.PLUGINS_HOME, guard.PLUGINS_HOME.resolve())
-            for p in Path(root).parents
-        )
-        else None
-    )
+    that lives under ~/.claude/plugins, as the guard itself decides. Called with no root only
+    for the guard at --base, which may predate own_root."""
+    guard.OWN_ROOT = guard.own_root(root) if root else None
 
 
 def verdict(guard, command, results=None, root=None):

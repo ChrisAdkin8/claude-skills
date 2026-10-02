@@ -105,3 +105,7 @@ Needs a run: 2, 3, 4
 - Question 5: Route: spike. Changes: the Background claim "A `core.fsmonitor` or a `post-commit` hook the implementer planted there fired on the next git command in the user's own checkout" and its *(assumption)* mark; W5's motivation, not its Done when. Expect: both run: `git status` in the main checkout runs the fsmonitor command set from the worktree, and a commit there runs the `post-commit` hook added through the worktree's `--git-path hooks`. Box: $2, 60 turns; hosts: none.
 - Question 6: Route: deferred. Needs a nested `claude -p` session with its own sandbox, which the spike sandbox can't start (no login, no API host); run by hand as the 2026-10-01 experiments were.
 - Question 7: Route: deferred. Needs a nested `claude -p` session with its own sandbox, which the spike sandbox can't start (no login, no API host); run by hand as the 2026-10-01 experiments were.
+
+## Evidence
+
+- Started at 365258c

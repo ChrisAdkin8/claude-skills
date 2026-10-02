@@ -135,10 +135,17 @@ class RunAgent(unittest.TestCase):
         # No auto memory: the work dir's MEMORY.md would reach the agent with no tool call the
         # guard could see.
         self.assertEqual(call["memory"], "1")
-        # The plugin root is readable: an agent reads the plugin's own files from it, and a
-        # checkout outside ~/.claude is not covered by the $HOME/.claude entry.
+        # The plugin root is readable: an agent reads the plugin's own files from it, wherever
+        # the plugin lives.
         dirs = argv[argv.index("--add-dir") + 1 :]
-        self.assertIn(str(root), dirs[: dirs.index("--append-system-prompt-file")])
+        dirs = dirs[: dirs.index("--append-system-prompt-file")]
+        self.assertIn(str(root), dirs)
+        # And nothing else under ~/.claude (an installed root lives there): the agent reads its
+        # own saved tool output with the Read tool, which the guard allows without it.
+        claude = self.home / ".claude"
+        for d in (d for d in dirs if d != str(root)):
+            with self.subTest(added=d):
+                self.assertFalse(Path(d) == claude or claude in Path(d).parents, d)
         # The reviewed repo's own settings and CLAUDE.md are never loaded.
         self.assertEqual(argv[argv.index("--setting-sources") + 1], "user")
         prompt = Path(argv[argv.index("--append-system-prompt-file") + 1]).read_text()

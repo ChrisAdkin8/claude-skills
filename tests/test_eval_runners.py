@@ -326,9 +326,12 @@ class Runners(unittest.TestCase):
         # (test_agent_evals_repo_is_a_clone_without_the_answer_keys): the checkout, whose
         # tests/agent-evals holds the answer keys, isn't one of its directories.
         self.assertNotIn(str(REPO), self.add_dirs(argv))
-        self.assertEqual(
-            self.add_dirs(argv)[:2], [f"{Path.home()}/.claude", f"{Path.home()}/notes"]
-        )
+        dirs = self.add_dirs(argv)
+        self.assertEqual(dirs[0], f"{Path.home()}/notes")
+        claude = Path.home() / ".claude"
+        for d in dirs:
+            with self.subTest(added=d):
+                self.assertFalse(Path(d) == claude or claude in Path(d).parents, d)
 
     def test_agent_evals_case_is_a_copy_of_the_fixture_alone(self):
         # {{CASE}} is a copy of the fixture files the brief needs: never the answer key or the

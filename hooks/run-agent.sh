@@ -113,7 +113,7 @@ fi
 cd "$work"
 status=0
 claude -p --agents "$run/agents.json" --agent "$agent" --output-format json --max-turns 200 --max-budget-usd "$max_usd" \
-  --allowedTools "$tools" --add-dir "$HOME/.claude" "$HOME/notes" "$work" "$plugin_root" \
+  --allowedTools "$tools" --add-dir "$HOME/notes" "$work" "$plugin_root" \
   --append-system-prompt-file "$run/sandbox.md" \
   --setting-sources user --settings "$run/settings.json" ${mcp[@]+"${mcp[@]}"} ${model[@]+"${model[@]}"} ${resume[@]+"${resume[@]}"} \
   "$prompt" < /dev/null > "$run/run.json" 2> "$run/run.err" || status=$?

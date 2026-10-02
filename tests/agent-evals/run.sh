@@ -39,8 +39,8 @@
 #
 # The agents run with their own frontmatter tools pre-approved and their own PreToolUse hook
 # (checked 2026-09-15: the guard blocks `awk` under --agent; the guard-applies case checks it
-# under --agents), in a throwaway directory with read access to ~/.claude, ~/notes, the clone and
-# the fixture copy, with no MCP servers and no saved session. The agents need no plugin loaded:
+# under --agents), in a throwaway directory with read access to ~/notes, the clone and the fixture
+# copy, with no MCP servers and no saved session. The agents need no plugin loaded:
 # agent-def.py writes this checkout's path into each definition, so the guard and the skill scripts
 # run from here. Every run costs real tokens: run by hand after changing an agent or skill file,
 # not on every commit. Results land in results/<timestamp>/ (git-ignored).
@@ -123,7 +123,7 @@ run_case() {
     case_settings="$out/$c.settings.json"
   fi
   (cd "$work" && claude -p --agents "$out/$c.agents.json" --agent "$agent" --output-format json --max-turns "$turns" \
-    --allowedTools "$tools" --add-dir "$HOME/.claude" "$HOME/notes" "$clone" "$fixture" \
+    --allowedTools "$tools" --add-dir "$HOME/notes" "$clone" "$fixture" \
     --append-system-prompt-file "$out/$c.sandbox.md" \
     --strict-mcp-config --no-session-persistence --setting-sources user \
     --max-budget-usd "$usd" ${EVAL_MODEL:+--model "$EVAL_MODEL"} \

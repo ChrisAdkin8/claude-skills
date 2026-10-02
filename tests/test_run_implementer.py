@@ -296,6 +296,68 @@ class RunImplementer(unittest.TestCase):
         )
         self.assertEqual(self.launch(self.worktree, self.run_dir)[0], 0)
 
+    def stub_does(self, code):
+        """The stub runs `code` (Python, with os, `common`, `git_dir` and `run` to hand) in the
+        worktree during the call, as the implementer's Bash would."""
+        self.env["STUB_EXEC"] = (
+            "import subprocess, pathlib\n"
+            f"common = pathlib.Path({str((self.repo / '.git').resolve())!r})\n"
+            "git_dir = common / 'worktrees' / 'spec'\n"
+            "def run(*a): subprocess.run(a, check=True, capture_output=True)\n" + code
+        )
+
+    def test_a_change_to_the_shared_git_config_or_hooks_exits_4(self):
+        def cases(marker, inside):
+            hook = f"#!/bin/sh\ntouch {marker}\n"
+            return (
+                ("config", "run('git', '-C', str(common.parent), 'config', 'core.fsmonitor',"
+                 f" 'touch {marker}')"),
+                ("hooks/post-commit", f"(common / 'hooks' / 'post-commit').write_text({hook!r})\n"
+                 "(common / 'hooks' / 'post-commit').chmod(0o755)"),
+                (".git", "pathlib.Path('.git').write_text('gitdir: /elsewhere\\n')"),
+                ("config.worktree",
+                 "(git_dir / 'config.worktree').write_text('[core]\\n\\tfsmonitor = x\\n')"),
+                ("worktrees/spec/commondir", f"run('git', 'init', '-q', {str(inside)!r})\n"
+                 f"(git_dir / 'commondir').write_text({str(inside / '.git')!r} + '\\n')"),
+                ("worktrees/other/commondir",
+                 f"(common / 'worktrees' / 'other' / 'commondir').write_text({str(inside)!r})"),
+                ("modules/sub/config", "(common / 'modules' / 'sub').mkdir(parents=True)\n"
+                 "(common / 'modules' / 'sub' / 'config').write_text('[core]\\n')"),
+                ("modules/sub/config", "(git_dir / 'modules' / 'sub').mkdir(parents=True)\n"
+                 "(git_dir / 'modules' / 'sub' / 'config')"
+                 ".write_text('[core]\\n\\tfsmonitor = touch x\\n')"),
+            )  # fmt: skip
+
+        for n in range(8):
+            # Each case from a repo, worktree and home of its own.
+            self.setUp()
+            self.brief()
+            other = self.home / "code" / "proj-worktrees" / "other"
+            git(self.repo, "worktree", "add", "-q", str(other), "-b", "other")
+            marker = self.tmp / "marker"
+            path, code = cases(marker, self.worktree / "evil")[n]
+            with self.subTest(path=path, n=n):
+                self.stub_does(code)
+                status, out = self.launch(self.worktree, self.run_dir)
+                self.assertEqual(status, 4, out)
+                self.assertIn(path, out)
+                self.assertFalse((self.run_dir / "reply.md").exists())
+                self.assertFalse(marker.exists())
+
+    def test_a_commit_in_the_main_checkout_is_named_not_refused(self):
+        self.brief()
+        branch = git(self.repo, "symbolic-ref", "--short", "HEAD").strip()
+        self.stub_does(
+            "pathlib.Path(common.parent, 'b.txt').write_text('b')\n"
+            "run('git', '-C', str(common.parent), 'add', 'b.txt')\n"
+            "run('git', '-C', str(common.parent), '-c', 'user.email=t@l', '-c', 'user.name=t',"
+            " 'commit', '-qm', 'mine')\n"
+        )
+        code, out = self.launch(self.worktree, self.run_dir)
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"moved during the run: refs/heads/{branch} ", out)
+        self.assertNotIn("implement/spec", out.split("moved during the run:", 1)[1].splitlines()[0])
+
     def test_cap_and_model_from_the_environment(self):
         self.brief()
         self.env["IMPLEMENT_MAX_USD"] = "5"

@@ -16,9 +16,14 @@
 # Exit 0: reply.md's last line is `Implementer: done`, `Implementer: question: <text>` or
 # `Implementer: stopped: <reason>`. Exit 3: the run finished, but it isn't (an API error, a budget
 # stop, a reply out of format): don't act on it. Exit 2: the run couldn't start (a bad path, no
-# brief, no session to resume, the cap spent, a bad cap or ledger). Exit 4: the ledger changed
-# during the call, which nothing but this script should write: no reply.md is written, so act on
-# nothing. Any other non-zero exit is claude's own, with run.err saying why.
+# brief, no session to resume, the cap spent, a bad cap or ledger, a user setting that could widen
+# the sandbox). Exit 4: the call changed what it mustn't: the ledger, which nothing but this script
+# writes, or the repo's shared git config, hooks or a worktree's git pointers (named one per line),
+# or left a submodule config under its git dir that names a program. No reply.md is written, so
+# act on nothing, and run no git command in the repo or the worktree. 4 comes before 3 and before
+# claude's own status. A ref or HEAD in the shared git dir that moved during the call is named in
+# a `run-implementer: moved during the run: <ref> <old> -> <new>` line, without stopping: the
+# user's own commits and fetches move them too.
 #
 # The cap is for every implementer call ever made for this spec: $IMPLEMENT_MAX_USD (default $20,
 # digits with an optional decimal part, above 0). Spent is read from the ledger,
@@ -182,6 +187,151 @@ PY
 [ -n "$tools" ] || die "no tools in $file"
 model=(${RUN_AGENT_MODEL:+--model "$RUN_AGENT_MODEL"})
 
+# What can make git run a program or point a checkout elsewhere, read without running git: the
+# shared config and hooks, every worktree's pointers, submodules' config and hooks. With no
+# argument it prints the state as JSON; given that JSON, it prints a `changed:` line for each path
+# that differs, a `moved:` line for each ref but the branch's own that moved, and a `program:` line
+# for a submodule config under the worktree's git dir that names a program or a hooks entry there:
+# /implement's own git add and commit, unsandboxed, would read them, and their -c flags cover only
+# core.fsmonitor and core.hooksPath.
+snapshot() {
+  python3 - "$common" "$git_dir" "$work" "$@" <<'PY'
+import hashlib, json, os, re, stat, sys
+
+common, git_dir, work = sys.argv[1:4]
+RUNS = re.compile(
+    r"filter\..+\.(?:clean|smudge|process)|diff\..+\.(?:textconv|command)|diff\.external"
+    r"|merge\..+\.driver|gpg\.(?:.+\.)?program|hook\..+\.command|core\.fsmonitor|core\.hookspath",
+    re.IGNORECASE,
+)
+
+def state(path):
+    try:
+        st = os.lstat(path)
+    except FileNotFoundError:
+        return "missing"
+    except OSError as e:
+        return f"unreadable ({e.strerror})"
+    if stat.S_ISLNK(st.st_mode):
+        return "link " + os.readlink(path)
+    if stat.S_ISDIR(st.st_mode):
+        return "dir"
+    if not stat.S_ISREG(st.st_mode):
+        return f"type {stat.S_IFMT(st.st_mode):o}"
+    try:
+        with open(path, "rb") as f:
+            digest = hashlib.sha256(f.read()).hexdigest()
+    except OSError as e:
+        return f"unreadable ({e.strerror})"
+    return f"{stat.S_IMODE(st.st_mode):o} {digest}"
+
+def walk(top):
+    """Every entry under top, top included, not following links."""
+    found = [top]
+    for root, dirs, files in os.walk(top):
+        found += [os.path.join(root, n) for n in dirs + files]
+    return found
+
+def children(top):
+    try:
+        return sorted(os.path.join(top, n) for n in os.listdir(top))
+    except OSError:
+        return []
+
+def watched():
+    paths = [os.path.join(common, "config"), os.path.join(common, "config.worktree"),
+             os.path.join(work, ".git")]
+    paths += walk(os.path.join(common, "hooks"))
+    for wt in children(os.path.join(common, "worktrees")):
+        paths += [os.path.join(wt, n) for n in ("config.worktree", "commondir", "gitdir")]
+    modules = os.path.join(common, "modules")
+    for path in walk(modules):
+        parts = os.path.relpath(path, modules).split(os.sep)
+        if parts[-1] == "config" or "hooks" in parts:
+            paths.append(path)
+    return {p: state(p) for p in paths}
+
+def refs():
+    own = None
+    try:
+        head = open(os.path.join(git_dir, "HEAD")).read().strip()
+        own = head[5:].strip() if head.startswith("ref:") else None
+    except OSError:
+        pass
+    found = {"HEAD": state(os.path.join(common, "HEAD"))}
+    try:
+        for line in open(os.path.join(common, "packed-refs")):
+            parts = line.split()
+            if len(parts) == 2 and not line.startswith(("#", "^")):
+                found[parts[1]] = parts[0]
+    except OSError:
+        pass
+    top = os.path.join(common, "refs")
+    for root, _, files in os.walk(top):
+        for n in files:
+            path = os.path.join(root, n)
+            name = os.path.relpath(path, common).replace(os.sep, "/")
+            try:
+                found[name] = open(path).read().strip()
+            except OSError as e:
+                found[name] = f"unreadable ({e.strerror})"
+    found.pop(own, None)
+    return found
+
+def keys(path):
+    """The keys a git config file sets, as section[.subsection].key; None if it can't be read."""
+    try:
+        text = open(path, errors="replace").read()
+    except OSError:
+        return None
+    section, out = "", []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line[0] in "#;":
+            continue
+        m = re.match(r'\[\s*([^\s\]"]+)(?:\s+"((?:[^"\\]|\\.)*)")?\s*\](.*)', line)
+        if m:
+            section = m[1] + (f".{m[2]}" if m[2] is not None else "")
+            line = m[3].strip()
+            if not line or line[0] in "#;":
+                continue
+        name = re.split(r"[\s=]", line, maxsplit=1)[0]
+        out.append(f"{section}.{name}")
+    return out
+
+def programs():
+    found = []
+    modules = os.path.join(git_dir, "modules")
+    for path in walk(modules) if os.path.isdir(modules) else []:
+        parts = os.path.relpath(path, modules).split(os.sep)
+        if "hooks" in parts[:-1]:
+            found.append(f"program: {path} (a hooks entry)")
+        elif parts[-1] == "config" and os.path.isfile(path):
+            names = keys(path)
+            if names is None:
+                found.append(f"program: {path} (unreadable)")
+            else:
+                found += [f"program: {path} sets {k}" for k in names if RUNS.fullmatch(k)]
+    return found
+
+if len(sys.argv) == 4:
+    print(json.dumps({"watched": watched(), "refs": refs()}))
+else:
+    before = json.loads(sys.argv[4])
+    now = watched()
+    for path in sorted(set(now) | set(before["watched"])):
+        if now.get(path, "missing") != before["watched"].get(path, "missing"):
+            print(f"changed: {path}")
+    for line in programs():
+        print(line)
+    after = refs()
+    for name in sorted(set(after) | set(before["refs"])):
+        old, new = before["refs"].get(name, "missing"), after.get(name, "missing")
+        if old != new:
+            print(f"moved: {name} {old} -> {new}")
+PY
+}
+
 # The ledger's start line, then its hash: nothing but this script writes the ledger, so a change
 # by the end of the call is a write the sandbox should have stopped.
 sha() { shasum -a 256 < "$ledger" | cut -d' ' -f1; }
@@ -190,6 +340,7 @@ call=$("$ledger_py" next-call "$run_name") || die "couldn't read the ledger $led
   "{\"who\": \"implementer\", \"call\": $call, \"event\": \"start\", \"budget\": $budget}" ||
   die "couldn't write the ledger $ledger"
 before=$(sha)
+taken=$(snapshot) || die "couldn't read the repo's git config and hooks before the call"
 
 cd "$work"
 status=0
@@ -221,6 +372,18 @@ PY
 
 n=1; while [ -e "$run/run-$n.json" ]; do n=$((n + 1)); done
 cp "$run/run.json" "$run/run-$n.json"
+
+# Exit 4 on anything that can make git run a program or point elsewhere; refs are only named.
+diff=$(snapshot "$taken") || diff="changed: couldn't read the repo's git config and hooks after the call"
+sed -n 's/^moved: /run-implementer: moved during the run: /p' <<< "$diff"
+changed=$(grep -v -e '^moved: ' -e '^$' <<< "$diff" || true)
+if [ -n "$changed" ]; then
+  sed 's/^/run-implementer: /' <<< "$changed" >&2
+  echo "run-implementer: exit 4: the call changed the repo's git config, hooks or pointers, named" \
+    "above; no reply was written: act on nothing, and run no git command in the repo or the" \
+    "worktree until the user has checked them" >&2
+  exit 4
+fi
 
 python3 - "$run" <<'PY'
 import json, sys

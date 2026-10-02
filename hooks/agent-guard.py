@@ -305,11 +305,7 @@ CLAUDE_REASON = (
     "their own saved tool output and the plugin's files"
 )
 PRIVATE_HOME = SECRET_HOME + HISTORY_HOME + (CLAUDE_HOME,)
-PLUGINS_HOME = HOME / ".claude/plugins"
-# The one directory under ~/.claude/plugins an agent may read: the plugin this guard is part of.
-# Under --plugin-dir or the hooks symlink the root is a checkout outside it, so nothing is exempt.
-# Set from own_root(ROOT) below, once path_key is defined.
-OWN_ROOT = None
+PLUGINS_HOME = CLAUDE_HOME / "plugins"
 # The one part of the history an agent may read: its own session's saved tool output, which
 # Claude Code writes under ~/.claude/projects and points the agent at when a result is too long
 # to show. Set from the hook input's transcript path and session ID in main().
@@ -1177,6 +1173,8 @@ def own_root(root):
     return None
 
 
+# The one directory under ~/.claude/plugins an agent may read: the plugin this guard is part of.
+# Under --plugin-dir or the hooks symlink the root is a checkout outside it, so nothing is exempt.
 OWN_ROOT = own_root(ROOT)
 
 

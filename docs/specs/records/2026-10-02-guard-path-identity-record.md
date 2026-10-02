@@ -77,13 +77,18 @@ Needs a run: none
 - Delta-reviewed on 2026-10-02: Spike questions say all three run in one run before W4, and what a no changes for each, from cold review row 12, on 2026-10-02.
 - Delta-reviewed on 2026-10-02: W2's Done when gives the repo root as `cwd` for `cat < README.md`, from cold review row 13, on 2026-10-02.
 - Delta-reviewed on 2026-10-02: W3 updates the guard's module docstring on session history (`hooks/agent-guard.py:18-24`), from cold review row 14, on 2026-10-02.
+- Not reviewed: W3 also changes `test_history_denied_to_agents_and_spikes` (:98) to loop over `self.history`, and drops the comment above `AGENT_NOT_DENIED`, from delta review row 1, on 2026-10-02.
+- Not reviewed: W3's `grep -rn spec ~/.claude` test checks for "Claude Code's own state", not "session history", from delta review row 2, on 2026-10-02.
+- Not reviewed: the Spike questions lead-in says how the three were answered (S1 a spike, S2 and S3 by hand), from delta review row 3, on 2026-10-02.
+- Not reviewed: Risks says the fold widens the allow side on a case-sensitive volume, accepted since the agents and CI run on macOS, from delta review row 4, on 2026-10-02.
 
 ## Spikes
 
 - Question 1: Route: spike. Changes: the Risks line "Case variants in the sandbox and permission rules are not known to be folded (spike 1)"; no work item. Expect: the macOS sandbox refuses `wc -c ~/.CLAUDE/settings.json` and `wc -c ~/.AWS/credentials` (Seatbelt judges the file reached, not the spelling); the Read tool's `Read(~/.claude/**)` and `Read(~/.aws/**)` denies don't catch a missing file under `~/.CLAUDE/` or `~/.AWS/`, which gives a not-found error instead of a permission refusal. Box: $2, 60 turns; hosts: none.
 - Question 2: Route: deferred, then run by hand on 2026-10-02 (S2): the spike sandbox can't start a logged-in `claude -p`. Expect: the answer key refused, the plugin's files readable. Verdict: EXPECTED.
 - Question 3: Route: deferred, then run by hand on 2026-10-02 (S3): the spike sandbox can't start a logged-in `claude -p`. Expect: a path under `tool-results/` and the line 150000. Verdict: EXPECTED, on the second run; the first asked for `seq`, which the guard refuses.
-- Not reviewed: W3 also changes `test_history_denied_to_agents_and_spikes` (:98) to loop over `self.history`, and drops the comment above `AGENT_NOT_DENIED`, from delta review row 1, on 2026-10-02.
-- Not reviewed: W3's `grep -rn spec ~/.claude` test checks for "Claude Code's own state", not "session history", from delta review row 2, on 2026-10-02.
-- Not reviewed: the Spike questions lead-in says how the three were answered (S1 a spike, S2 and S3 by hand), from delta review row 3, on 2026-10-02.
-- Not reviewed: Risks says the fold widens the allow side on a case-sensitive volume, accepted since the agents and CI run on macOS, from delta review row 4, on 2026-10-02.
+
+## Evidence
+
+- Started at d7dea8b
+- Drift WARN, no DRIFT line: docs/specs/spikes/2026-10-01-review-fixes-hand-run-results.md (added after read-at b9a37ae, committed in d7dea8b)

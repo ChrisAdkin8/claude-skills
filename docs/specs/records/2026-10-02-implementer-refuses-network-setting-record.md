@@ -62,3 +62,4 @@ Needs a run: 3
 - Baseline: `claude plugin validate . --json` -> pass
 - Baseline: `claude plugin validate .claude-plugin/plugin.json` -> pass (with the expected root `CLAUDE.md` warning)
 - Baseline: `tests/agent-evals/run.sh` and `tests/skill-evals/run.sh` -> not run: paid, by hand only (`CLAUDE.md`)
+- W1 (46969a4): Done when `python3 -m unittest tests.test_run_implementer` -> pass; it failed first with 5 failures (the four new subtests and the `httpProxyPort` block each exited 0, not 2). `python3 -m unittest discover -s tests` -> pass (589); `shellcheck -S warning skills/implement/scripts/run-implementer.sh` -> prints nothing. `EVAL_MODEL=sonnet|opus tests/skill-evals/run.sh implement-basic implement-trap` -> not run: paid, by hand only, so no `tests/agent-evals/BASELINE.md` section was added; suite as baseline (replay guard's same 1 difference); scan clean

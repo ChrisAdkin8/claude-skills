@@ -1264,11 +1264,43 @@ class SessionHistory(unittest.TestCase):
                 self.assertIn("session history", err)
 
     def test_recursive_search_over_history_blocked(self):
-        for command in ("grep -rn spec ~/.claude", "rg spec ~/.cache"):
+        # ~/.claude itself is refused as a path before the recursive-search check runs.
+        code, err = self.bash("grep -rn spec ~/.claude")
+        self.assertEqual(code, 2)
+        self.assertIn("Claude Code's own state", err)
+        for command in ("grep -rn spec ~", "rg spec ~/.cache"):
             with self.subTest(command=command):
                 code, err = self.bash(command)
                 self.assertEqual(code, 2, f"expected blocked: {command!r}")
                 self.assertIn("narrower directory", err)
+
+    STATE = (
+        "usage-data/x",
+        "settings.json",
+        "jobs/x",
+        "plans/x.md",
+        "todos/x",
+        "debug/x",
+        "daemon/x",
+    )
+
+    def test_the_rest_of_claude_home_blocked(self):
+        # ~/.claude is an allow-list: only the session's own saved output and the plugin root.
+        for rel in self.STATE:
+            path = f"{self.HOME}/.claude/{rel}"
+            with self.subTest(path=path):
+                self.assertEqual(self.tool("Read", file_path=path), 2)
+                code, err = self.bash(f"cat ~/.claude/{rel}")
+                self.assertEqual(code, 2, f"expected blocked: cat ~/.claude/{rel}")
+                self.assertIn("Claude Code's own state", err)
+
+    def test_own_results_readable_and_another_sessions_not(self):
+        own = f"{self.PROJECT}/{self.SESSION}/tool-results/b.txt"
+        other = f"{self.PROJECT}/66666666-0000-0000-0000-000000000000/tool-results/b.txt"
+        self.assertEqual(self.tool("Read", file_path=own), 0)
+        self.assertEqual(self.bash(f"sed -n 1p {own}")[0], 0)
+        self.assertEqual(self.tool("Read", file_path=other), 2)
+        self.assertEqual(self.bash(f"sed -n 1p {other}")[0], 2)
 
     def test_skills_agents_and_own_results_readable(self):
         own = f"{self.PROJECT}/{self.SESSION}/tool-results/b1.txt"

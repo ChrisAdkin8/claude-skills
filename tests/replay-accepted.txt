@@ -52,3 +52,35 @@ f2c969b1ce7e7c78 headless allowed->blocked  # `gh` in a call with other commands
 # worktree`: /spec done and /implement run it through git-read.py. A recorded call that the base
 # refused only for its `worktree list` part is allowed now on purpose.
 f7132e38260e5c93 base blocked->allowed  # `git worktree list` allowed since #39 (2026-10-01)
+
+# Since W3 of docs/specs/2026-10-02-guard-path-identity.md, ~/.claude is an allow-list: only the
+# agent's own saved tool output and the plugin root when it lives there. These runs read the old
+# symlink install's skills, agents and hooks under ~/.claude (now under the plugin root),
+# ~/.claude/settings.json, or listed ~/.claude's state; all are refused on purpose.
+f1e98e1c8a6e104c read allowed->blocked  # a read under ~/.claude outside the allow-list (old install or Claude Code state): refused since W3 (2026-10-02)
+68641b550e7c448b read allowed->blocked  # a read under ~/.claude outside the allow-list (old install or Claude Code state): refused since W3 (2026-10-02)
+aeabac760c5b151e read allowed->blocked  # a read under ~/.claude outside the allow-list (old install or Claude Code state): refused since W3 (2026-10-02)
+6e62511293f9488d read allowed->blocked  # a read under ~/.claude outside the allow-list (old install or Claude Code state): refused since W3 (2026-10-02)
+8660daa75275671c read allowed->blocked  # a read under ~/.claude outside the allow-list (old install or Claude Code state): refused since W3 (2026-10-02)
+b35c4895c24aa7fe read allowed->blocked  # a read under ~/.claude outside the allow-list (old install or Claude Code state): refused since W3 (2026-10-02)
+476cdd3d7dde526e read allowed->blocked  # a read under ~/.claude outside the allow-list (old install or Claude Code state): refused since W3 (2026-10-02)
+d9f695b173e3143f read allowed->blocked  # a read under ~/.claude outside the allow-list (old install or Claude Code state): refused since W3 (2026-10-02)
+3525936a120222a2 read allowed->blocked  # a read under ~/.claude outside the allow-list (old install or Claude Code state): refused since W3 (2026-10-02)
+40ef9ed973ba1ab0 read allowed->blocked  # a read under ~/.claude outside the allow-list (old install or Claude Code state): refused since W3 (2026-10-02)
+deee49c16afd27ed read allowed->blocked  # a read under ~/.claude outside the allow-list (old install or Claude Code state): refused since W3 (2026-10-02)
+19e1b1e4a14ca892 read allowed->blocked  # a read under ~/.claude outside the allow-list (old install or Claude Code state): refused since W3 (2026-10-02)
+bbf904d923166fa4 read allowed->blocked  # a read under ~/.claude outside the allow-list (old install or Claude Code state): refused since W3 (2026-10-02)
+e4ec06d83621edda read allowed->blocked  # a read under ~/.claude outside the allow-list (old install or Claude Code state): refused since W3 (2026-10-02)
+f53426c8d84dc6d3 read allowed->blocked  # a read under ~/.claude outside the allow-list (old install or Claude Code state): refused since W3 (2026-10-02)
+abb385f96b9e7d43 read allowed->blocked  # a read under ~/.claude outside the allow-list (old install or Claude Code state): refused since W3 (2026-10-02)
+53f8ffc514e37d9b read allowed->blocked  # a read under ~/.claude outside the allow-list (old install or Claude Code state): refused since W3 (2026-10-02)
+9577e964643eefba read allowed->blocked  # a read under ~/.claude outside the allow-list (old install or Claude Code state): refused since W3 (2026-10-02)
+4430f780a7fe427e read allowed->blocked  # a read under ~/.claude outside the allow-list (old install or Claude Code state): refused since W3 (2026-10-02)
+85ed83c8e1eff4b4 read allowed->blocked  # a read under ~/.claude outside the allow-list (old install or Claude Code state): refused since W3 (2026-10-02)
+2df7424b1ae57206 headless allowed->blocked  # names ~/.claude or its state (settings.json, usage-data, ...): refused since W3 (2026-10-02)
+8e6418fad3b2657a headless allowed->blocked  # names ~/.claude or its state (settings.json, usage-data, ...): refused since W3 (2026-10-02)
+f8da4ee7083ee3b0 headless allowed->blocked  # names ~/.claude or its state (settings.json, usage-data, ...): refused since W3 (2026-10-02)
+34a67d5d616a60a4 headless allowed->blocked  # names ~/.claude or its state (settings.json, usage-data, ...): refused since W3 (2026-10-02)
+cae6e0e9a775b8e0 headless allowed->blocked  # names ~/.claude or its state (settings.json, usage-data, ...): refused since W3 (2026-10-02)
+dacb39a9b688c00b headless allowed->blocked  # names ~/.claude or its state (settings.json, usage-data, ...): refused since W3 (2026-10-02)
+9eaee643f63783f0 headless allowed->blocked  # names ~/.claude or its state (settings.json, usage-data, ...): refused since W3 (2026-10-02)

@@ -1,5 +1,5 @@
-"""Tests that the lists of paths agents may not read stay in step: the guard's SECRET_HOME and
-HISTORY_HOME (hooks/agent-guard.py), the agents' sandbox settings (hooks/agent-sandbox.json), the
+"""Tests that the lists of paths agents may not read stay in step: the guard's SECRET_HOME,
+HISTORY_HOME and PRIVATE_HOME, which adds all of ~/.claude (hooks/agent-guard.py), the agents' sandbox settings (hooks/agent-sandbox.json), the
 spikes' (skills/spec/spike-settings.json) and the implement-verifier's
 (skills/implement/verify-settings.json), which denies what the spikes' does. Each file only knows
 its own copy, so a path added to one is easily missed in the others. Likewise the secret
@@ -35,9 +35,6 @@ IMPLEMENT_CASE = json.loads(
 )
 
 # Written-down exceptions, and why.
-# The agent's own tool output is saved under ~/.claude/projects, so only the guard covers it.
-# Likewise ~/.claude/plugins: the guard exempts its own root there, which a deny can't say.
-AGENT_NOT_DENIED = {".claude/projects", ".claude/plugins"}
 # git and uv read their own config under ~/.config, so a spike is denied only parts of it.
 SPIKE_PARTLY_DENIED = {
     ".config": {".config/gh", ".config/gcloud", ".config/op", ".config/doctl"}
@@ -95,7 +92,7 @@ class SandboxSettings(unittest.TestCase):
                         )
 
     def test_history_denied_to_agents_and_spikes(self):
-        for path in sorted(self.history - AGENT_NOT_DENIED):
+        for path in sorted(self.history):
             for name, denied in (
                 ("agent-sandbox.json denyRead", self.agent_os),
                 ("agent-sandbox.json Read denies", self.agent_read),
@@ -117,7 +114,7 @@ class SandboxSettings(unittest.TestCase):
     def test_agent_denies_known_to_guard(self):
         # A path the sandbox denies but the guard doesn't know is still readable with the Read
         # tool, which the OS sandbox doesn't cover.
-        known = self.secrets | self.history
+        known = {home_relative(p) for p in guard.PRIVATE_HOME}
         for path in sorted(self.agent_os | self.agent_read):
             with self.subTest(path=path):
                 self.assertTrue(

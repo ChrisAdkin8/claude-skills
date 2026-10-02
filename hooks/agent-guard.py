@@ -19,9 +19,11 @@ So credentials are kept out of reach instead (see SECRET_HOME): no command word 
 nor may grep -r or rg search a directory that holds them, and the `read` mode refuses them to
 the Read, Grep and Glob tools. For Bash this is best effort, since a path built at run time from
 variables gets past it; for the tools it is exact, since the path arrives whole. Session history
-(HISTORY_HOME) is refused the same way: the verifiers and the cold reviewer are only worth
-running if they can't see how the document they check was written. The exception is the
-agent's own saved tool output (SESSION_RESULTS).
+is refused the same way: the verifiers and the cold reviewer are only worth running if they
+can't see how the document they check was written. All of ~/.claude (CLAUDE_HOME) is an
+allow-list: an agent may read only its own saved tool output (SESSION_RESULTS) and the plugin's
+own root when that lives there (OWN_ROOT). The agents' earlier runs (HISTORY_HOME) are refused
+too.
 
 Environment variables are checked too, because they change what an allowed command runs: git
 runs GIT_EXTERNAL_DIFF through a shell, bash sources BASH_ENV, Python reads PYTHONPATH. A
@@ -288,22 +290,21 @@ SECRET_HOME = tuple(
         "Library/Application Support/Google/Chrome",
     )
 )  # fmt: skip
-# Session history: transcripts, prompt history, file snapshots and the agents' own briefs and
-# replies. No agent needs it, and a cold reviewer that could read the session that wrote a
-# document wouldn't be cold. Also denied in agent-sandbox.json, except ~/.claude/projects: the
-# agent's own tool output is saved there (SESSION_RESULTS), so only this guard covers it. The
-# same goes for ~/.claude/plugins: other plugins' caches, marketplace clones and plugins/data are
-# private, but this guard's own root, when it lives there, is not (OWN_ROOT), and a sandbox deny
-# can't say that.
-HISTORY_HOME = tuple(
-    HOME / p
-    for p in (
-        ".claude/plugins", ".claude/projects", ".claude/history.jsonl", ".claude/file-history", ".claude/sessions",
-        ".claude/session-env", ".claude/shell-snapshots", ".claude/paste-cache",
-        ".cache/agent-runs",
-    )
-)  # fmt: skip
-PRIVATE_HOME = SECRET_HOME + HISTORY_HOME
+# Session history outside ~/.claude: the agents' own briefs and replies from earlier runs. No
+# agent needs it, and a cold reviewer that could read the session that wrote a document wouldn't
+# be cold. Also denied in agent-sandbox.json.
+HISTORY_HOME = (HOME / ".cache/agent-runs",)
+# Transcripts, prompt history, file snapshots, plans, todos, settings and the rest of Claude
+# Code's own state. An allow-list: only the agent's own saved tool output (SESSION_RESULTS) and
+# this guard's own root, when it lives under ~/.claude/plugins (OWN_ROOT), may be read. The
+# sandbox denies it all to Bash but the plugin root; only this guard lets the Read tool reach the
+# agent's own output, since a Read deny would beat any allow.
+CLAUDE_HOME = HOME / ".claude"
+CLAUDE_REASON = (
+    f"{CLAUDE_HOME} holds session history and Claude Code's own state; agents may read only "
+    "their own saved tool output and the plugin's files"
+)
+PRIVATE_HOME = SECRET_HOME + HISTORY_HOME + (CLAUDE_HOME,)
 PLUGINS_HOME = HOME / ".claude/plugins"
 # The one directory under ~/.claude/plugins an agent may read: the plugin this guard is part of.
 # Under --plugin-dir or the hooks symlink the root is a checkout outside it, so nothing is exempt.
@@ -1201,13 +1202,11 @@ def secret_path(path):
             return f"{secret} holds credentials"
     if SESSION_RESULTS and any(under(path, form) for form in results_spellings()):
         return None
+    if any(under(path, form) for form in spellings(CLAUDE_HOME)):
+        if OWN_ROOT and under(os.path.realpath(path), OWN_ROOT):
+            return None
+        return CLAUDE_REASON
     for history in HISTORY_HOME:
-        if (
-            history == PLUGINS_HOME
-            and OWN_ROOT
-            and under(os.path.realpath(path), OWN_ROOT)
-        ):
-            continue
         if any(under(path, form) for form in spellings(history)):
             return f"{history} holds session history, which would show how a document was written"
     if hidden := next(

@@ -8,6 +8,7 @@ What happened to [2026-10-02-implementer-sandbox](../2026-10-02-implementer-sand
 - Verifier round 2 ran on 2026-10-02: after the cold review, re-checking W2, W3, W4, W5 and W6.
 - 2026-10-02, round 2: spec-verifier, 34 of 37 claims confirmed. Plan holds: yes. Fixed: three miscited ranges (`CLAUDE.md:10-14`, `README.md:368-370`, `CLAUDE.md:22-25` and :30-33); `CLAUDE.md` added to W4 for its count of sandbox settings files. Left as a note: the 2026-10-02 agent-eval run cost $1.91 and $4.46 (`tests/agent-evals/BASELINE.md:1454`), about $0.26 more than Effort's $10.04.
 - 2026-10-02, `/spec finish`: spec-verifier, 55 of 60 claims confirmed. Plan holds: yes. Fixed: five variables, not four; the 18 failures' cause restated; which writes Q1 tried; `CLAUDE.md:14-15`; the suite passed in full twice, not four times; spike question 3 matches its run. The added `denyWrite` entries marked *(assumption)*, with spike question 8.
+- 2026-10-02, `/spec finish` after drift at `skills/implement/SKILL.md:99`: spec-verifier, 51 of 54 claims confirmed. Plan holds: yes. Fixed: the other branches' refs cited to Q1's follow-up as well as Q8; `CLAUDE.md:23-26`, :31-34 and :23-24.
 
 ## Cold review
 
@@ -91,6 +92,7 @@ Needs a run: 2, 3, 4
 - Not reviewed: Design, W5, W6 and Risks: the launcher names refs and `HEAD` that moved during a run in a `moved during the run:` line, without stopping it, and `/implement`'s report shows them, from the user, on 2026-10-02.
 - Not reviewed: Design and W5: after each call the launcher refuses a submodule config under `<git dir>/modules/` that names a program, or a hooks entry there, with a test; a worktree added during a run is covered by the snapshot only, from the submodule follow-up, on 2026-10-02.
 - Not reviewed: Design: the `allowRead` of `~/.config/git` marked *(assumption)*, with W4's hand run as its check; Non-goals: managed settings aren't read by the launcher's check, from the user, on 2026-10-02.
+- Not reviewed: Background and Design: read-at moved to `b4e9749`; `/implement`'s own `add` and `commit` (`skills/implement/SKILL.md:99`) now turn off `core.fsmonitor` and `core.hooksPath`, so the Background no longer says they would fire a planted hook, and the Snapshot's reason for checking submodule configs names the programs those flags don't cover; nothing built changes. Effort drops a sentence the Spike questions repeat, to stay under 4,000 words. From `/spec finish`'s drift check, on 2026-10-02.
 
 ## Spikes
 

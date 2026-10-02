@@ -40,7 +40,7 @@ You frame, relay and verify; you don't write the code. The work items are done b
 - `<spec>`: the path given; stop if there is none. `<repo>`: `git-read.py -C <spec's dir> rev-parse --show-toplevel`, which must be under `~/code` (else stop: `/implement` works only on repos there). `<repo dir>`: its directory name.
 - `<basename>`: the spec's filename without `.md`. `<record>`: `<spec dir>/records/<basename>-record.md`. `<spikes>`: `<spec dir>/spikes/<basename>-results.md` (it may not exist). Paths below are from the repo root unless they start with `~`.
 - `<worktree>`: `<repo>/../<repo dir>-worktrees/<basename>`, written with `~`. `<branch>`: `implement/<basename>`.
-- `<run name>`: `<repo dir>--<basename>`. `<run dir>`: `~/.cache/implement-runs/<run name>/implementer`. `<baseline>`: `~/.cache/implement-runs/<run name>/baseline.txt`. `<scratch V<n>>`: `~/.cache/implement-verify/<repo dir>/<basename>/V<n>`.
+- `<run name>`: `<repo dir>--<basename>`. `<run dir>`: `~/.cache/implement-runs/<run name>/implementer`. `<baseline>`: `~/.cache/implement-runs/<run name>/scratch/baseline.txt`, in the one dir outside the worktree the implementer may write. `<ledger>`: `~/.cache/implement-ledger/<run name>.jsonl`, the cost of every implementer and verifier run for this spec. `<scratch V<n>>`: `~/.cache/implement-verify/<repo dir>/<basename>/V<n>`.
 - **New or resume.** `git-read.py -C <repo> branch --list <branch>`: empty means a new run; a branch means resume (step 3's Resume).
 
 ## 2. Gate
@@ -80,7 +80,10 @@ On resume, run the Gate in the worktree instead, where the status must be `in-pr
      - `Implementer: stopped: <reason>`: stop and report the reason; don't verify.
    - **3**: the reply doesn't end with an `Implementer:` line. Send one follow-up asking it to reply again, in full, ending with that line. If that exits 3 too, stop and tell the user.
    - **2**: the run never started, or its cap is spent. Stop and give the script's message.
+   - **4**: the run changed the repo's shared git config or hooks, a worktree's git pointers or the ledger, or left a submodule config that names a program. Stop at once: run no git command in the repo or the worktree, `git-read.py` included, read nothing the run wrote, and tell the user each path the script's message names, so they can check it before anything runs git there.
    - **Any other**: stop; `run.err` and `run.json` in the run dir say why.
+
+   On any exit, keep each `run-implementer: moved during the run: <ref> <old> -> <new>` line the script printed, for the report.
 
 ## 5. Verify
 
@@ -97,4 +100,4 @@ On resume, run the Gate in the worktree instead, where the status must be `in-pr
 ## 6. Evidence and report
 
 1. `git -C <worktree> -c core.fsmonitor=false -c core.hooksPath=/dev/null add <record>`, then `git -C <worktree> -c core.fsmonitor=false -c core.hooksPath=/dev/null commit -m '<area>: implementation evidence'`: the branch's last commit. The verifier ran on the commit before it, which changes only the record. `git -C <worktree> -c core.fsmonitor=false -c core.hooksPath=/dev/null status --porcelain` must then print nothing; if it doesn't, name what's left.
-2. **Report**, one short line each: each work item, its commit and Done when result, and, for one no verifier row passed, that only the implementer checked it (`implementer-run:`) or no one did; the clean-up commits and any revert; the verifier's `Verified` and `Implementation holds` lines, per round, or that a round was refused and why; any departure or question and its answer; the cost of every run, from `total_cost_usd` in each `<run dir>/run-<n>.json` and each `<scratch V<n>>/run.json` but a refused round's (find them with Glob, read them with Read), and their total. Then: "run `/spec done <spec>` from `<worktree>`". Don't push, merge or remove the worktree.
+2. **Report**, one short line each: each work item, its commit and Done when result, and, for one no verifier row passed, that only the implementer checked it (`implementer-run:`) or no one did; the clean-up commits and any revert; the verifier's `Verified` and `Implementation holds` lines, per round, or that a round was refused and why; any departure or question and its answer; each `moved during the run:` line, for the user to confirm they made that change themselves (their own commit or fetch) and not the implementer; the cost of every run, from `<ledger>`, which you read with Read: each implementer call's `end` line's `usd` (or its `start` line's `budget`, if no end line follows), each `verifier V<n>` line's `usd`, a `null` one as unknown, and their total, which counts every run of this spec, earlier ones included. Then: "run `/spec done <spec>` from `<worktree>`". Don't push, merge or remove the worktree.

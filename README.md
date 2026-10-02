@@ -366,9 +366,10 @@ What things cost:
 - **Each agent run** is capped at $5, or $10 for the researcher. The `RUN_AGENT_MAX_USD`
   environment variable overrides both. Agents run on your default model, or on the one
   `RUN_AGENT_MODEL` names (`sonnet` or `opus`).
-- **Each `/implement` run's implementer** is capped at $20 in all, however many times it is
-  resumed with an answer. The `IMPLEMENT_MAX_USD` environment variable overrides it. Each of its
-  up to two checker runs is capped at $5.
+- **Each spec's implementer** is capped at $20 in all, across every `/implement` run of that
+  spec and every resume with an answer, until you remove its cost ledger,
+  `~/.cache/implement-ledger/<repo>--<spec>.jsonl`, by hand. The `IMPLEMENT_MAX_USD` environment
+  variable overrides the cap. Each of its up to two checker runs is capped at $5.
 - **Each spike** is capped at $2 and 60 turns. A *turn* is one step: Claude replies once, and may
   use a tool. Assume a spike that fetches anything from the web costs close to its cap.
 - A cap stops a run only after the turn that crosses it, so a run can go over by up to one turn.

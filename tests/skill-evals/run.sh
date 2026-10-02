@@ -54,7 +54,7 @@ done
 # Every temp fixture lives under one temp dir, and the rest are named by $stamp, so an interrupted
 # run leaves none behind.
 tmp_root=$(mktemp -d)
-trap 'rm -rf "$tmp_root" "$HOME"/code/eval-*-"$stamp" "$HOME"/code/eval-*-"$stamp"-worktrees "$HOME"/.cache/agent-runs/eval-*-"$stamp"* "$HOME"/.cache/implement-runs/eval-*-"$stamp"* "$HOME"/.cache/implement-verify/eval-*-"$stamp"*; rm -f "$HOME"/notes/research/eval-*-"$stamp".md' EXIT
+trap 'rm -rf "$tmp_root" "$HOME"/code/eval-*-"$stamp" "$HOME"/code/eval-*-"$stamp"-worktrees "$HOME"/.cache/agent-runs/eval-*-"$stamp"* "$HOME"/.cache/implement-runs/eval-*-"$stamp"* "$HOME"/.cache/implement-verify/eval-*-"$stamp"*; rm -f "$HOME"/notes/research/eval-*-"$stamp".md "$HOME"/.cache/implement-ledger/eval-*-"$stamp"*.jsonl' EXIT
 
 # An agent a skill launches runs on the model under test, not the default (hooks/run-agent.sh).
 export RUN_AGENT_MODEL=${EVAL_MODEL:-}
@@ -127,6 +127,12 @@ PY
       mkdir -p "$out/$c.$kind" && cp -R "$d" "$out/$c.$kind/"
       rm -rf "$d"
     done
+  done
+  # The implement ledger is one file per run name, not a dir.
+  for f in "$HOME"/.cache/implement-ledger/eval-"$c"-"$stamp"*.jsonl; do
+    [ -f "$f" ] || continue
+    mkdir -p "$out/$c.implement-ledger" && cp "$f" "$out/$c.implement-ledger/"
+    rm -f "$f"
   done
   [ -d "$work/docs" ] && cp -R "$work/docs" "$out/$c.docs"
   [ -d "$work-worktrees" ] && cp -R "$work-worktrees" "$out/$c.worktrees"

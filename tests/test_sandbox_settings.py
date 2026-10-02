@@ -220,9 +220,15 @@ class SandboxSettings(unittest.TestCase):
         # The implement eval cases run /implement, whose worktree, commits and
         # ~/.cache/implement-runs writes the sandbox refuses (spike S1 of
         # docs/specs/2026-09-26-implement-skill-2-skill.md). So they keep the agents' permission
-        # denies, which the Read tool obeys, and turn the OS sandbox off. Nothing else.
+        # denies, which the Read tool obeys, and turn the OS sandbox off. And the Write and Edit
+        # tools may not touch the implement ledger, which the implementer's cap is read from.
+        # Nothing else.
         expected = json.loads(json.dumps(AGENT))
         expected["sandbox"] = {"enabled": False}
+        expected["permissions"]["deny"] += [
+            "Write(~/.cache/implement-ledger/**)",
+            "Edit(~/.cache/implement-ledger/**)",
+        ]
         self.assertEqual(IMPLEMENT_CASE, expected)
 
     def test_no_settings_file_locates_the_repo_through_home(self):

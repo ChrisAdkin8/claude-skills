@@ -689,12 +689,23 @@ class Runners(unittest.TestCase):
             'mkdir -p "$r" && echo "{}" > "$r/run.json"\n'
             'v="$HOME/.cache/implement-verify/$name/spec/V1"\n'
             'mkdir -p "$v" && echo verdict > "$v/reply.md"\n'
+            # The ledger is a file, not a dir; another case's, of this run, only the trap removes.
+            'l="$HOME/.cache/implement-ledger"\n'
+            'mkdir -p "$l" && echo "{}" > "$l/$name--spec.jsonl"\n'
+            'echo "{}" > "$l/eval-other-${name#eval-impl-}--spec.jsonl"\n'
+            'echo "{}" > "$l/mine--spec.jsonl"\n'
             f'echo "$1" >> {self.tmp}/works\n'
         )
         code, out = self.run_script(SKILL_RUN, "impl")
         self.assertEqual(code, 0, out)
         (work,) = (self.tmp / "works").read_text().split()
         name = Path(work).name
+        ledgers = self.tmp / "out/impl.implement-ledger"
+        self.assertEqual((ledgers / f"{name}--spec.jsonl").read_text(), "{}\n")
+        self.assertEqual(
+            sorted(p.name for p in (home / ".cache/implement-ledger").iterdir()),
+            ["mine--spec.jsonl"],
+        )
         self.assertFalse(Path(work + "-worktrees").exists())
         self.assertEqual(list((home / ".cache/implement-runs").iterdir()), [])
         self.assertEqual(list((home / ".cache/implement-verify").iterdir()), [])

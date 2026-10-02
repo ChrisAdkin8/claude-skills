@@ -344,6 +344,30 @@ class RunImplementer(unittest.TestCase):
                 self.assertFalse((self.run_dir / "reply.md").exists())
                 self.assertFalse(marker.exists())
 
+    def test_a_submodules_sample_hooks_are_not_refused(self):
+        # git copies its template's *.sample hooks into each submodule it clones.
+        self.brief()
+        self.stub_does(
+            "(git_dir / 'modules' / 'sub' / 'hooks').mkdir(parents=True)\n"
+            "(git_dir / 'modules' / 'sub' / 'hooks' / 'pre-commit.sample').write_text('#!/bin/sh\\n')\n"
+            "(git_dir / 'modules' / 'sub' / 'config').write_text('[core]\\n\\tbare = false\\n')"
+        )
+        code, out = self.launch(self.worktree, self.run_dir)
+        self.assertEqual(code, 0, out)
+
+    def test_a_submodule_config_with_an_include_exits_4(self):
+        for key in ("[include]\\n\\tpath = x", '[includeIf "gitdir:/"]\\n\\tpath = x'):
+            self.setUp()
+            self.brief()
+            with self.subTest(key=key):
+                self.stub_does(
+                    "(git_dir / 'modules' / 'sub').mkdir(parents=True)\n"
+                    f"(git_dir / 'modules' / 'sub' / 'config').write_text('{key}\\n')"
+                )
+                code, out = self.launch(self.worktree, self.run_dir)
+                self.assertEqual(code, 4, out)
+                self.assertIn("modules/sub/config sets", out)
+
     def test_a_commit_in_the_main_checkout_is_named_not_refused(self):
         self.brief()
         branch = git(self.repo, "symbolic-ref", "--short", "HEAD").strip()

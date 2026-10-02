@@ -202,8 +202,12 @@ spec = importlib.util.spec_from_file_location("git_read", sys.argv.pop(1))
 git_read = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(git_read)
 common, git_dir, work = sys.argv[1:4]
-# git-read.py's keys that name a program, and the two its -c flags (and /implement's) override.
-RUNS = re.compile(git_read.RUNS.pattern + r"|core\.fsmonitor|core\.hookspath", re.IGNORECASE)
+# git-read.py's keys that name a program, the two its -c flags (and /implement's) override, and
+# an include, whose file keys() doesn't follow and which could set any of them.
+RUNS = re.compile(
+    git_read.RUNS.pattern + r"|core\.fsmonitor|core\.hookspath|include\.path|includeif\..+\.path",
+    re.IGNORECASE,
+)
 
 def state(path):
     try:
@@ -305,7 +309,10 @@ def programs():
     for path in walk(modules) if os.path.isdir(modules) else []:
         parts = os.path.relpath(path, modules).split(os.sep)
         if "hooks" in parts[:-1]:
-            found.append(f"program: {path} (a hooks entry)")
+            # git copies its template's *.sample hooks into every submodule it clones, and
+            # never runs a hook by that name.
+            if not parts[-1].endswith(".sample"):
+                found.append(f"program: {path} (a hooks entry)")
         elif parts[-1] == "config" and os.path.isfile(path):
             names = keys(path)
             if names is None:
@@ -335,12 +342,13 @@ PY
 # The ledger's start line, then its hash: nothing but this script writes the ledger, so a change
 # by the end of the call is a write the sandbox should have stopped.
 sha() { shasum -a 256 < "$ledger" | cut -d' ' -f1; }
+# The snapshot first: if it can't be taken, the call never starts, so nothing is charged.
+taken=$(snapshot) || die "couldn't read the repo's git config and hooks before the call"
 call=$("$ledger_py" next-call "$run_name") || die "couldn't read the ledger $ledger"
 "$ledger_py" append "$run_name" \
   "{\"who\": \"implementer\", \"call\": $call, \"event\": \"start\", \"budget\": $budget}" ||
   die "couldn't write the ledger $ledger"
 before=$(sha)
-taken=$(snapshot) || die "couldn't read the repo's git config and hooks before the call"
 
 cd "$work"
 status=0

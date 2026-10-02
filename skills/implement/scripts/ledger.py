@@ -98,7 +98,7 @@ def shape(line):
 
 
 class Ledger:
-    """The ledger's lines, checked in order, as they would be if `extra` were appended."""
+    """The ledger's lines, checked in order; add() checks one more as if it were appended."""
 
     def __init__(self, lines):
         self.starts = {}  # call -> budget

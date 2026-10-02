@@ -146,14 +146,15 @@ if widening:
 PY
 
 # The settings, with this run's paths, and each other worktree's git files denied too.
-"$plugin_root/hooks/agent-settings.py" "$plugin_root/skills/implement/implementer-settings.json" \
+rendered=$("$plugin_root/hooks/agent-settings.py" \
+  "$plugin_root/skills/implement/implementer-settings.json" \
   "$plugin_root" "IMPLEMENT_WORKTREE=$work" "IMPLEMENT_GIT_DIR=$git_dir" \
-  "IMPLEMENT_COMMON_DIR=$common" "IMPLEMENT_SCRATCH=$scratch" "IMPLEMENT_TMP=$tmp" \
-  > "$run/settings.rendered.json" || die "couldn't render the implementer's settings"
-python3 - "$run/settings.rendered.json" "$common" "$git_dir" > "$run/settings.json" <<'PY' ||
+  "IMPLEMENT_COMMON_DIR=$common" "IMPLEMENT_SCRATCH=$scratch" "IMPLEMENT_TMP=$tmp") ||
+  die "couldn't render the implementer's settings"
+python3 - "$rendered" "$common" "$git_dir" > "$run/settings.json" <<'PY' ||
 import json, os, sys
-path, common, own = sys.argv[1:]
-settings = json.load(open(path))
+rendered, common, own = sys.argv[1:]
+settings = json.loads(rendered)
 deny = settings["sandbox"]["filesystem"]["denyWrite"]
 worktrees = os.path.join(common, "worktrees")
 for name in sorted(os.listdir(worktrees)) if os.path.isdir(worktrees) else []:
@@ -163,7 +164,6 @@ for name in sorted(os.listdir(worktrees)) if os.path.isdir(worktrees) else []:
 print(json.dumps(settings, indent=2))
 PY
   die "couldn't add the other worktrees to the implementer's settings"
-rm -f "$run/settings.rendered.json"
 
 # The agent's definition as --agents takes it, and its own tools pre-approved, e.g.
 # "Read,Edit,Write,Glob,Grep,Bash,Skill": Bash too, so /simplify and /code-review can run their
@@ -171,7 +171,7 @@ rm -f "$run/settings.rendered.json"
 "$plugin_root/hooks/agent-def.py" --root "$plugin_root" "$file" > "$run/agents.json" ||
   die "couldn't read the agent file $file"
 # Edit and Write become Edit rules for the worktree and the scratch dir (an Edit rule covers Write).
-tools=$(python3 - "$run/agents.json" "$(basename "$(dirname "$run")")" <<'PY'
+tools=$(python3 - "$run/agents.json" "$run_name" <<'PY'
 import json, sys
 (agent,) = json.load(open(sys.argv[1])).values()
 edits = ["Edit(./**)", f"Edit(~/.cache/implement-runs/{sys.argv[2]}/scratch/**)"]
@@ -195,15 +195,15 @@ model=(${RUN_AGENT_MODEL:+--model "$RUN_AGENT_MODEL"})
 # /implement's own git add and commit, unsandboxed, would read them, and their -c flags cover only
 # core.fsmonitor and core.hooksPath.
 snapshot() {
-  python3 - "$common" "$git_dir" "$work" "$@" <<'PY'
-import hashlib, json, os, re, stat, sys
+  python3 - "$plugin_root/hooks/git-read.py" "$common" "$git_dir" "$work" "$@" <<'PY'
+import hashlib, importlib.util, json, os, re, stat, sys
 
+spec = importlib.util.spec_from_file_location("git_read", sys.argv.pop(1))
+git_read = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(git_read)
 common, git_dir, work = sys.argv[1:4]
-RUNS = re.compile(
-    r"filter\..+\.(?:clean|smudge|process)|diff\..+\.(?:textconv|command)|diff\.external"
-    r"|merge\..+\.driver|gpg\.(?:.+\.)?program|hook\..+\.command|core\.fsmonitor|core\.hookspath",
-    re.IGNORECASE,
-)
+# git-read.py's keys that name a program, and the two its -c flags (and /implement's) override.
+RUNS = re.compile(git_read.RUNS.pattern + r"|core\.fsmonitor|core\.hookspath", re.IGNORECASE)
 
 def state(path):
     try:

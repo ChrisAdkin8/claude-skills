@@ -51,3 +51,7 @@ Needs a run: 3
 - Delta-reviewed on 2026-10-02: the Goal says `strictAllowlist` is refused when anything but `true`, Design says `null` is refused too, and W1 adds a `strictAllowlist: null` subtest. From cold review row 2, on 2026-10-02.
 - Delta-reviewed on 2026-10-02: W1 puts the `httpProxyPort` case in its own block after the loop and before the no-call assertion, asserting exit 2, `httpProxyPort` named and `strictAllowlist` not. From cold review row 3, on 2026-10-02.
 - Verifier round 2 ran on 2026-10-02: after the cold review, re-checking W1. 15 of 15 claims confirmed. Plan holds: yes.
+
+## Evidence
+
+- Started at 87b2aed

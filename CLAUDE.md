@@ -11,7 +11,7 @@ each step, and expect a skill you're editing to be the one you're running.
   `build-index.py`, `review-state.py`, `git-read.py`, `prepare-spike.sh`, `run-spike.sh`,
   `run-agent.sh`, `agent-def.py`, `agent-settings.py`, `mdcheck.py`, `mine-sessions.py`,
   `scan-diff.py`, `prepare-verify.sh`, `run-verify.sh`, `run-implementer.sh`, `ledger.py` and the
-  research scripts; that the eval runners exit 1 on a failure; that the guard's and all three sandbox
+  research scripts; that the eval runners exit 1 on a failure; that the guard's and all four sandbox
   settings' deny lists agree, and `hooks/user-deny.json` with them; that no skill's allowed-tools
   holds a path rule Claude Code ignores; that `/implement`'s own git commands turn off the file
   watcher and hooks and match its allowed-tools; and the README's index-rebuild command. CI runs these,

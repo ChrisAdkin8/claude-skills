@@ -355,10 +355,11 @@ can do:
   saved tool output and the plugin's files.
 
 A few things run outside the sandbox, and one, the researcher's AWS and Terraform documentation
-servers, isn't checked by the guard either. The biggest is `/implement`'s implementer: it has to
-edit and commit your code, so it runs like your own session, in its worktree, with no sandbox or
-guard. Only use it on your own repos and reviewed specs. [How the agents are contained](docs/containment.md)
-lists them all.
+servers, isn't checked by the guard either. `/implement`'s implementer has to edit and commit your
+code, so it has a sandbox of its own: it may write its worktree and that branch's git files, with
+no network, but not your repo's shared git settings or anything outside. The guard doesn't check
+it, and your own hooks still run outside its sandbox. Only use it on your own repos and reviewed
+specs. [How the agents are contained](docs/containment.md) lists them all.
 
 What things cost:
 

@@ -105,6 +105,16 @@ class RenderedSettings(unittest.TestCase):
                 self.assertNotIn("${", out)
                 self.assertIn(str(REPO), out)
 
+    def test_the_implementer_settings_render_with_the_runs_variables(self):
+        path = REPO / "skills" / "implement" / "implementer-settings.json"
+        names = ("WORKTREE", "GIT_DIR", "COMMON_DIR", "SCRATCH", "TMP")
+        self.assertEqual(render(path, REPO)[0], 2)
+        code, out, err = render(path, REPO, *(f"IMPLEMENT_{n}=/v/{n}" for n in names))
+        self.assertEqual(code, 0, err)
+        self.assertNotIn("${", out)
+        for name in names:
+            self.assertIn(f"/v/{name}", out)
+
     def test_the_network_scripts_are_excluded_by_the_roots_spelling(self):
         for name, path in FILES.items():
             entries = json.loads(render(path, REPO)[1])["sandbox"]["excludedCommands"]

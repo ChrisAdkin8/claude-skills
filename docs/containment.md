@@ -57,13 +57,20 @@ Some things run outside the sandbox, and not all of them are checked by the guar
   looks like a token. Only the researcher and the research-verifier have web search.
 - **The researcher's documentation servers** (AWS and Terraform). **Nothing checks these.** The
   only limit is that only the researcher has them. Each agent's file lists its tools by name.
-- **`/implement`'s implementer.** It edits and commits code, which the sandbox refuses, so
-  `skills/implement/scripts/run-implementer.sh` runs it outside the sandbox and the guard, like
-  your own session: with the repo's own settings, hooks and `CLAUDE.md`, and every tool it has
-  pre-approved. **Nothing checks what it runs.** Its limits are its own session (it sees none of
-  your conversation), its working directory (a git worktree of a repo under `~/code`), its
-  instructions and a $20 cap for the whole run. The implement-verifier that re-runs its checks is
-  sandboxed, with no network (`skills/implement/verify-settings.json`).
+- **`/implement`'s implementer.** It edits and commits code, so it has a sandbox of its own,
+  `skills/implement/implementer-settings.json`, which `skills/implement/scripts/run-implementer.sh`
+  fills in with each run's paths. Its shell commands may write only its git worktree, that
+  worktree's own git files, the repo's objects and `implement/*` branches, a scratch dir and the
+  per-user temp dir, with no network. They may not write the repo's shared git config or hooks,
+  the main checkout's `HEAD` or index, other worktrees' git files, `~/.claude`, `~/notes` or the
+  cost ledger. Its Edit and Write tools are pre-approved only in the worktree and the scratch dir.
+  The guard doesn't check it. Only your own settings load, not the repo's: a repo's hooks would
+  run outside the sandbox. Your own hooks and plugins' hooks still do, so know what they run. If
+  your `~/.claude/settings.json` sets a sandbox key that could widen its sandbox, the launcher
+  refuses to run. After each call it checks that the shared git config and hooks are unchanged.
+  Its spend goes in a ledger it can't write, `~/.cache/implement-ledger/`, capped at $20 for
+  every run of a spec. The implement-verifier that re-runs its checks is sandboxed, with no
+  network (`skills/implement/verify-settings.json`).
 
 Every agent is also told these rules: [`hooks/agent-sandbox.md`](../hooks/agent-sandbox.md) is
 added to its instructions, with the list of allowed websites filled in from the sandbox settings.

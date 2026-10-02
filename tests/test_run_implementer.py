@@ -179,13 +179,21 @@ class RunImplementer(unittest.TestCase):
             defs["implementer"]["tools"],
             ["Read", "Edit", "Write", "Glob", "Grep", "Bash", "Skill"],
         )
+        # Edits are pre-approved only in the worktree and the scratch dir.
+        scratch = self.run_dir.parent / "scratch"
         self.assertEqual(
-            self.flag(argv, "--allowedTools"), "Read,Edit,Write,Glob,Grep,Bash,Skill"
+            self.flag(argv, "--allowedTools"),
+            "Read,Edit(./**),Edit(~/.cache/implement-runs/proj--spec/scratch/**),"
+            "Glob,Grep,Bash,Skill",
         )
-        # The repo's own settings and CLAUDE.md load; edits are accepted; no OS sandbox is set.
-        self.assertEqual(self.flag(argv, "--setting-sources"), "user,project")
+        # Only the user's settings load, under a sandbox of the run's own.
+        self.assertEqual(self.flag(argv, "--setting-sources"), "user")
         self.assertEqual(self.flag(argv, "--permission-mode"), "acceptEdits")
-        self.assertNotIn("--settings", argv)
+        self.assertEqual(Path(self.flag(argv, "--settings")), self.run_dir / "settings.json")
+        self.assertEqual(argv.count("--add-dir"), 1)
+        self.assertEqual(Path(self.flag(argv, "--add-dir")), scratch)
+        self.assertTrue(argv[argv.index("--add-dir") + 2].startswith("--"))
+        self.assertTrue(scratch.is_dir())
         self.assertEqual(self.flag(argv, "--max-budget-usd"), "20")
         self.assertEqual(self.flag(argv, "--output-format"), "json")
         self.assertNotIn("--resume", argv)
@@ -200,6 +208,93 @@ class RunImplementer(unittest.TestCase):
         self.assertEqual((self.run_dir / "session_id").read_text(), "sess-1")
         self.assertTrue((self.run_dir / "run.json").exists())
         self.assertTrue((self.run_dir / "run-1.json").exists())
+
+    def settings(self):
+        (call,) = self.calls_made()
+        return json.loads(Path(self.flag(call["argv"], "--settings")).read_text())
+
+    def test_the_call_is_sandboxed_to_the_worktree(self):
+        self.brief()
+        code, out = self.launch(self.worktree, self.run_dir)
+        self.assertEqual(code, 0, out)
+        settings = self.settings()
+        self.assertNotIn("${", json.dumps(settings))
+        sandbox = settings["sandbox"]
+        self.assertIs(sandbox["enabled"], True)
+        self.assertIs(sandbox["allowUnsandboxedCommands"], False)
+        self.assertEqual(sandbox["network"]["allowedDomains"], [])
+        common = (self.repo / ".git").resolve()
+        git_dir = common / "worktrees" / "spec"
+        tmp = subprocess.run(
+            ["getconf", "DARWIN_USER_TEMP_DIR"], capture_output=True, text=True, check=True
+        ).stdout.strip()
+        allow = sandbox["filesystem"]["allowWrite"]
+        deny = sandbox["filesystem"]["denyWrite"]
+        for path in (
+            self.worktree,
+            git_dir,
+            common / "objects",
+            common / "refs" / "heads" / "implement",
+            self.run_dir.parent / "scratch",
+            Path(tmp).resolve(),
+        ):
+            with self.subTest(allow=path):
+                self.assertIn(str(path), allow)
+        for path in ("config", "hooks"):
+            self.assertNotIn(str(common / path), allow)
+        for path in (
+            common / "config",
+            common / "hooks",
+            common / "HEAD",
+            common / "index",
+            common / "packed-refs",
+            common / "modules",
+            git_dir / "config.worktree",
+            git_dir / "commondir",
+            git_dir / "gitdir",
+            self.worktree / ".git",
+            self.worktree / ".claude",
+        ):
+            with self.subTest(deny=path):
+                self.assertIn(str(path), deny)
+        self.assertIn("~/.cache/implement-ledger", deny)
+        deny_rules = settings["permissions"]["deny"]
+        for rule in ("Bash(gh *)", "WebFetch", "WebSearch", "Edit(~/.cache/implement-ledger/**)"):
+            self.assertIn(rule, deny_rules)
+
+    def test_other_worktrees_are_denied_to_the_call(self):
+        self.brief()
+        other = self.home / "code" / "proj-worktrees" / "other"
+        git(self.repo, "worktree", "add", "-q", str(other), "-b", "other")
+        self.assertEqual(self.launch(self.worktree, self.run_dir)[0], 0)
+        deny = self.settings()["sandbox"]["filesystem"]["denyWrite"]
+        theirs = (self.repo / ".git").resolve() / "worktrees" / "other"
+        for name in ("commondir", "gitdir", "HEAD", "config.worktree", "index"):
+            with self.subTest(name=name):
+                self.assertIn(str(theirs / name), deny)
+        ours = (self.repo / ".git").resolve() / "worktrees" / "spec"
+        self.assertNotIn(str(ours / "HEAD"), deny)
+
+    def test_a_widening_user_setting_is_refused(self):
+        self.brief()
+        settings = self.home / ".claude" / "settings.json"
+        settings.parent.mkdir()
+        for sandbox, key in (
+            ({"excludedCommands": ["git *"]}, "excludedCommands"),
+            ({"enabled": False}, "enabled"),
+            ({"allowUnsandboxedCommands": True}, "allowUnsandboxedCommands"),
+            ({"filesystem": {"allowWrite": ["~/code"]}}, "allowWrite"),
+        ):
+            with self.subTest(sandbox=sandbox):
+                settings.write_text(json.dumps({"sandbox": sandbox}))
+                code, out = self.launch(self.worktree, self.run_dir)
+                self.assertEqual(code, 2, out)
+                self.assertIn(key, out)
+        self.assertEqual(self.calls_made(), [])
+        settings.write_text(
+            json.dumps({"sandbox": {"enabled": True, "excludedCommands": []}, "model": "x"})
+        )
+        self.assertEqual(self.launch(self.worktree, self.run_dir)[0], 0)
 
     def test_cap_and_model_from_the_environment(self):
         self.brief()

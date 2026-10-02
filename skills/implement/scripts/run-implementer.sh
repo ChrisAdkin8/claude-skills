@@ -31,11 +31,17 @@
 # On the user's default model, or on $RUN_AGENT_MODEL if it's set, as hooks/run-agent.sh does, so
 # the skill evals' per-model runs reach it.
 #
-# Why not run-agent.sh: its agents are read-only and sandboxed, and the agent sandbox denies Bash
-# writes under ~/code and inside .git, so a sandboxed implementer could neither edit nor commit.
-# This one runs outside the OS sandbox, as it would in the user's session, with the repo's own
-# settings, hooks and CLAUDE.md (--setting-sources user,project). Its separate session and the
-# worktree are its isolation; the sandboxed implement-verifier is the independent check.
+# Sandboxed: the implementer's Bash runs under skills/implement/implementer-settings.json, rendered
+# per call into the run dir with this run's paths. It may write only its worktree, its own git
+# dir, the repo's objects, the implement/* branches' refs, ~/.cache/implement-runs/<run name>/scratch
+# and the per-user temp dir; not the repo's shared config, hooks, HEAD or index, other worktrees'
+# git files, ~/.claude, ~/notes or the ledger; and it has no network. Its Edit and Write tools are
+# pre-approved only in the worktree and the scratch dir. Only the user's settings load
+# (--setting-sources user): a project hook runs outside the sandbox, and could run a file the
+# implementer rewrote. A user setting that would widen the sandbox refuses the run instead. Not
+# run-agent.sh: its agents are read-only, and the agent sandbox denies writes under ~/code. The
+# repo's CLAUDE.md and rules files the implementer reads itself; the sandboxed implement-verifier
+# is the independent check.
 set -euo pipefail
 
 die() { echo "run-implementer: $*" >&2; exit 2; }
@@ -101,12 +107,78 @@ else
   resume=()
 fi
 
+# The scratch dir: the one place outside the worktree the implementer may write (baseline.txt).
+scratch="$(dirname "$run")/scratch"
+mkdir -p "$scratch"
+# The macOS per-user temp dir: mktemp writes there, and without it this repo's suite fails.
+tmp=$(getconf DARWIN_USER_TEMP_DIR 2>/dev/null) && [ -d "$tmp" ] && tmp=$(cd "$tmp" && pwd -P) ||
+  die "couldn't find the per-user temp dir (getconf DARWIN_USER_TEMP_DIR)"
+
+# A user setting that could widen the --settings sandbox: whether it would is untested, so refuse.
+python3 - "$HOME/.claude/settings.json" <<'PY' || exit 2
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        settings = json.load(f)
+except FileNotFoundError:
+    sys.exit(0)
+except (OSError, ValueError) as e:
+    sys.exit(f"run-implementer: can't read {sys.argv[1]} to check its sandbox keys: {e}")
+box = settings.get("sandbox") if isinstance(settings, dict) else None
+box = box if isinstance(box, dict) else {}
+fs = box.get("filesystem") if isinstance(box.get("filesystem"), dict) else {}
+widening = [
+    key for key, bad in (
+        ("sandbox.enabled", box.get("enabled") is False),
+        ("sandbox.allowUnsandboxedCommands", box.get("allowUnsandboxedCommands") is True),
+        ("sandbox.excludedCommands", bool(box.get("excludedCommands"))),
+        ("sandbox.filesystem.allowWrite", bool(fs.get("allowWrite"))),
+    ) if bad
+]
+if widening:
+    sys.exit(f"run-implementer: {sys.argv[1]} sets {', '.join(widening)}, which could widen the"
+             " implementer's sandbox; remove it to run /implement")
+PY
+
+# The settings, with this run's paths, and each other worktree's git files denied too.
+"$plugin_root/hooks/agent-settings.py" "$plugin_root/skills/implement/implementer-settings.json" \
+  "$plugin_root" "IMPLEMENT_WORKTREE=$work" "IMPLEMENT_GIT_DIR=$git_dir" \
+  "IMPLEMENT_COMMON_DIR=$common" "IMPLEMENT_SCRATCH=$scratch" "IMPLEMENT_TMP=$tmp" \
+  > "$run/settings.rendered.json" || die "couldn't render the implementer's settings"
+python3 - "$run/settings.rendered.json" "$common" "$git_dir" > "$run/settings.json" <<'PY' ||
+import json, os, sys
+path, common, own = sys.argv[1:]
+settings = json.load(open(path))
+deny = settings["sandbox"]["filesystem"]["denyWrite"]
+worktrees = os.path.join(common, "worktrees")
+for name in sorted(os.listdir(worktrees)) if os.path.isdir(worktrees) else []:
+    theirs = os.path.join(worktrees, name)
+    if os.path.realpath(theirs) != own:
+        deny += [os.path.join(theirs, f) for f in ("commondir", "gitdir", "HEAD", "config.worktree", "index")]
+print(json.dumps(settings, indent=2))
+PY
+  die "couldn't add the other worktrees to the implementer's settings"
+rm -f "$run/settings.rendered.json"
+
 # The agent's definition as --agents takes it, and its own tools pre-approved, e.g.
 # "Read,Edit,Write,Glob,Grep,Bash,Skill": Bash too, so /simplify and /code-review can run their
 # own checks, which spike S2 found refused without it.
 "$plugin_root/hooks/agent-def.py" --root "$plugin_root" "$file" > "$run/agents.json" ||
   die "couldn't read the agent file $file"
-tools=$(python3 -c 'import json,sys;(a,)=json.load(open(sys.argv[1])).values();print(",".join(a["tools"]))' "$run/agents.json")
+# Edit and Write become Edit rules for the worktree and the scratch dir (an Edit rule covers Write).
+tools=$(python3 - "$run/agents.json" "$(basename "$(dirname "$run")")" <<'PY'
+import json, sys
+(agent,) = json.load(open(sys.argv[1])).values()
+edits = ["Edit(./**)", f"Edit(~/.cache/implement-runs/{sys.argv[2]}/scratch/**)"]
+tools = []
+for tool in agent["tools"]:
+    if tool in ("Edit", "Write"):
+        tools += [e for e in edits if e not in tools]
+    else:
+        tools.append(tool)
+print(",".join(tools))
+PY
+)
 [ -n "$tools" ] || die "no tools in $file"
 model=(${RUN_AGENT_MODEL:+--model "$RUN_AGENT_MODEL"})
 
@@ -123,7 +195,7 @@ cd "$work"
 status=0
 claude -p --agents "$run/agents.json" --agent implementer --output-format json --max-turns 400 \
   --max-budget-usd "$budget" --allowedTools "$tools" --permission-mode acceptEdits \
-  --setting-sources user,project --add-dir "$(dirname "$run")" "$plugin_root" --strict-mcp-config \
+  --setting-sources user --settings "$run/settings.json" --add-dir "$scratch" --strict-mcp-config \
   ${model[@]+"${model[@]}"} ${resume[@]+"${resume[@]}"} \
   -- "$prompt" < /dev/null > "$run/run.json" 2> "$run/run.err" || status=$?
 

@@ -79,3 +79,8 @@ Implementation holds: yes
 
 - implementer-run: W1: `python3 -m unittest tests.test_eval_runners.Runners tests.test_research_scripts.RepoHealth tests.test_no_stale_paths.NoStalePaths tests.test_replay_guard.Main` -> Ran 52 tests, OK (all 52 passed: the 24 the verifier couldn't run, plus the other tests in those four classes)
 - implementer-run: W1: `EVAL_MODEL=sonnet tests/skill-evals/run.sh implement-basic implement-trap`, then `EVAL_MODEL=opus` -> not run: paid `claude -p` evals, run by hand only, and the user hasn't asked for them; no `tests/agent-evals/BASELINE.md` section added
+
+## Implementation
+
+- 2026-10-03, W1 (46969a4): the paid skill evals (`implement-basic` and `implement-trap` on Sonnet and Opus) were not run, and no `tests/agent-evals/BASELINE.md` section was added, though W1's Files and third Done when ask for them. The user waived them on 2026-10-03: the new check acts only when `~/.claude/settings.json` sets a `sandbox.network` key, and the user's sets none, so the evals would run as before; the unit tests cover the new behaviour (V1 PASS). Still open from the implementer-sandbox spec, whose evals were also waived: one run of both cases on both models against the sandboxed implementer.
+- 2026-10-03, W1 (46969a4): `strictAllowlist` is refused with `is not True`, matching the launcher's existing `is True` / `is False` tests, as the delta review's row 2 suggested; the spec left `is not` or `!=` open. The commit message gives no reason.

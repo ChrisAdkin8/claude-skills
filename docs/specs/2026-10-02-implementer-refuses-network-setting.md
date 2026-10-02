@@ -1,7 +1,7 @@
 ---
 title: The implementer's launcher refuses a user setting that opens its sandbox to the network
 created: 2026-10-02
-status: in-progress # draft | reviewed | in-progress | done | superseded
+status: done # draft | reviewed | in-progress | done | superseded
 research: none
 idea: ~/notes/ideas/2026-10-02-implementer-refuses-network-setting.md
 read-at: 99e002e

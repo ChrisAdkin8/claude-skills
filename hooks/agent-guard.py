@@ -641,6 +641,10 @@ def simple_commands(toks):
                 i += 2
                 continue
             if set(tok) <= {"<"}:  # input redirection or a here-string: reads only
+                # `<` reads a file; after `<<` and `<<<` the word is text, not a path.
+                target = toks[i + 1] if i + 1 < len(toks) else ""
+                if tok == "<" and (reason := secret_word(target)):
+                    block(f"{reason}. {SECRET_BLOCK}")
                 i += 2
                 continue
             commands.append(current)
@@ -1115,10 +1119,16 @@ def check_reader(name, args):
 
 
 def expand_home(text):
-    """`~`, `$HOME` and `${HOME}` at the start of a path, as the shell would expand them."""
+    """`~`, `$HOME` and `${HOME}` at the start of a path, as the shell would expand them, and
+    `$PWD` or `${PWD}` as the hook's working directory."""
     for prefix in ("~/", "$HOME/", "${HOME}/"):
         if text.startswith(prefix):
             return str(HOME) + "/" + text[len(prefix) :]
+    for prefix in ("$PWD/", "${PWD}/"):
+        if text.startswith(prefix):
+            return CWD.rstrip("/") + "/" + text[len(prefix) :]
+    if text in ("$PWD", "${PWD}"):
+        return CWD
     return str(HOME) if text in ("~", "$HOME", "${HOME}") else text
 
 
@@ -1220,6 +1230,14 @@ def secret_reason(path):
     return None
 
 
+# The variables a path may start with that secret_word can still judge: expand_home knows them.
+KNOWN_VARS = ("$HOME", "${HOME}", "$PWD", "${PWD}")
+SECRET_BLOCK = (
+    "These agents read untrusted content, so they may not read secrets, which could leave in "
+    "a request URL, nor session history"
+)
+
+
 def secret_word(word):
     """Why a command word names a secret file or directory, or None.
 
@@ -1230,9 +1248,9 @@ def secret_word(word):
         text = FILE_URL.sub("", text or "")
         if not text or URL.match(text):
             continue
-        if "$" in text and not text.startswith(("$HOME", "${HOME}")):
+        if "$" in text and not text.startswith(KNOWN_VARS):
             continue
-        pathlike = "/" in text or text.startswith(("~", "$HOME", "${HOME}"))
+        pathlike = "/" in text or text.startswith(("~", *KNOWN_VARS))
         glob_at = next((i for i, ch in enumerate(text) if ch in "*?["), None)
         if glob_at is not None:
             if not pathlike:
@@ -1286,10 +1304,7 @@ def check_secrets(raw, argv):
         if word is pattern:
             continue
         if reason := secret_word(word):
-            block(
-                f"{reason}. These agents read untrusted content, so they may not read "
-                "secrets, which could leave in a request URL, nor session history"
-            )
+            block(f"{reason}. {SECRET_BLOCK}")
     recursive = name == "rg" or (
         searcher
         and any(

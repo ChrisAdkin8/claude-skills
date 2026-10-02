@@ -99,3 +99,4 @@ Needs a run: none
 - Baseline: claude plugin validate .claude-plugin/plugin.json -> pass (warnings only)
 - Baseline: tests/agent-evals/run.sh and tests/skill-evals/run.sh -> not run: paid, by hand (CLAUDE.md)
 - Drift WARN, no DRIFT line: docs/specs/spikes/2026-10-01-review-fixes-hand-run-results.md (added after read-at b9a37ae, committed in d7dea8b)
+- W1 (6a3fb3c): Done when `python3 -m unittest tests.test_agent_guard.CaseInsensitive` -> 10 failures first (`~/.Claude/projects`, `~/.AWS`, `X.TFVARS`, `K.PEM`, `FILE://`, the `~/.AW*` glob stem, `x/.SSH`, the Read/Grep/Glob of `~/.AWS`, `write` under `~/NOTES/research`, a `~/.Claude/plugins/cache/...` root as `OWN_ROOT`), all pass after; `python3 tests/replay_guard.py` -> exit 0 with no new difference, so nothing added to `tests/replay-accepted.txt`; suite pass (514 tests); scan clean

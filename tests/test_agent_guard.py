@@ -1102,6 +1102,36 @@ class CaseInsensitive(unittest.TestCase):
         self.assertEqual(self.run_guard("read", event, guard=guard)[0], 2)
 
 
+class RedirectsAndPwd(unittest.TestCase):
+    """An input redirect reads its target as surely as an argument does, and `$PWD` is the
+    hook's working directory, so both are judged like any other path."""
+
+    HOME = str(Path.home())
+
+    def bash(self, command, cwd=HOME):
+        return hook("bash", {"tool_input": {"command": command}, "cwd": cwd})[0]
+
+    def test_redirect_and_pwd_targets_blocked(self):
+        for command in (
+            "cat < ~/.claude/projects/x.jsonl",
+            "wc -l < ~/.aws/credentials",
+            "cat $PWD/.claude/projects/x",
+            "cat ${PWD}/.aws/config",
+        ):
+            with self.subTest(command=command):
+                self.assertEqual(
+                    self.bash(command), 2, f"expected blocked: {command!r}"
+                )
+
+    def test_ordinary_redirects_and_pwd_allowed(self):
+        for command in ('grep x <<< "$PWD"', "sort < /dev/null"):
+            with self.subTest(command=command):
+                self.assertEqual(
+                    self.bash(command), 0, f"expected allowed: {command!r}"
+                )
+        self.assertEqual(self.bash("cat < README.md", cwd=str(REPO)), 0)
+
+
 class HomeBehindALink(unittest.TestCase):
     """A home directory that is itself reached through a symlink (macOS's /var is /private/var):
     a path written either way is private, and a search from a link to the home is refused."""

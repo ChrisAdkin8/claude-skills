@@ -109,6 +109,13 @@ Needs a run: 2, 3, 4
 ## Implementation
 
 - 2026-10-02, W2 (fc3c551): `ledger.py` has a fourth command, `next-call <run name>`, beside Design's `append`, `spent` and `path`, so the launcher takes its call number from the helper rather than parsing the ledger itself; `append` also refuses a line the ledger's rules would refuse (a repeated call number, an end with no start), so a bad line is never written.
+- 2026-10-02, W1 (166b752): the `x=1` and `X` test passed before the change as well as after, so it never failed first as the Done when says: the old script already refused any third argument. The commit message gives no reason; the reason is in the record's Evidence and V1's table.
+- 2026-10-02, W2 (fc3c551): the test that a `verifier V1` line leaves a resume's budget alone also passed before the change, because the old launcher read no ledger. The commit message gives no reason; the reason is in the record's Evidence and V1's table.
+- 2026-10-02, W5 (a9716e7): after each call, a submodule config under `<git dir>/modules/` is also refused if it sets `include.path` or `includeIf.*.path`, which Design's list leaves out. The commit message gives no reason. The code's comment says an included file isn't followed when keys are read, and could set any of the listed keys.
+- 2026-10-02, W5 (a9716e7): a `*.sample` file in a submodule's `hooks/` dir is no longer refused, though Design says any entry there is. The commit message gives no reason. The code's comment says git copies its template's sample hooks into every submodule it clones, and never runs a hook with that name.
+- 2026-10-02, W2 and W5 (a9716e7): the snapshot is taken before the ledger's start line, not after it, so a call whose snapshot fails is never charged. The commit message gives no reason; the reason is from the code's comment.
+- 2026-10-02, W4 and W5 (a9716e7): code review found two gaps and left them open, recorded in Evidence. A user's `sandbox.network.allowedDomains` isn't refused, although it is another key that widens the sandbox. And the user's own `git push -u`, or a worktree they add during a run, makes the run exit 4, against Design's claim that the user's own git use changes none of the watched files.
+- 2026-10-02, W4 (15b9b28) and W6 (792cd7e): the paid checks were not run: W4's hand run of the suite under the rendered settings, W6's skill evals and agent evals on both models, and W6's dated `tests/agent-evals/BASELINE.md` section. The user waived them on 2026-10-02 ("ignore paid for tests"). The user ran W6's `python3 tests/replay_guard.py` from the worktree the same day: exit 0, with 0 headless commands' verdicts changed (36 accepted).
 
 ## Evidence
 

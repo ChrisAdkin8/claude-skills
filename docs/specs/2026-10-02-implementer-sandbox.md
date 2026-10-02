@@ -1,7 +1,7 @@
 ---
 title: The implementer runs sandboxed, and its spend goes in a ledger it can't write
 created: 2026-10-02
-status: in-progress # draft | reviewed | in-progress | done | superseded
+status: done # draft | reviewed | in-progress | done | superseded
 research: none
 idea: none
 read-at: b4e9749

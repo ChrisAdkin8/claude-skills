@@ -17,3 +17,4 @@ What happened to [2026-10-02-implement-git-safeguard](../2026-10-02-implement-gi
 - Baseline: `claude plugin validate . --json` -> pass (only the expected plugin.json version warning)
 - Baseline: `claude plugin validate .claude-plugin/plugin.json` -> pass (expected warnings only)
 - Baseline: `python3 tests/replay_guard.py` -> pass
+- W1 (505169e): Done when `python3 -m unittest tests.test_implement_skill` -> pass (5 tests); failed first against the unchanged `skills/implement/SKILL.md`, 11 failures: the commands at :50, :59 (worktree add, add, commit), :60 and :99 (add, commit, status) lacked both flags, and the tool rules didn't name them; `python3 -m unittest discover -s tests` -> pass (557); `EVAL_MODEL=sonnet|opus tests/skill-evals/run.sh implement-basic implement-trap` -> not run: paid evals, run by hand (a `not run` section is in `tests/agent-evals/BASELINE.md` for their results); suite pass; scan clean

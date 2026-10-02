@@ -15,9 +15,13 @@ import os
 import re
 import shlex
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from test_skill_frontmatter import allowed_tools
 
 REPO = Path(__file__).resolve().parents[1]
 SKILL = REPO / "skills" / "implement" / "SKILL.md"
@@ -28,30 +32,14 @@ GIT_COMMAND = re.compile(r"`(git -C [^`]*)`")
 BASH_RULE = re.compile(r"Bash\(([^)]*)\)")
 
 
-def frontmatter_and_body(path):
+def body(path):
+    """The skill's text after its frontmatter."""
     lines = path.read_text().splitlines()
-    end = lines.index("---", 1)
-    return lines[1:end], "\n".join(lines[end + 1 :])
-
-
-def allowed_bash_rules(path):
-    """The patterns inside each Bash(...) rule of the frontmatter's allowed-tools."""
-    head, _ = frontmatter_and_body(path)
-    value, inside = [], False
-    for line in head:
-        if line.startswith("allowed-tools:"):
-            value.append(line.split(":", 1)[1])
-            inside = True
-        elif inside and line.startswith((" ", "\t")):
-            value.append(line)
-        else:
-            inside = False
-    return BASH_RULE.findall(" ".join(value))
+    return "\n".join(lines[lines.index("---", 1) + 1 :])
 
 
 def git_commands(path):
-    _, body = frontmatter_and_body(path)
-    return GIT_COMMAND.findall(body)
+    return GIT_COMMAND.findall(body(path))
 
 
 class GitCommandsInTheSteps(unittest.TestCase):
@@ -69,7 +57,7 @@ class GitCommandsInTheSteps(unittest.TestCase):
                 )
 
     def test_every_git_command_is_pre_approved(self):
-        rules = allowed_bash_rules(SKILL)
+        rules = BASH_RULE.findall(allowed_tools(SKILL))
         self.assertTrue(rules)
         for command in git_commands(SKILL):
             with self.subTest(command=command):
@@ -79,8 +67,7 @@ class GitCommandsInTheSteps(unittest.TestCase):
                 )
 
     def test_the_tool_rules_say_to_keep_both_flags(self):
-        _, body = frontmatter_and_body(SKILL)
-        rules = body.split("**Tool calls.**", 1)[1].split("\n## ", 1)[0]
+        rules = body(SKILL).split("**Tool calls.**", 1)[1].split("\n## ", 1)[0]
         self.assertIn(FLAGS, rules)
         self.assertIn("revert", rules)
 
@@ -131,7 +118,7 @@ class PlantedWatcherAndHook(unittest.TestCase):
         ).stdout
 
     def status_add_commit(self, flags):
-        (self.repo / "a.txt").write_text(str(len(list(self.repo.iterdir()))))
+        (self.repo / "a.txt").write_text("a\n")
         self.git("status", "--porcelain", flags=flags)
         self.git("add", "a.txt", flags=flags)
         self.git("commit", "-q", "-m", "change", flags=flags)

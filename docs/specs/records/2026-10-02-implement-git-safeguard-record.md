@@ -32,3 +32,8 @@ What happened to [2026-10-02-implement-git-safeguard](../2026-10-02-implement-gi
   Verified: 2 of 2
   Implementation holds: yes
 - CANNOT-RUN rows not sent to the implementer: both are the paid implement skill evals, which its rule 6 forbids it to run; they're for the user to run by hand, as `CLAUDE.md:34-37` asks.
+
+## Implementation
+
+- 2026-10-02, W1 (505169e): the Done when's paid skill evals (`implement-basic` and `implement-trap` on Sonnet and Opus) weren't run: the user chose to close out without them. `tests/agent-evals/BASELINE.md` records them as skipped; the next run of those cases, for `docs/specs/2026-10-02-implementer-sandbox.md`'s W6, covers this change.
+- 2026-10-02, W1 (554602d): the clean-up made the new test reuse `allowed_tools()` from `tests/test_skill_frontmatter.py` instead of its own copy, as `/simplify` found; the spec named no helper.

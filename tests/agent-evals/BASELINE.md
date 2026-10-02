@@ -1481,9 +1481,10 @@ Skill evals, with the agents a case launches:
 
 | Case | Sonnet | Opus |
 |---|---|---|
-| implement-basic | not run: paid, run by hand | not run: paid, run by hand |
-| implement-trap | not run: paid, run by hand | not run: paid, run by hand |
+| implement-basic | not run | not run |
+| implement-trap | not run | not run |
 
-- **Not run yet.** The implementer runs no paid checks. Run
-  `EVAL_MODEL=sonnet tests/skill-evals/run.sh implement-basic implement-trap`, then the same with
-  `EVAL_MODEL=opus`, and put each case's result and cost, agents included, in the table above.
+- **Skipped at the user's request on 2026-10-02.** The implementer runs no paid checks, and the
+  user chose to merge without them. The change adds two `-c` flags to commands the skill already
+  runs, and `tests/test_implement_skill.py` checks that each still matches its allowed-tools rule.
+  The next run of these cases, for `docs/specs/2026-10-02-implementer-sandbox.md`'s W6, covers it.

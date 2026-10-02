@@ -1,7 +1,7 @@
 ---
 title: /implement runs its own git commands with the file watcher and hooks off
 created: 2026-10-02
-status: in-progress # draft | reviewed | in-progress | done | superseded
+status: done # draft | reviewed | in-progress | done | superseded
 research: none
 idea: none
 read-at: c8270b4

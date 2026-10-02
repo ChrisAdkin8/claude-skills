@@ -9,9 +9,9 @@ around an agent that does. So the agent files aren't in the agents directory Cla
 would offer them; `run-agent.sh` passes each one to its own run. Two layers contain them.
 
 - **The sandbox** ([`hooks/agent-sandbox.json`](../hooks/agent-sandbox.json)): Claude Code's
-  operating-system sandbox. Shell commands can't read credentials or secret environment variables,
-  can't write under `~/code`, `~/notes` or `~/.claude`, and can reach only an allowed list of
-  websites. The committed file names the research scripts with `${CLAUDE_PLUGIN_ROOT}`, which
+  operating-system sandbox. Shell commands can't read credentials, secret environment variables or
+  anything under `~/.claude` except the plugin's own root (re-opened with `allowRead`), can't write
+  under `~/code`, `~/notes` or `~/.claude`, and can reach only an allowed list of websites. The committed file names the research scripts with `${CLAUDE_PLUGIN_ROOT}`, which
   Claude Code doesn't expand in `--settings`, so [`hooks/agent-settings.py`](../hooks/agent-settings.py)
   renders it with the repo's absolute path for each run, and `run-agent.sh` passes the result. An
   `excludedCommands` entry matches a call only as written, so the rendered file lists the absolute
@@ -22,9 +22,14 @@ would offer them; `run-agent.sh` passes each one to its own run. Two layers cont
   could trick an agent into sending them out in a web address. It also hides session history (past
   conversations and earlier agent runs), so a verifier or cold reviewer can't see how the document
   it checks was written. If the guard itself fails, it refuses the call rather than letting it
-  through. It finds the repo from its own location, and keeps `~/.claude/plugins/` private to
-  agents, other plugins' caches and marketplace clones included, except its own root when the repo
-  is installed there. Only the guard enforces that exception: a sandbox deny can't name it.
+  through. It finds the repo from its own location, and treats `~/.claude` as an allow-list: an
+  agent may read only its own session's saved tool output and the guard's own root, when the repo
+  is installed there. Everything else there is refused, other plugins' caches, settings and
+  Claude Code's state included. It compares paths ignoring upper and lower case, as macOS does,
+  and checks the file an input redirect reads. For the Read tool, the guard is the only check on
+  most of `~/.claude`: a permission deny beats any allow, so it can't leave those two exceptions
+  open. The agent reads its saved output with the Read tool, since the sandbox refuses it to shell
+  commands.
 
 ## What runs outside the sandbox
 

@@ -3,12 +3,27 @@
 What changed, by day, drawn from the commit history. The repo has no releases or tags, so each
 section is a date. Within a day, changes are grouped by area.
 
+## 2026-10-03
+
+One spec built with `/implement`, `docs/specs/2026-10-02-implementer-refuses-network-setting.md`,
+merged locally after pull request #51. The implement skill evals, owed since the two `/implement`
+specs of 2026-10-02, were run on both models and passed (`tests/agent-evals/BASELINE.md`).
+
+### Security
+
+- The implementer refuses to start if your `~/.claude/settings.json` sets any `sandbox.network`
+  key to a value that isn't empty, or sets `strictAllowlist` to anything but `true`, and names the
+  key. Before, your own allowed domains, sockets or proxy could reach the implementer's shell,
+  which is meant to have no network.
+
 ## 2026-10-02
 
-Two specs built with `/implement` and merged locally, with no pull request:
-`docs/specs/2026-10-01-review-parser.md` and `docs/specs/2026-10-02-guard-path-identity.md`. The
-second changed the agents' sandbox and an agent file, but the agent and skill evals weren't run
-for it, by choice; its record says so and gives the commands.
+Four specs built with `/implement` and merged locally, with no pull request:
+`docs/specs/2026-10-01-review-parser.md`, `docs/specs/2026-10-02-guard-path-identity.md`,
+`docs/specs/2026-10-02-implement-git-safeguard.md` and
+`docs/specs/2026-10-02-implementer-sandbox.md`. The second changed the agents' sandbox and an agent
+file, and the last two changed `/implement`, but the agent and skill evals weren't run for them, by
+choice; their records say so and give the commands. The implement skill evals ran on 2026-10-03.
 
 ### Security
 
@@ -24,6 +39,19 @@ for it, by choice; its record says so and gives the commands.
   of `~/.claude` to the agents' shell commands except the plugin's folder. An agent reads its saved
   output with the Read tool; a shell read of it is refused.
 - `run-agent.sh` and the agent evals no longer add `~/.claude` as a working directory.
+- `/implement`'s implementer runs in a sandbox of its own, with no network. Its shell commands may
+  write only its worktree, that worktree's git files, the repo's objects and `implement/*`
+  branches, a scratch folder and the temp folder, not the repo's shared git config or hooks,
+  `~/.claude` or `~/notes`. Only your own settings load, not the repo's, and a setting in yours
+  that could widen the sandbox refuses the run.
+- A run that changed the repo's shared git config, hooks or a worktree's git pointers exits 4,
+  and `/implement` acts on nothing from it.
+- The implementer's spend goes in a ledger it can't write,
+  `~/.cache/implement-ledger/<repo>--<spec>.jsonl`. The $20 cap covers every run of a spec until
+  you remove the ledger, so a forged, missing or reset cost no longer raises it.
+- `/implement`'s own git commands run with git's file watcher and hooks turned off
+  (`-c core.fsmonitor=false -c core.hooksPath=/dev/null`), so a command planted in the repo's git
+  config can't run in its session.
 
 ### Fixed
 

@@ -64,7 +64,8 @@ Each agent runs as a headless, sandboxed session: read `${CLAUDE_PLUGIN_ROOT}/ho
 4. **Where the spec goes.** Read `CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md`, `docs/*method*`, `docs/*process*`, `docs/adr*`, and look for `prompts/`, `docs/specs/`, `docs/design/`, `rfcs/`.
    Follow a repo convention exactly (location, filename, sections, style, process); otherwise write `docs/specs/YYYY-MM-DD-short-slug.md` from `${CLAUDE_PLUGIN_ROOT}/skills/spec/template.md`.
 5. **Existing specs.** `grep -ril '<key terms>'` in the spec location. If one covers this, ask whether to update it or write a new one. Never rewrite a spec marked done or superseded.
-6. **Fresh session.** If this conversation has been building in this repo, suggest a fresh one.
+
+Stay in this session. The verifier and cold reviewer are agents that never see this conversation, so a fresh session adds nothing.
 
 Tell the user in one or two lines: the research note, the option, and where the spec will land.
 
@@ -146,7 +147,7 @@ If a cold review is saved, stop after step 5's item 5 and report as its item 7 d
    - Log a later change to a work item, Done when, the Design or the Decision the same way, `from spike S<n>` or `from the user`. No second full cold review; the one delta review of the `Not reviewed:` lines is `/cold-review <spec>`.
 5. **Spikes.** Unless Spike questions says "None.", offer step 7.
 6. **Next**, always: step 7, if it runs; `/spec finish <spec>` only after hand edits; `/cold-review <spec>` if there are `Not reviewed:` lines; `status: reviewed`; implement.
-   Give the hand-off only once `check-spec.py` passes with `status: reviewed`: commit the spec, its record and its spike results (if any), then run `/implement <spec path>`. It checks them, implements the work items test first on a branch of its own, `implement/<spec basename>`, in a worktree beside the repo, and has each Done when re-run by a verifier. Then `/spec done <spec>`, run from that worktree.
+   Give the hand-off only once `check-spec.py` passes with `status: reviewed`: commit the spec, its record and its spike results (if any), then run `/implement <spec path>` in this same session. It checks them, implements the work items test first on a branch of its own, `implement/<spec basename>`, in a worktree beside the repo, and has each Done when re-run by a verifier. Then, still in this session, `/spec done <the spec's path in that worktree>`.
 
 ## 7. Spike
 

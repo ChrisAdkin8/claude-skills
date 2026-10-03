@@ -234,9 +234,9 @@ The six stages match the diagram.
    the branch. It never pushes or merges.
    ([tools spec](docs/specs/2026-09-26-implement-skill-1-tools.md),
    [skill spec](docs/specs/2026-09-26-implement-skill-2-skill.md))
-6. **Close out: `/spec done <spec>`**, run from `/implement`'s worktree, notes in the record
-   where the implementation left the spec, marks the spec done, and points out any research the
-   implementation proved wrong.
+6. **Close out: `/spec done <spec>`**, given the spec's path in `/implement`'s worktree and run in
+   the same session, notes in the record where the implementation left the spec, marks the spec
+   done, and points out any research the implementation proved wrong.
 
 ### Smaller changes: `/spec quick`
 

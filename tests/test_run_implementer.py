@@ -284,16 +284,28 @@ class RunImplementer(unittest.TestCase):
             ({"enabled": False}, "enabled"),
             ({"allowUnsandboxedCommands": True}, "allowUnsandboxedCommands"),
             ({"filesystem": {"allowWrite": ["~/code"]}}, "allowWrite"),
+            ({"network": {"allowedDomains": ["github.com"]}}, "allowedDomains"),
+            ({"network": {"allowLocalBinding": True}}, "allowLocalBinding"),
+            ({"network": {"strictAllowlist": False}}, "strictAllowlist"),
+            ({"network": {"strictAllowlist": None}}, "strictAllowlist"),
         ):
             with self.subTest(sandbox=sandbox):
                 settings.write_text(json.dumps({"sandbox": sandbox}))
                 code, out = self.launch(self.worktree, self.run_dir)
                 self.assertEqual(code, 2, out)
                 self.assertIn(key, out)
+        # strictAllowlist: true is what the implementer sets, so only the other key is named.
+        network = {"strictAllowlist": True, "httpProxyPort": 8080}
+        settings.write_text(json.dumps({"sandbox": {"network": network}}))
+        code, out = self.launch(self.worktree, self.run_dir)
+        self.assertEqual(code, 2, out)
+        self.assertIn("httpProxyPort", out)
+        self.assertNotIn("strictAllowlist", out)
         self.assertEqual(self.calls_made(), [])
-        settings.write_text(
-            json.dumps({"sandbox": {"enabled": True, "excludedCommands": []}, "model": "x"})
-        )
+        network = {"allowedDomains": [], "strictAllowlist": True}
+        settings.write_text(json.dumps(
+            {"sandbox": {"enabled": True, "excludedCommands": [], "network": network}, "model": "x"}
+        ))
         self.assertEqual(self.launch(self.worktree, self.run_dir)[0], 0)
 
     def stub_does(self, code):

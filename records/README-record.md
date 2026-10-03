@@ -123,3 +123,4 @@ Needs a run: none
 - Not reviewed: Safety and cost says the implementer's $20 cap covers every `/implement` run of a spec until its cost ledger, `~/.cache/implement-ledger/<repo>--<spec>.jsonl`, is removed by hand, not only one run and its resumes, on 2026-10-02.
 - Not reviewed: From idea to merged change's step 6 says to give `/spec done` the spec's path in `/implement`'s worktree and run it in the same session, not to run it from the worktree, on 2026-10-03.
 - Not reviewed: Safety and cost says the implementer refuses to start, naming the setting, if your own `~/.claude/settings.json` sets something that could widen its sandbox, such as a `sandbox.network` entry, after the implementer-refuses-network-setting change, on 2026-10-03.
+- Not reviewed: Safety and cost's paragraph on what runs outside the sandbox is rewrapped to the file's line width; no wording changed, on 2026-10-04.

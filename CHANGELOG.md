@@ -6,8 +6,17 @@ section is a date. Within a day, changes are grouped by area.
 ## 2026-10-03
 
 One spec built with `/implement`, `docs/specs/2026-10-02-implementer-refuses-network-setting.md`,
-merged locally after pull request #51. The implement skill evals, owed since the two `/implement`
-specs of 2026-10-02, were run on both models and passed (`tests/agent-evals/BASELINE.md`).
+merged locally after pull request #51, and pull request #52, merged on GitHub. The implement skill
+evals, owed since the two `/implement` specs of 2026-10-02, were run on both models and passed
+(`tests/agent-evals/BASELINE.md`). The evals weren't run for #52.
+
+### Changed
+
+- The workflow stays in one session. `/spec` no longer suggests a fresh session, and its
+  hand-off, `/implement`'s report and `/spec done` give the spec's path in the worktree, so
+  `/spec done` runs in the same session instead of one started from the worktree. `/cold-review`
+  no longer offers `prompt` mode just because this session wrote the document: its reviewer never
+  sees the conversation anyway.
 
 ### Security
 

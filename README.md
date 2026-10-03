@@ -359,8 +359,8 @@ servers, isn't checked by the guard either. `/implement`'s implementer has to ed
 code, so it has a sandbox of its own: it may write its worktree and that branch's git files, with
 no network, but not your repo's shared git settings or anything outside. If your own
 `~/.claude/settings.json` sets something that could widen that sandbox, such as a `sandbox.network`
-entry, it refuses to start and names the setting. The guard doesn't check it, and your own hooks still run outside its sandbox. Only use it on your own repos and reviewed
-specs. [How the agents are contained](docs/containment.md) lists them all.
+entry, it refuses to start and names the setting. The guard doesn't check it, and your own hooks
+still run outside its sandbox. Only use it on your own repos and reviewed specs. [How the agents are contained](docs/containment.md) lists them all.
 
 What things cost:
 

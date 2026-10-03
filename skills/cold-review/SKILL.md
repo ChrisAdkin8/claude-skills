@@ -56,8 +56,9 @@ reviewer runs, and in the final report. When it returns, carry on from the first
      with the document's folder and basename.
 3. **Its repo**: `repo:` and `head:` from the script. If `${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py -C <repo>
    status --porcelain` shows the document or its code uncommitted, say so in one line.
-4. **Who wrote it.** If this session wrote or edited it, say so in one line and offer `prompt`
-   mode.
+4. **Who wrote it.** If this session wrote or edited it, say so in one line and carry on: the
+   reviewer is an agent that never sees this conversation, so it stays cold. Don't suggest
+   `prompt` mode unless the user asks for it.
 
 ## 2. Read the document in full
 

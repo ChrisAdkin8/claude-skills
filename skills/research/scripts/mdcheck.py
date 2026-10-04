@@ -259,18 +259,18 @@ def _find_review(lines, ends):
     """(start, end, date) of the review under `## Cold review`, ending at the first heading in
     `ends` (else the end of the file), or None if there isn't one with its `Reviewed on` line."""
     code = in_code(lines)
-    start = next(
+    # The first such heading with its `Reviewed on` line: a stray one above mustn't hide it.
+    start, m = next(
         (
-            i
+            (i, m)
             for i, l in enumerate(lines)
-            if not code[i] and heading_is(l, "## Cold review")
+            if not code[i]
+            and heading_is(l, "## Cold review")
+            and (m := REVIEWED_ON.match(_first_text(lines, i)))
         ),
-        None,
+        (None, None),
     )
     if start is None:
-        return None
-    m = REVIEWED_ON.match(_first_text(lines, start))
-    if not m:
         return None
     end = next(
         (

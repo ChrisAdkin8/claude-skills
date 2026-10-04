@@ -394,6 +394,16 @@ class RunImplementer(unittest.TestCase):
         self.assertIn(f"moved during the run: refs/heads/{branch} ", out)
         self.assertNotIn("implement/spec", out.split("moved during the run:", 1)[1].splitlines()[0])
 
+    def test_a_repo_with_many_refs_is_not_refused(self):
+        # The before-snapshot holds every ref. Passed on the command line, 20,000 of them were
+        # over macOS's 1 MB argument limit, so every call exited 4.
+        self.brief()
+        head = git(self.repo, "rev-parse", "HEAD").strip()
+        refs = "".join(f"{head} refs/tags/t{n:05}\n" for n in range(20000))
+        (self.repo / ".git" / "packed-refs").write_text(refs)
+        code, out = self.launch(self.worktree, self.run_dir)
+        self.assertEqual(code, 0, out)
+
     def test_cap_and_model_from_the_environment(self):
         self.brief()
         self.env["IMPLEMENT_MAX_USD"] = "5"

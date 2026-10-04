@@ -8,8 +8,8 @@
 #   <worktree>  a linked git worktree of a repo under ~/code, itself under ~/code
 #   <run dir>   ~/.cache/implement-runs/<repo dir>--<spec basename>/implementer, holding brief.md
 #               (written first by /implement). The run writes reply.md (the implementer's reply),
-#               run.json, run.err and session_id there, and keeps each call's run.json as
-#               run-<n>.json.
+#               run.json, run.err, session_id and snapshot.json (git's state before a call)
+#               there, and keeps each call's run.json as run-<n>.json.
 #   --resume    send followup.md from the run dir to the same session instead, keeping the
 #               previous reply as reply-<n>.md
 #
@@ -330,7 +330,7 @@ def programs():
 if len(sys.argv) == 4:
     print(json.dumps({"watched": watched(), "refs": refs()}))
 else:
-    before = json.loads(sys.argv[4])
+    before = json.load(open(sys.argv[4]))  # a file: every ref is too long for argv
     now = watched()
     for path in sorted(set(now) | set(before["watched"])):
         if now.get(path, "missing") != before["watched"].get(path, "missing"):
@@ -349,7 +349,7 @@ PY
 # by the end of the call is a write the sandbox should have stopped.
 sha() { shasum -a 256 < "$ledger" | cut -d' ' -f1; }
 # The snapshot first: if it can't be taken, the call never starts, so nothing is charged.
-taken=$(snapshot) || die "couldn't read the repo's git config and hooks before the call"
+snapshot > "$run/snapshot.json" || die "couldn't read the repo's git config and hooks before the call"
 call=$("$ledger_py" next-call "$run_name") || die "couldn't read the ledger $ledger"
 "$ledger_py" append "$run_name" \
   "{\"who\": \"implementer\", \"call\": $call, \"event\": \"start\", \"budget\": $budget}" ||
@@ -388,7 +388,7 @@ n=1; while [ -e "$run/run-$n.json" ]; do n=$((n + 1)); done
 cp "$run/run.json" "$run/run-$n.json"
 
 # Exit 4 on anything that can make git run a program or point elsewhere; refs are only named.
-diff=$(snapshot "$taken") || diff="changed: couldn't read the repo's git config and hooks after the call"
+diff=$(snapshot "$run/snapshot.json") || diff="changed: couldn't read the repo's git config and hooks after the call"
 sed -n 's/^moved: /run-implementer: moved during the run: /p' <<< "$diff"
 changed=$(grep -v -e '^moved: ' -e '^$' <<< "$diff" || true)
 if [ -n "$changed" ]; then

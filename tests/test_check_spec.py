@@ -927,6 +927,7 @@ class GateLoopholes(unittest.TestCase):
         # A full stop or other punctuation after a placeholder leaves it a placeholder.
         for placeholder in (
             "TBD", "TODO", "?", "...", "TBD.", "TODO.", "n/a.", "TBC!", "TBD …",
+            "—", "–", "-", "--", "none", "None.",
         ):  # fmt: skip
             with self.subTest(placeholder=placeholder):
                 out, result = check(base.replace("the tests pass.", placeholder))

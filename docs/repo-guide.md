@@ -31,12 +31,18 @@ runs a copy in Claude Code's plugin cache, which an edit here doesn't reach.
 | `skills/spec/scripts/run-spike.sh` | launches a spike |
 | `skills/cold-review/` | `/cold-review`; `/spec` builds its cold review from this skill's instructions |
 | `skills/cold-review/scripts/review-state.py` | works out which review a document is due, and what has changed since its last one |
+| `skills/implement/` | `/implement`; `verifier.md` holds the rules the `implement-verifier` follows |
+| `skills/implement/implementer-settings.json`, `verify-settings.json` | the implementer's and the verifier's sandbox and permission settings |
+| `skills/implement/scripts/run-implementer.sh` | launches the implementer in its worktree, and checks what the call changed in the repo's git dir |
+| `skills/implement/scripts/ledger.py` | the cost ledger that caps every implementer call for one spec |
+| `skills/implement/scripts/scan-diff.py` | flags a skipped, deleted, loosened or mocked test, a silenced linter, or a file outside a work item, in a diff |
+| `skills/implement/scripts/prepare-verify.sh`, `run-verify.sh` | make the verifier's scratch copy and launch it |
 
 ### The agents and their containment
 
 | Path | What it is |
 |---|---|
-| `hooks/agents/` | `researcher`, `research-verifier`, `spec-verifier`, `cold-reviewer`; `run-agent.sh` passes each one to `claude` per run |
+| `hooks/agents/` | `researcher`, `research-verifier`, `spec-verifier`, `cold-reviewer`, which `run-agent.sh` passes to `claude` per run, and `implementer`, which `run-implementer.sh` does |
 | `hooks/agent-def.py` | turns an agent file into the definition `claude --agents` takes |
 | `hooks/run-agent.sh` | launches an agent; exits with code 3 when a reply lacks its expected ending, so an error is never mistaken for a verdict |
 | `hooks/run-agent.md` | how `/research`, `/spec` and `/cold-review` run an agent with `run-agent.sh` and read its reply |
@@ -44,7 +50,7 @@ runs a copy in Claude Code's plugin cache, which an edit here doesn't reach.
 | `hooks/agent-settings.py` | renders a settings file with `${CLAUDE_PLUGIN_ROOT}` replaced by the repo's absolute path; `run-agent.sh` and both eval runners pass the result to `--settings` |
 | `hooks/agent-sandbox.md`, `sandbox-prompt.py` | the rules added to every agent's instructions |
 | `hooks/agent-guard.py` | the guard ([how the agents are contained](containment.md)) |
-| `hooks/git-read.py` | runs read-only git commands for `/research`, `/spec` and `/cold-review` |
+| `hooks/git-read.py` | runs read-only git commands for `/research`, `/spec`, `/cold-review` and `/implement` |
 
 ### Docs, tests and the rest
 
@@ -62,7 +68,7 @@ runs a copy in Claude Code's plugin cache, which an edit here doesn't reach.
 | `tests/mine-sessions.py` | reports how the skills and agents went in real use, from Claude Code's session logs |
 | `tests/agent-evals/` | runs the verifiers and the cold reviewer against documents with planted mistakes, and the researcher on sample questions |
 | `tests/skill-evals/` | runs whole skills against throwaway repos |
-| `.github/workflows/tests.yml` | runs the unit tests, ruff and shellcheck on each push to `main` and each pull request |
+| `.github/workflows/tests.yml` | runs the unit tests, ruff, shellcheck and `claude plugin validate` on each push to `main` and each pull request |
 | `CHANGELOG.md` | what changed, by day |
 | `CLAUDE.md` | the rules for working in this repo |
 
@@ -95,11 +101,12 @@ before you share it.
 
 | Eval set | Cost per run, one model | Cap |
 |---|---|---|
-| Agent evals, all eleven cases | about $4.50 ($4.52 on 2026-09-28) | $5 a case, $10 for `research-ideas` |
-| Skill evals, per case | about $0.30 | $3 a case |
-| Skill evals that launch agents (`spec-quick`, `research-quick-flow`) | about $0.60 to $1.20 each | $3 a case |
+| Agent evals, all eleven cases | $1.89 on Sonnet, $4.22 on Opus (2026-10-01) | $5 a case, $10 for `research-ideas` |
+| Skill evals, per case | about $0.15 to $0.45 | $3 a case |
+| Skill evals that launch agents (`spec-quick`, `research-quick-flow`, `implement-basic`, `implement-trap`) | about $0.35 to $1.30 each, agents included | $3 a case, plus $2 for each agent it launches; under `implement-*`, $5 for the implementer and each verifier |
 
-Both sets on both models cost about **$11** a round on 2026-09-28.
+Both sets on both models cost **$22.78** on 2026-10-01, reruns included. The implement cases alone
+cost $3.04 on both models on 2026-10-03.
 
 The agent-eval cases run at the same time, so a run that goes wrong can cost far more than the
 typical figure. A cap stops a run only after the turn that crosses it: a *turn* is one step of a

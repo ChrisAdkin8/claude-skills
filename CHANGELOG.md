@@ -3,6 +3,29 @@
 What changed, by day, drawn from the commit history. The repo has no releases or tags, so each
 section is a date. Within a day, changes are grouped by area.
 
+## 2026-10-04
+
+Three fixes from a review of the whole repo, each on its own branch, merged locally with no pull
+request, and one quick spec, `docs/specs/2026-10-04-replay-guard-settings-jq-read.md`, not built
+yet. Two fixes changed `/implement`'s scripts and one its steps, but the implement skill evals
+weren't run for them, by choice.
+
+### Fixed
+
+- `/implement` can be resumed in a new session. On resume its Gate refused to go on while the
+  spec's record had changes not yet committed, but the implementer always leaves its evidence lines
+  there uncommitted, so a run stopped by a question or a closed session couldn't carry on.
+- The implementer no longer stops every call with a false alarm in a repo with many refs. Its
+  before-call snapshot of the git dir, which lists every ref, went to Python as one command-line
+  argument, and with about 14,000 refs (many tags or fetched pull requests) that passed macOS's
+  1 MB limit.
+
+### Security
+
+- `scan-diff.py` reads a diff's lines as git does, split only at a newline. A form feed or a few
+  other characters also split a line before, and the part after it went unchecked, so a test
+  skipped, a test deleted or a linter silenced behind one raised no flag.
+
 ## 2026-10-03
 
 One spec built with `/implement`, `docs/specs/2026-10-02-implementer-refuses-network-setting.md`,

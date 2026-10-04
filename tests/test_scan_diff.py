@@ -668,6 +668,26 @@ class StagedChanges(unittest.TestCase):
     def test_more_ways_to_silence_a_linter(self):
         self.scan_added_lines(SILENCERS, NOT_SILENCERS, "silenced")
 
+    def test_only_a_newline_ends_a_diff_line(self):
+        # Python's splitlines() also breaks at a form feed or U+2028, which git doesn't: the
+        # piece after the break had no +/- prefix and was dropped, so the test really skipped.
+        code, out, err = self.scan_staged(
+            {"tests/test_gone.py": "\x0cdef test_a():\n    pass\n"},
+            {
+                "tests/test_gone.py": "\n",
+                "tests/test_x.py": "s = ' '\n\x0c@unittest.skip('x')\nx = 1\x0c  # noqa\n",
+            },
+        )
+        self.assertEqual(
+            (code, sorted(out.split("\n")[:-1])),
+            (1, sorted([
+                "FLAG deleted-test: tests/test_gone.py:1: def test_a():",
+                "FLAG skip: tests/test_x.py:2: @unittest.skip('x')",
+                "FLAG silenced: tests/test_x.py:3: x = 1\x0c  # noqa",
+            ])),
+            err,
+        )  # fmt: skip
+
     def test_xctassert_is_an_assertion(self):
         # Dropping an XCTAssert loosens a test; changing one doesn't.
         code, out, err = self.scan_staged(

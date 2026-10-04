@@ -169,7 +169,10 @@ def header_paths(names):
 
 def parse(text):
     files, current, old_no, new_no = [], None, 0, 0
-    for line in text.splitlines():
+    # Split as git does, at "\n" only: splitlines() also breaks at a form feed or U+2028, and
+    # drops the piece after it, which has no +/- prefix.
+    for line in text.removesuffix("\n").split("\n"):
+        line = line.removesuffix("\r")
         if line.startswith("diff --git "):
             current = File(line)
             files.append(current)

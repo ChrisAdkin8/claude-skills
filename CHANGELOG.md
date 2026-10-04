@@ -6,9 +6,13 @@ section is a date. Within a day, changes are grouped by area.
 ## 2026-10-04
 
 Three fixes from a review of the whole repo, each on its own branch, merged locally with no pull
-request, and one quick spec, `docs/specs/2026-10-04-replay-guard-settings-jq-read.md`, not built
-yet. Two fixes changed `/implement`'s scripts and one its steps, but the implement skill evals
-weren't run for them, by choice.
+request, and one quick spec, `docs/specs/2026-10-04-replay-guard-settings-jq-read.md`, built by
+hand. Two fixes changed `/implement`'s scripts and one its steps; the implement skill evals ran on
+both models afterwards (`tests/agent-evals/BASELINE.md`).
+
+### Changed
+
+- The workflow diagram's cost caps name the implementer's $20 cap too.
 
 ### Fixed
 

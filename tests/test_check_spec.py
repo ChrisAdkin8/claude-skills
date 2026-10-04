@@ -1096,3 +1096,19 @@ class CheckerGaps(unittest.TestCase):
             "", spec_text=text.replace("src/app.py:999", "src/app.py:2")
         )
         self.assertIn("2 citations to 1 files", out)
+
+    def test_path_in_the_wrong_case_fails(self):
+        # macOS finds SRC/APP.PY; Linux, and CI, don't.
+        for cited in ("SRC/APP.PY:3", "src/App.py:3"):
+            with self.subTest(cited=cited):
+                out, result = self.check(f"See {cited}.")
+                self.assertEqual(result, "RESULT: FAIL", out)
+                self.assertIn(
+                    f"{cited}: no such file; src/app.py differs only in case", out
+                )
+        # An untracked file is held to its exact case too.
+        (self.repo / "src" / "new.py").write_text("one\n")
+        out, result = self.check("See src/NEW.py:1.")
+        self.assertEqual(result, "RESULT: FAIL", out)
+        out, result = self.check("See src/new.py:1.")
+        self.assertEqual(result, "RESULT: PASS", out)

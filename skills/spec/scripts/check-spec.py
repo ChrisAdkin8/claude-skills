@@ -39,10 +39,12 @@ line says what the spec claims is the spec-verifier agent's job.
 
 import argparse
 import collections
+import os
 import re
 import shlex
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "research" / "scripts"))
@@ -229,9 +231,10 @@ class Snapshot:
             str(p) for f in self.files for p in Path(f).parents if str(p) != "."
         }
         tracked = (git(repo, "ls-files") or "").splitlines()
-        self.by_name = {}
+        self.by_name, self.by_lower = {}, {}
         for path in self.files | set(tracked):
             self.by_name.setdefault(Path(path).name, []).append(path)
+            self.by_lower.setdefault(path.lower(), path)
         self._lengths = {}
 
     def length_at_read(self, rel):
@@ -243,10 +246,31 @@ class Snapshot:
         return self._lengths[rel]
 
     def exists(self, rel):
-        return rel in self.files or (self.repo / rel).is_file()
+        return rel in self.files or exact_file(self.repo, rel)
+
+    def case_twin(self, rel):
+        """The tracked path that `rel` names in another case, else None: macOS finds it, Linux
+        doesn't."""
+        twin = self.by_lower.get(rel.lower())
+        return twin if twin != rel else None
 
     def dir_exists(self, top):
         return top in self.dirs or (self.repo / top).is_dir()
+
+
+def exact_file(root, rel):
+    """True if `rel` is a file under root with every part named in its exact case. Path.is_file()
+    alone would pass SRC/APP.PY for src/app.py on a case-insensitive filesystem."""
+    here = root
+    for part in Path(rel).parts:
+        try:
+            names = {unicodedata.normalize("NFC", n) for n in os.listdir(here)}
+        except OSError:
+            return False
+        if unicodedata.normalize("NFC", part) not in names:
+            return False
+        here = here / part
+    return here.is_file()
 
 
 def working_length(path):
@@ -345,6 +369,14 @@ def check_citations(body, snap, templated, fails, warns):
                 for s, e, r in spans:
                     check_range(snap, rel, s, e, r, fails, warns)
                     ranges.append((rel, s, e))
+                continue
+            if twin := snap.case_twin(rel):
+                count += 1
+                fails.append(
+                    f"{ref}: no such file; {twin} differs only in case, which a "
+                    "case-sensitive filesystem (Linux, CI) won't match"
+                )
+                last_file, last_bad = None, rel
                 continue
             if "/" in rel and snap.dir_exists(rel.split("/")[0]):
                 count += 1

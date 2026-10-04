@@ -66,6 +66,13 @@ class GitCommandsInTheSteps(unittest.TestCase):
                     f"no Bash(...) rule in allowed-tools matches it: {rules}",
                 )
 
+    def test_no_rule_approves_git_without_the_flags(self):
+        # A bare `git commit` in the user's checkout would run with its hooks on, and the steps
+        # give none: every git rule is a `git -C` one, which the steps fill with both flags.
+        for rule in BASH_RULE.findall(allowed_tools(SKILL)):
+            with self.subTest(rule=rule):
+                self.assertFalse(rule.startswith("git ") and not rule.startswith("git -C "))
+
     def test_the_tool_rules_say_to_keep_both_flags(self):
         rules = body(SKILL).split("**Tool calls.**", 1)[1].split("\n## ", 1)[0]
         self.assertIn(FLAGS, rules)

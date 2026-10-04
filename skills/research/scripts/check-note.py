@@ -703,7 +703,8 @@ def main():
     text = "\n".join(lines)
     leftovers = [p for p in template_prompts(depth) if p in text]
     # Outside code only: a note may quote Argo, Helm or Jinja expressions, which use {{ ... }}.
-    if "{{" in INLINE_CODE.sub("", "\n".join(lines[:start] + body)):
+    # Line by line: inline code ends at its line, so a stray backtick can't pair with one later.
+    if any("{{" in INLINE_CODE.sub("", l) for l in lines[:start] + body):
         leftovers.append("{{placeholder}}")
     if any(line.strip() == "-" for line in prose):
         leftovers.append("empty '-' bullet")

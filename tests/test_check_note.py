@@ -178,6 +178,19 @@ class Placeholders(unittest.TestCase):
         self.assertEqual(result, "RESULT: FAIL", out)
         self.assertIn("{{placeholder}}", out)
 
+    def test_stray_backtick_neither_hides_nor_invents_a_placeholder(self):
+        # Inline code ends at its line: a lone backtick mustn't pair with one lines later.
+        for extra, verdict in (
+            ("It costs 5` more.\n\nOwned by {{owner}}, see `x`.", "RESULT: FAIL"),
+            ("It costs 5` more.\n\nHelm renders `{{ .Values.x }}`.", "RESULT: PASS"),
+        ):
+            with self.subTest(extra=extra):
+                text = FIXTURE.read_text().replace(
+                    "### Counter-evidence", f"{extra}\n\n### Counter-evidence", 1
+                )
+                out, result = check(text)
+                self.assertEqual(result, verdict, out)
+
 
 class PoolRowsAreNotStale(unittest.TestCase):
     """A Verification row may quote a Candidate pool line, which sits after Sources."""

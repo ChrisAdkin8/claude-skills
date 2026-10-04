@@ -70,7 +70,8 @@ Some things run outside the sandbox, and not all of them are checked by the guar
   refuses to run. After each call it checks that the shared git config and hooks are unchanged.
   Its spend goes in a ledger it can't write, `~/.cache/implement-ledger/`, capped at $20 for
   every run of a spec. The implement-verifier that re-runs its checks is sandboxed, with no
-  network (`skills/implement/verify-settings.json`).
+  network and a uv cache of its own, which spikes can't write
+  (`skills/implement/verify-settings.json`).
 
 Every agent is also told these rules: [`hooks/agent-sandbox.md`](../hooks/agent-sandbox.md) is
 added to its instructions, with the list of allowed websites filled in from the sandbox settings.

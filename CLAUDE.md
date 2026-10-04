@@ -21,7 +21,7 @@ each step, and expect a skill you're editing to be the one you're running.
   the command (the transcripts are private). Add an entry, with its reason, only for a change the
   guard means.
 - After changing an agent or skill file, run `tests/agent-evals/run.sh` by hand. A full run cost
-  $1.89 on Sonnet and $4.22 on Opus on 2026-10-01, and each case is capped at $5 (`research-ideas`
+  $1.80 on Sonnet and $4.58 on Opus on 2026-10-04, and each case is capped at $5 (`research-ideas`
   at $10), so it isn't automatic. Add a dated section to `tests/agent-evals/BASELINE.md` with every
   case's result and cost, including the cases you didn't expect to change.
 - After changing a skill's steps, run `tests/skill-evals/run.sh` by hand too (about $0.40 a case

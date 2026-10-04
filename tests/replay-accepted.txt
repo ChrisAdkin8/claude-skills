@@ -84,3 +84,4 @@ f8da4ee7083ee3b0 headless allowed->blocked  # names ~/.claude or its state (sett
 cae6e0e9a775b8e0 headless allowed->blocked  # names ~/.claude or its state (settings.json, usage-data, ...): refused since W3 (2026-10-02)
 dacb39a9b688c00b headless allowed->blocked  # names ~/.claude or its state (settings.json, usage-data, ...): refused since W3 (2026-10-02)
 9eaee643f63783f0 headless allowed->blocked  # names ~/.claude or its state (settings.json, usage-data, ...): refused since W3 (2026-10-02)
+caa06a7031956b32 headless allowed->blocked  # names ~/.claude or its state (settings.json, usage-data, ...): refused since W3 (2026-10-02); run under the plugin installed at 7158a7b, before W3

@@ -1,7 +1,7 @@
 ---
 title: The guard replay accepts the recorded jq read of ~/.claude/settings.json
 created: 2026-10-04
-status: reviewed # draft | reviewed | in-progress | done | superseded
+status: done # draft | reviewed | in-progress | done | superseded
 research: none
 idea: ~/notes/ideas/2026-10-04-replay-guard-settings-jq-read.md
 read-at: 07c02eb

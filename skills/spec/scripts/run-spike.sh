@@ -46,6 +46,12 @@ export CLAUDE_CODE_DISABLE_AUTO_MEMORY=1
 # The spiker prompt sits beside this script's directory, wherever the skill is installed.
 spiker=$(cd "$(dirname "$0")/.." && pwd -P)/spiker.md
 cd "$scratch"
+# The redirects below would follow a link that an earlier, refused run left and couldn't remove,
+# and /spec reads any results.md here as this run's. As in run-verify.sh.
+rm -rf -- results.md run.json run.err 2>/dev/null || true
+for f in results.md run.json run.err; do
+  [ ! -e "$f" ] && [ ! -L "$f" ] || die "couldn't clear $scratch/$f from an earlier run"
+done
 status=0
 claude -p --model sonnet --setting-sources user \
   --append-system-prompt-file "$spiker" \
@@ -53,7 +59,7 @@ claude -p --model sonnet --setting-sources user \
   --allowedTools "Read Grep Glob Bash Write(./**) Edit(./**)" \
   --max-budget-usd 2 --max-turns 60 \
   --output-format json --strict-mcp-config --no-session-persistence \
-  "$(cat brief.md)" < /dev/null > run.json 2> run.err || status=$?
+  -- "$(cat brief.md)" < /dev/null > run.json 2> run.err || status=$?
 
 # The spike may write anything in its scratch dir, links included: the sandbox stops it reading
 # ~/.ssh, but not linking to it. /spec's own session then reads these three files and copies

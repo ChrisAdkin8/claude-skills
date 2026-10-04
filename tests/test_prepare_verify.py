@@ -688,8 +688,10 @@ class RunVerify(Home):
             flag("--allowedTools"), "Read Grep Glob Bash Write(./**) Edit(./**)"
         )
         self.assertIn("--strict-mcp-config", argv)
-        self.assertEqual(argv[-1], "the brief")
-        self.assertTrue(call["uv"].endswith("/.cache/spec-spikes/.uv-cache"))
+        # After `--`, so a brief that starts with a dash is never read as an option.
+        self.assertEqual(argv[-2:], ["--", "the brief"])
+        # Its own uv cache, beside the scratch dirs, not the one spikes write.
+        self.assertTrue(call["uv"].endswith("/.cache/implement-verify/.uv-cache"))
         self.assertEqual(call["memory"], "1")  # no auto memory, as in run-agent.sh
         self.assertIn(
             "Implementation holds: yes", (self.scratch / "reply.md").read_text()

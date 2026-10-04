@@ -92,7 +92,9 @@ class RunSpike(unittest.TestCase):
         self.assertEqual(
             call["argv"][call["argv"].index("--settings") + 1], "settings.json"
         )
-        self.assertEqual(call["argv"][-1], "the brief")  # $(cat) drops the newline
+        # $(cat) drops the newline. After `--`, so a brief that starts with a dash is never
+        # read as an option.
+        self.assertEqual(call["argv"][-2:], ["--", "the brief"])
         # The caps and containment the README promises: $2, 60 turns, no project settings,
         # writes only inside the scratch dir, no MCP servers.
         argv = call["argv"]
@@ -223,6 +225,39 @@ class RunSpike(unittest.TestCase):
         )
         self.assertEqual(code, 4, out)
         self.assertFalse(os.path.lexists(path / "results.md"))
+
+    def test_a_link_left_from_an_earlier_run_is_cleared_first(self):
+        # The script writes run.json and run.err through a shell redirect, which would follow a
+        # link that an earlier, refused run couldn't remove. And /spec reads results.md as this
+        # run's, so an earlier one, link or not, goes too.
+        secret = self.tmp / "secret"
+        secret.write_text("a secret\n")
+        path = self.scratch()
+        for name in ("results.md", "run.json", "run.err"):
+            (path / name).symlink_to(secret)
+        code, out = self.run_spike(path)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(secret.read_text(), "a secret\n")
+        self.assertFalse(os.path.lexists(path / "results.md"))
+        for name in ("run.json", "run.err"):
+            self.assertFalse((path / name).is_symlink(), name)
+        self.assertIn("done", (path / "run.json").read_text())
+
+    @unittest.skipIf(os.geteuid() == 0, "root can remove it anyway")
+    def test_refuses_to_start_over_a_link_it_cant_clear(self):
+        # An earlier spike took away its scratch dir's write permission, so its link stays. The
+        # run doesn't start, rather than write through it.
+        secret = self.tmp / "secret"
+        secret.write_text("a secret\n")
+        path = self.scratch()
+        (path / "run.json").symlink_to(secret)
+        path.chmod(0o555)
+        self.addCleanup(path.chmod, 0o755)
+        code, out = self.run_spike(path)
+        self.assertEqual(code, 2, out)
+        self.assertIn("couldn't clear", out)
+        self.assertEqual(secret.read_text(), "a secret\n")
+        self.assertEqual(self.calls_made(), [])
 
     @unittest.skipIf(os.geteuid() == 0, "root can remove it anyway")
     def test_refuses_a_link_it_cant_remove(self):

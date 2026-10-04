@@ -116,7 +116,7 @@ claude -p --agents "$run/agents.json" --agent "$agent" --output-format json --ma
   --allowedTools "$tools" --add-dir "$HOME/notes" "$work" "$plugin_root" \
   --append-system-prompt-file "$run/sandbox.md" \
   --setting-sources user --settings "$run/settings.json" ${mcp[@]+"${mcp[@]}"} ${model[@]+"${model[@]}"} ${resume[@]+"${resume[@]}"} \
-  "$prompt" < /dev/null > "$run/run.json" 2> "$run/run.err" || status=$?
+  -- "$prompt" < /dev/null > "$run/run.json" 2> "$run/run.err" || status=$?
 
 python3 - "$run" "$agent" "${RUN_AGENT_LOG:-$root/sessions.log}" <<'PY'
 import json, sys, time

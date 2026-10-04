@@ -157,7 +157,8 @@ class RunAgent(unittest.TestCase):
             "--strict-mcp-config", argv
         )  # only the researcher keeps MCP servers
         self.assertNotIn("--resume", argv)
-        self.assertEqual(argv[-1], "Review this.")
+        # After `--`, so a brief that starts with a dash is never read as an option.
+        self.assertEqual(argv[-2:], ["--", "Review this."])
         self.assertEqual(Path(call["cwd"]).resolve(), self.work.resolve())
         self.assertTrue((run / "reply.md").read_text().startswith("reply 1\n"))
         self.assertEqual((run / "session_id").read_text(), "sess-1")
@@ -186,7 +187,7 @@ class RunAgent(unittest.TestCase):
         self.assertEqual(code, 0, out)
         second = self.calls_made()[-1]["argv"]
         self.assertEqual(second[second.index("--resume") + 1], "sess-1")
-        self.assertEqual(second[-1], "Send rows 3 to 5.")
+        self.assertEqual(second[-2:], ["--", "Send rows 3 to 5."])
         self.assertTrue((run / "reply-1.md").read_text().startswith("reply 1\n"))
         self.assertTrue((run / "reply.md").read_text().startswith("reply 2\n"))
 

@@ -8,7 +8,9 @@ section is a date. Within a day, changes are grouped by area.
 Three fixes from a review of the whole repo, each on its own branch, merged locally with no pull
 request, and one quick spec, `docs/specs/2026-10-04-replay-guard-settings-jq-read.md`, built by
 hand. Two fixes changed `/implement`'s scripts and one its steps; the implement skill evals ran on
-both models afterwards (`tests/agent-evals/BASELINE.md`).
+both models afterwards (`tests/agent-evals/BASELINE.md`). Later the same day, the review's
+second list of fixes, on four more branches: the guard, the launchers, the checkers and
+`/implement`'s permissions. Both eval sets ran on both models after them.
 
 ### Changed
 
@@ -23,12 +25,31 @@ both models afterwards (`tests/agent-evals/BASELINE.md`).
   before-call snapshot of the git dir, which lists every ref, went to Python as one command-line
   argument, and with about 14,000 refs (many tags or fetched pull requests) that passed macOS's
   1 MB limit.
+- `check-spec.py` checks more citations: every number in a list (`file:1,9`), ranges written with
+  a dash (`file:2—9`), a path in backticks followed by `:N`, and citations in headings. A path in
+  the wrong case fails, since it passed on macOS but not on Linux. A **Done when** of `—`, `-` or
+  `none` counts as empty.
+- A spec or note's review history is read right when an empty `## Cold review` heading comes
+  before the real one, and `Not reviewed:` lines count with `+` or numbered bullets too.
+- One stray backtick no longer hides or invents a `{{placeholder}}` in `check-spec.py` and
+  `check-note.py`, and `check-note.py` reports a folder given as a note instead of crashing.
 
 ### Security
 
 - `scan-diff.py` reads a diff's lines as git does, split only at a newline. A form feed or a few
   other characters also split a line before, and the part after it went unchecked, so a test
   skipped, a test deleted or a linter silenced behind one raised no flag.
+- The guard refuses `sort -o`, `base64 -o` and sed's write and run commands however they are
+  spelled: grouped with other flags (`sort -uo`), as a long option (`--expression=`, `--out`), or
+  from a sed script file (`-f`), which it can't check. macOS's sed `-l` takes no value, so the
+  guard reads sed's options both ways.
+- `/implement` no longer pre-approves bare `git status`, `add`, `commit`, `worktree add` and
+  `revert`, `scan-diff.py` or the Skill tool, which none of its steps use. A bare `git commit` in
+  your checkout would have run without asking, with the repo's hooks on.
+- The agents, spikes and verifiers get their brief after `--`, so a brief starting with `-` can't
+  be read as an option. A spike clears its output files first, so it can't write through a link an
+  earlier run left there. The implement-verifier has a uv cache of its own, which a spike's code
+  can't change.
 
 ## 2026-10-03
 

@@ -171,6 +171,18 @@ class Placeholders(unittest.TestCase):
         self.assertEqual(result, "RESULT: FAIL", out)
         self.assertIn("{{placeholder}}", out)
 
+    def test_stray_backtick_neither_hides_nor_invents_a_placeholder(self):
+        # Inline code ends at its line: a lone backtick mustn't pair with one lines later.
+        out, result = check(
+            self.with_background("It costs 5` more.\n\nOwned by {{owner}}, see `x`.")
+        )
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("{{placeholder}}", out)
+        out, result = check(
+            self.with_background("It costs 5` more.\n\nHelm renders `{{ .Values.x }}`.")
+        )
+        self.assertEqual(result, "RESULT: PASS", out)
+
 
 class SpikeResultSecrets(unittest.TestCase):
     """Spike results are raw command output, committed beside the spec."""

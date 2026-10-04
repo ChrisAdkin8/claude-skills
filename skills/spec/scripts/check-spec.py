@@ -746,8 +746,9 @@ def main():
     if templated:
         leftovers = [p for p in template_prompts() if p in text]
         # Outside code only: Argo, Helm, Jinja and GitHub Actions write their own expressions
-        # as {{ ... }}, and a spec quotes them in backticks.
-        if "{{" in INLINE_CODE.sub("", "\n".join(lines[:start] + body)):
+        # as {{ ... }}, and a spec quotes them in backticks. Line by line: inline code ends at
+        # its line, so a stray backtick can't pair with one lines later.
+        if any("{{" in INLINE_CODE.sub("", l) for l in lines[:start] + body):
             leftovers.append("{{placeholder}}")
         if any(line.strip() == "-" for line in body):
             leftovers.append("empty '-' bullet")

@@ -136,14 +136,20 @@ class SandboxSettings(unittest.TestCase):
 
     def test_verify_settings_deny_what_the_spike_settings_deny(self):
         # The verifier runs code in an export as a spike does, under the same sandbox: no
-        # network, the same denies and hidden environment variables, and writes only to the uv
-        # cache the spikes share.
-        for key in ("denyRead", "allowWrite"):
-            with self.subTest(list=key):
-                self.assertEqual(
-                    VERIFY["sandbox"]["filesystem"][key],
-                    SPIKE["sandbox"]["filesystem"][key],
-                )
+        # network, the same denies and hidden environment variables. It writes only to a uv
+        # cache of its own: code a spike runs could change the packages a verifier imports.
+        self.assertEqual(
+            VERIFY["sandbox"]["filesystem"]["denyRead"],
+            SPIKE["sandbox"]["filesystem"]["denyRead"],
+        )
+        self.assertEqual(
+            VERIFY["sandbox"]["filesystem"]["allowWrite"],
+            ["~/.cache/implement-verify/.uv-cache"],
+        )
+        self.assertEqual(
+            SPIKE["sandbox"]["filesystem"]["allowWrite"],
+            ["~/.cache/spec-spikes/.uv-cache"],
+        )
         self.assertEqual(VERIFY["permissions"]["deny"], SPIKE["permissions"]["deny"])
         self.assertEqual(
             VERIFY["sandbox"].get("credentials"), SPIKE["sandbox"].get("credentials")

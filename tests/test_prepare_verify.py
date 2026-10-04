@@ -690,7 +690,8 @@ class RunVerify(Home):
         self.assertIn("--strict-mcp-config", argv)
         # After `--`, so a brief that starts with a dash is never read as an option.
         self.assertEqual(argv[-2:], ["--", "the brief"])
-        self.assertTrue(call["uv"].endswith("/.cache/spec-spikes/.uv-cache"))
+        # Its own uv cache, beside the scratch dirs, not the one spikes write.
+        self.assertTrue(call["uv"].endswith("/.cache/implement-verify/.uv-cache"))
         self.assertEqual(call["memory"], "1")  # no auto memory, as in run-agent.sh
         self.assertIn(
             "Implementation holds: yes", (self.scratch / "reply.md").read_text()

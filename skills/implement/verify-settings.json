@@ -11,7 +11,7 @@
         "~/.zsh_history", "~/.bash_history", "~/Library/Keychains", "~/Library/Cookies",
         "~/Library/Application Support/Google/Chrome", "~/.cache/agent-runs"
       ],
-      "allowWrite": ["~/.cache/spec-spikes/.uv-cache"]
+      "allowWrite": ["~/.cache/implement-verify/.uv-cache"]
     },
     "credentials": {
       "envVars": [

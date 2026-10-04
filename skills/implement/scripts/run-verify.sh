@@ -26,7 +26,7 @@
 #
 # Capped at $5 and 100 turns. On the user's default model, or on $RUN_AGENT_MODEL if it's set, as
 # hooks/run-agent.sh does, so the evals' per-model runs reach it. The sandbox is
-# verify-settings.json beside this script's directory: the spike settings, with no network.
+# verify-settings.json beside this script's directory: spike settings, no network, own uv cache.
 set -euo pipefail
 
 die() { echo "run-verify: $*" >&2; exit 2; }
@@ -118,9 +118,9 @@ else:
 PY
 }
 
-# The spikes' uv cache, not the user's ~/.cache/uv, for the reason run-spike.sh gives; the
-# settings let a run write there and nowhere else outside its scratch dir.
-export UV_CACHE_DIR="$HOME/.cache/spec-spikes/.uv-cache"
+# A uv cache of its own: not the user's ~/.cache/uv, for the reason run-spike.sh gives, nor the
+# spikes', which a spike's code could change. A run may write there and in its scratch dir.
+export UV_CACHE_DIR="$HOME/.cache/implement-verify/.uv-cache"
 mkdir -p "$UV_CACHE_DIR"
 # No auto memory, as in hooks/run-agent.sh: the verifier checks the work against the spec alone.
 export CLAUDE_CODE_DISABLE_AUTO_MEMORY=1

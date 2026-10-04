@@ -688,7 +688,8 @@ class RunVerify(Home):
             flag("--allowedTools"), "Read Grep Glob Bash Write(./**) Edit(./**)"
         )
         self.assertIn("--strict-mcp-config", argv)
-        self.assertEqual(argv[-1], "the brief")
+        # After `--`, so a brief that starts with a dash is never read as an option.
+        self.assertEqual(argv[-2:], ["--", "the brief"])
         self.assertTrue(call["uv"].endswith("/.cache/spec-spikes/.uv-cache"))
         self.assertEqual(call["memory"], "1")  # no auto memory, as in run-agent.sh
         self.assertIn(

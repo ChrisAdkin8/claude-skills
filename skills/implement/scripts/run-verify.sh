@@ -154,7 +154,7 @@ claude -p --setting-sources user \
   --allowedTools "Read Grep Glob Bash Write(./**) Edit(./**)" \
   --max-budget-usd 5 --max-turns 100 ${model[@]+"${model[@]}"} \
   --output-format json --strict-mcp-config --no-session-persistence \
-  "$(cat brief.md)" < /dev/null > run.json 2> run.err || status=$?
+  -- "$(cat brief.md)" < /dev/null > run.json 2> run.err || status=$?
 
 # The verifier may write anything in its scratch dir, links included, and so may the code it
 # runs: the sandbox stops them reading ~/.ssh, but not linking to it. This script then writes

@@ -1049,3 +1049,35 @@ class OneReviewParser(unittest.TestCase):
         self.assertIn("RESULT: PASS", run.stdout)
         self.assertRegex(run.stdout, r"WARN: its record is still under .*old-record.md")
         self.assertIn("git mv", run.stdout)
+
+
+class CheckerGaps(unittest.TestCase):
+    """Citations and fields that passed though they were broken, from the 2026-10-04 review."""
+
+    check = Citations.check
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.repo = Path(tmp.name) / "repo"
+        self.read_at = git_repo(self.repo, {"src/app.py": "one\ntwo\nthree\n"})
+
+    def test_list_and_dash_ranges_are_checked(self):
+        for text, bad in (
+            ("See src/app.py:1,999.", "src/app.py:999"),
+            ("See src/app.py:1,2-999.", "src/app.py:2-999"),
+            ("See src/app.py:2—999.", "src/app.py:2—999"),
+            ("See src/app.py:2–999.", "src/app.py:2–999"),
+            ("See `src/app.py`:999.", "src/app.py:999"),
+        ):
+            with self.subTest(text=text):
+                out, result = self.check(text)
+                self.assertEqual(result, "RESULT: FAIL", out)
+                self.assertIn(f"{bad}: the file had only 3 lines", out)
+
+    def test_list_and_dash_ranges_in_range_pass(self):
+        out, result = self.check(
+            "See src/app.py:1,3 and src/app.py:1-2,3 and src/app.py:1—3 and `src/app.py`:2."
+        )
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertIn("6 citations to 1 files", out)

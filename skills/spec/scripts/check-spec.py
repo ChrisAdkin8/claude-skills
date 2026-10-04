@@ -86,22 +86,24 @@ EXTENSIONLESS = (
     "Makefile", "GNUmakefile", "Dockerfile", "Containerfile", "Justfile", "Jenkinsfile",
     "Vagrantfile", "Gemfile", "Rakefile", "Procfile", "Brewfile", "CODEOWNERS",
 )  # fmt: skip
-# `path/to/file.py:12`, `file.py:12-20` or `Makefile:40`. The lookbehind stops matches starting
+# `path/to/file.py:12`, `file.py:12-20`, `file.py:12—20`, `file.py:3,7-9` or `Makefile:40`, and
+# `` `file.py`:12 `` with the path in its own backticks. The lookbehind stops matches starting
 # mid-URL (https://host/x.py:1) or mid-token; the lookahead stops `:1.2` version strings but lets
-# a citation end a sentence.
+# a citation end a sentence. Group 4 is the `,N` and `,N-M` items after the first range.
 CITATION = re.compile(
     r"(?<![\w/:.@-])((?:[\w.-]+/)+[\w.-]+|[\w-][\w.-]*\.\w+|"
     + "|".join(EXTENSIONLESS)
-    + r"):(\d+)(?:[-–](\d+))?(?!\w|\.\d)"
+    + r")`?:(\d+)(?:[-–—](\d+))?((?:,\d+(?:[-–—]\d+)?)*)(?!\w|\.\d)"
 )
+LIST_ITEM = re.compile(r",(\d+)(?:[-–—](\d+))?")
 # `:48`, `(:48)`, (:48) or (:14, :36-40), continuing the last full citation in the paragraph.
 # Group 1 is the list of `:N` or `:N-M` items.
 SHORTHAND = re.compile(
-    r"(?:`\(?|\()(:\d+(?:[-–]\d+)?(?:\s*,\s*:\d+(?:[-–]\d+)?)*)(?:\)?`|\))"
+    r"(?:`\(?|\()(:\d+(?:[-–—]\d+)?(?:\s*,\s*:\d+(?:[-–—]\d+)?)*)(?:\)?`|\))"
 )
-SHORT_ITEM = re.compile(r":(\d+)(?:[-–](\d+))?")
+SHORT_ITEM = re.compile(r":(\d+)(?:[-–—](\d+))?")
 # ~/path:12 or /abs/path:12: outside the cite repo, so they can't be checked.
-ABSOLUTE = re.compile(r"(?<![\w/.:-])(~?/[\w./-]+\.\w+):(\d+)(?:[-–](\d+))?(?!\w|\.\d)")
+ABSOLUTE = re.compile(r"(?<![\w/.:-])(~?/[\w./-]+\.\w+):(\d+)(?:[-–—](\d+))?(?!\w|\.\d)")
 READ_AT_LINE = re.compile(r"[Rr]ead at (?:commit )?`?([0-9a-f]{7,40})\b")
 # Bare filenames with these extensions are citations even if nothing matches; others
 # (example.com:443) may be hosts.
@@ -293,7 +295,13 @@ def check_citations(body, snap, templated, fails, warns):
             )
             continue
         matches = [(m.start(), "full", m) for m in CITATION.finditer(line)]
-        matches += [(m.start(), "short", m) for m in SHORTHAND.finditer(line)]
+        # `src/app.py`:12 holds a backtick before its colon: that's the full citation's own.
+        full = [range(m.start(), m.end()) for _, _, m in matches]
+        matches += [
+            (m.start(), "short", m)
+            for m in SHORTHAND.finditer(line)
+            if not any(m.start() in span for span in full)
+        ]
         matches += [(m.start(), "abs", m) for m in ABSOLUTE.finditer(line)]
         for _, kind, m in sorted(matches, key=lambda t: t[0]):
             if kind == "abs":
@@ -318,31 +326,39 @@ def check_citations(body, snap, templated, fails, warns):
             path, start = m.group(1), int(m.group(2))
             end = int(m.group(3)) if m.group(3) else start
             rel = path.removeprefix("./")
-            ref = m.group(0)
+            ref = m.group(0).replace("`", "")
+            # The first range, then each `,N` or `,N-M` after it, all in the same file.
+            first = line[m.start() : m.start(4)].replace("`", "")
+            spans = [(start, end, first)] + [
+                (int(i.group(1)), int(i.group(2) or i.group(1)), f"{path}:{i.group(0)[1:]}")
+                for i in LIST_ITEM.finditer(m.group(4))
+            ]
             if ".." in Path(rel).parts:
                 unresolved.append(ref)  # climbs out of the cite repo
                 last_file, last_bad = None, rel
                 continue
             if snap.exists(rel):
-                count += 1
+                count += len(spans)
                 cited.add(rel)
                 last_file, last_bad = rel, None
-                check_range(snap, rel, start, end, ref, fails, warns)
-                ranges.append((rel, start, end))
+                for s, e, r in spans:
+                    check_range(snap, rel, s, e, r, fails, warns)
+                    ranges.append((rel, s, e))
                 continue
             if "/" in rel and snap.dir_exists(rel.split("/")[0]):
                 count += 1
                 fails.append(f"{ref}: no such file in {snap.repo}")
             elif "/" not in rel and rel in snap.by_name:
-                count += 1
+                count += len(spans)
                 bare.append(ref)
                 owners = snap.by_name[rel]
                 if len(owners) == 1:
                     # Only one file it can mean, so its range is checked too: `howto.md:9999`
                     # mustn't pass because the name is short.
                     cited.add(owners[0])
-                    check_range(snap, owners[0], start, end, ref, fails, warns)
-                    ranges.append((owners[0], start, end))
+                    for s, e, r in spans:
+                        check_range(snap, owners[0], s, e, r, fails, warns)
+                        ranges.append((owners[0], s, e))
                     last_file, last_bad = owners[0], None
                     continue
                 unresolved.append(f"{ref} (could be {', '.join(sorted(owners)[:3])})")

@@ -128,7 +128,7 @@ GUARDS = [
     ("Own session", "a headless claude -p run"),
     ("OS sandbox", "no credentials; allowlisted network"),
     ("Guard hook", "checks shell, file and web calls"),
-    ("Cost caps", "$5–10 per agent, $2 per spike"),
+    ("Cost caps", "$5–10 agent, $2 spike, $20 implement"),
 ]
 LEGEND = [
     ("~/notes", "notes"),

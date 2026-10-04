@@ -1090,15 +1090,16 @@ def check_reader(name, args):
             for a in args
         ):
             block("`sed -i` edits files; these agents may not write files from Bash")
-        opts = list(options(args, "efl", ("--expression", "--file", "--line-length")))
-        if any(o == "f" or abbreviates(o, "--file") for o, _ in opts):
-            block("`sed -f` reads its script from a file, which can't be checked; give it inline")
-        scripts = [v for o, v in opts if o == "e" or abbreviates(o, "--expression")]
-        # BSD's -l takes no value, so the script may be what GNU's -l would read as one.
-        if not scripts:
-            scripts = [v for o, v in opts if o is None][:1] + [v for o, v in opts if o == "l"]
-        if any(sed_script_writes(s) for s in scripts):
-            block("that sed script writes a file or runs a command (w or e)")
+        # GNU's -l takes a value and BSD's doesn't: read the args both ways, and refuse either.
+        for opts in (list(options(args, "efl", ("--expression", "--file", "--line-length"))),
+                     list(options(args, "ef", ("--expression", "--file")))):
+            if any(o == "f" or abbreviates(o, "--file") for o, _ in opts):
+                block("`sed -f` reads its script from a file, which can't be checked; give it inline")
+            scripts = [v for o, v in opts if o == "e" or abbreviates(o, "--expression")]
+            if not scripts:
+                scripts = [v for o, v in opts if o is None][:1] + [v for o, v in opts if o == "l"]
+            if any(sed_script_writes(s) for s in scripts):
+                block("that sed script writes a file or runs a command (w or e)")
     elif name == "find" and set(args) & {
         "-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprint0", "-fprintf", "-fls",
     }:  # fmt: skip
@@ -1117,8 +1118,8 @@ def check_reader(name, args):
         block("`sort --compress-program` runs another program")
     elif name == "uniq" and len([a for a in args if not a.startswith("-")]) > 1:
         block("`uniq <in> <out>` writes a file")
-    elif name == "base64" and any(
-        o == "o" or abbreviates(o, "--output") for o, _ in options(args, "bimow")
+    elif name == "base64" and any(  # macOS's, the one with -o: only -b, -i and -o take a value
+        o == "o" or abbreviates(o, "--output") for o, _ in options(args, "bio")
     ):
         block("`base64 -o` writes a file")
     elif name == "rg" and any(a.startswith("--pre") for a in args):

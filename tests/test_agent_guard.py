@@ -540,6 +540,13 @@ class WriteOptionSpellings(GuardTestCase):
             ("base64 -o/tmp/x f", "`base64 -o` writes a file"),
             ("base64 --output=/tmp/x f", "`base64 -o` writes a file"),
             ("base64 --out /tmp/x f", "`base64 -o` writes a file"),
+            # macOS's sed -l takes no value, so what follows it is still an option there.
+            ("sed -l -f s.sed a.txt", "reads its script from a file"),
+            ("sed -n -l --file=s.sed a.txt", "reads its script from a file"),
+            ("sed -l -e 'w /tmp/x' a.txt", "writes a file or runs a command"),
+            # Nor does macOS's base64 have -m or -w to take a value.
+            ("base64 -m -o /tmp/x f", "`base64 -o` writes a file"),
+            ("base64 -w -o /tmp/x f", "`base64 -o` writes a file"),
         ):
             with self.subTest(command=command):
                 self.assertBlocked(command, reason)

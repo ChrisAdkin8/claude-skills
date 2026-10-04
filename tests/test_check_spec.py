@@ -1081,3 +1081,18 @@ class CheckerGaps(unittest.TestCase):
         )
         self.assertEqual(result, "RESULT: PASS", out)
         self.assertIn("6 citations to 1 files", out)
+
+    def test_citation_in_a_heading_is_checked(self):
+        text = (
+            FIXTURE.read_text()
+            .replace("read-at: none", f"read-at: {self.read_at}")
+            .replace("### W1: Do nothing", "### W1: fix src/app.py:999")
+            .replace("Nothing to cite, because read-at is none.", "See src/app.py:1.")
+        )
+        out, result = self.check("", spec_text=text)
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("src/app.py:999: the file had only 3 lines", out)
+        out, _ = self.check(
+            "", spec_text=text.replace("src/app.py:999", "src/app.py:2")
+        )
+        self.assertIn("2 citations to 1 files", out)

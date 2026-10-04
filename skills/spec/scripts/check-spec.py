@@ -293,7 +293,8 @@ def check_citations(body, snap, templated, fails, warns):
             last_file = last_bad = (
                 None  # a shorthand only continues within its paragraph
             )
-            continue
+            if not line.strip():
+                continue
         matches = [(m.start(), "full", m) for m in CITATION.finditer(line)]
         # `src/app.py`:12 holds a backtick before its colon: that's the full citation's own.
         full = [range(m.start(), m.end()) for _, _, m in matches]
@@ -373,6 +374,8 @@ def check_citations(body, snap, templated, fails, warns):
                 # registry.k8s.io/pause:3, host:port. Not a citation.
                 continue
             last_file, last_bad = None, rel
+        if is_heading(line):
+            last_file = last_bad = None  # nor does it run on from a heading
     if bare:
         shown = ", ".join(bare[:5]) + (
             f" and {len(bare) - 5} more" if len(bare) > 5 else ""

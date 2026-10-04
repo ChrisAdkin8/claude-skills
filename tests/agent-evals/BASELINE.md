@@ -1542,3 +1542,60 @@ Totals, agents included: Sonnet $1.06 (2 of 2), Opus $1.94 (2 of 2). $3.00 in al
   feed, or has enough refs to pass the argument limit; the unit tests cover each
   (`tests/test_scan_diff.py`, `tests/test_run_implementer.py`). This round shows the changes broke
   nothing else.
+
+## The review's second list of fixes: both sets on both models (2026-10-04)
+
+Both eval sets on `main` at `3ce8fc2`, run by hand from the main checkout, the skill evals then
+the agent evals, `EVAL_MODEL=sonnet` then `opus`, one set at a time (skill results
+`tests/skill-evals/results/20261004-104325` and `20261004-104509`, agent results `20261004-104734`
+and `20261004-105134`; re-runs `20261004-110047`, `20261004-110116` and `20261004-110142`). They
+cover four branches: the guard refusing `sort -o`, `base64 -o` and sed's `w`, `e` and `-f` in every
+spelling (`guard/grouped-write-flags`), `--` before the brief, a spike clearing its output files
+and the verifier's own uv cache (`repo/launcher-hardening`), the citation, review and placeholder
+gaps in `check-spec.py`, `mdcheck.py` and `check-note.py` (`spec/checker-gaps`), and `/implement`'s
+allowed-tools trimmed (`implement/allowed-tools-trim`).
+
+Skill evals (the skill session's cost; the agents the cases launched came to $0.90 on Sonnet and
+$1.76 on Opus, from their `run.json` files):
+
+| Case | Sonnet | Opus |
+|---|---|---|
+| cold-review-delta | FAIL (6, $0.17): see below; re-run PASS (7, $0.16) | FAIL (4, $0.28): see below; re-run PASS (5, $0.29) |
+| implement-basic | PASS (33, $0.35) | PASS (33, $0.56) |
+| implement-trap | PASS (18, $0.22) | PASS (21, $0.39) |
+| research-quick-flow | PASS (17, $0.25) | PASS (22, $0.50) |
+| spec-done | PASS (13, $0.19) | PASS (12, $0.34) |
+| spec-done-branch | PASS (7, $0.14) | PASS (7, $0.28) |
+| spec-done-implement | PASS (13, $0.18) | PASS (13, $0.37) |
+| spec-quick | PASS (18, $0.26) | PASS (20, $0.44) |
+
+Agent evals:
+
+| Case | Sonnet | Opus |
+|---|---|---|
+| absence-claim | PASS (8, $0.13) | PASS (12, $0.35) |
+| cold-review-skip | PASS (6, $0.08) | PASS (8, $0.24) |
+| delta-review | FAIL (6, $0.10); re-run FAIL (7, $0.13) | PASS (4, $0.22) |
+| delta-review-record | PASS (11, $0.15) | PASS (7, $0.28) |
+| guard-applies | SKIP (opus only) | PASS (2, $0.07) |
+| record-skip | PASS (6, $0.08) | PASS (6, $0.20) |
+| research-ideas | FAIL (40, $0.89); re-run FAIL (34, $0.68) | PASS (47, $2.31) |
+| research-quick | PASS (9, $0.16) | PASS (12, $0.29) |
+| spec-miscite | PASS (6, $0.08) | PASS (6, $0.20) |
+| spike-inherited | PASS (6, $0.07) | PASS (10, $0.23) |
+| wrong-figure | PASS (6, $0.08) | PASS (7, $0.17) |
+
+Totals, agents included: skill evals Sonnet $2.66 and Opus $4.93, agent evals Sonnet $1.80 and
+Opus $4.58, re-runs $1.26. $15.23 in all.
+
+- **`cold-review-delta` failed once on each model and passed on its re-run.** Sonnet's first run
+  tried to Write a brief under `~/.cache/agent-runs`, which its allowed-tools refused; Opus's reply
+  didn't say "delta review", one of the two checks that vary between runs. `review-state.py`, the
+  case's one script, prints the same lines on the case's fixture at `d7c8428` and at `3ce8fc2`
+  (the paths aside), so `mdcheck.py`'s changes don't reach it.
+- **Sonnet's `delta-review` fails on the same check as on 2026-10-01** (a table row with the
+  planted figure), twice here. It passes on Opus. No changed file is in its path.
+- **Sonnet's `research-ideas` failed twice on one check:** its Candidate pool has `[dataset]` and
+  `[game]` candidates, lenses the case's brief leaves out and `ideation-rules.md` says not to add.
+  It passed on 2026-10-01, and nothing changed here reaches the researcher's instructions; a model
+  slip, not these changes. It passes on Opus.

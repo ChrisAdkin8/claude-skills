@@ -31,10 +31,12 @@ SECRETS = [
 ACCOUNT_ID = re.compile(r"(?<![\w.:-])\d{12}(?![\w-]|\.\d)")
 # An ARN's account field, which ACCOUNT_ID's lookbehind skips: arn:aws:iam::123456789012:role/x.
 ARN_ACCOUNT = re.compile(r"\barn:aws[\w-]*:[\w-]*:[\w-]*:\d{12}(?::|/|$)", re.MULTILINE)
-# `- Not reviewed:`, and the same in bold, italics or lower case, with or without the bullet:
-# check-spec's delta-review gate and /cold-review's review-state.py count these, so a
-# hand-written variant mustn't slip past them.
-NOT_REVIEWED = re.compile(r"\s*(?:[-*]\s+)?[*_]*not reviewed[*_]*\s*:", re.IGNORECASE)
+# `- Not reviewed:`, and the same in bold, italics or lower case, with any bullet (`-`, `*`, `+`,
+# `1.`, `1)`) or none: check-spec's delta-review gate and /cold-review's review-state.py count
+# these, so a hand-written variant mustn't slip past them.
+NOT_REVIEWED = re.compile(
+    r"\s*(?:(?:[-*+]|\d+[.)])\s+)?[*_]*not reviewed[*_]*\s*:", re.IGNORECASE
+)
 # A research note's `topic`: area or area/sub-area, each lowercase and hyphenated. check-note.py
 # fails anything else, and build-index.py files anything else as Unfiled.
 TOPIC = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*(?:/[a-z0-9]+(?:-[a-z0-9]+)*)?")
@@ -259,18 +261,18 @@ def _find_review(lines, ends):
     """(start, end, date) of the review under `## Cold review`, ending at the first heading in
     `ends` (else the end of the file), or None if there isn't one with its `Reviewed on` line."""
     code = in_code(lines)
-    start = next(
+    # The first such heading with its `Reviewed on` line: a stray one above mustn't hide it.
+    start, m = next(
         (
-            i
+            (i, m)
             for i, l in enumerate(lines)
-            if not code[i] and heading_is(l, "## Cold review")
+            if not code[i]
+            and heading_is(l, "## Cold review")
+            and (m := REVIEWED_ON.match(_first_text(lines, i)))
         ),
-        None,
+        (None, None),
     )
     if start is None:
-        return None
-    m = REVIEWED_ON.match(_first_text(lines, start))
-    if not m:
         return None
     end = next(
         (

@@ -51,6 +51,16 @@ class Baseline(unittest.TestCase):
         out, result = check(FIXTURE.read_text())
         self.assertEqual(result, "RESULT: PASS", out)
 
+    def test_directory_fails_without_a_traceback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = subprocess.run(
+                [sys.executable, str(CHECKER), tmp],
+                capture_output=True, text=True, check=False,
+            )  # fmt: skip
+        self.assertEqual(run.returncode, 1, run.stderr)
+        self.assertNotIn("Traceback", run.stderr)
+        self.assertEqual(run.stdout.strip().splitlines()[-1], "RESULT: FAIL")
+
 
 class HeaderAgainstTable(unittest.TestCase):
     def test_mismatch_fails_a_final_note(self):
@@ -177,6 +187,19 @@ class Placeholders(unittest.TestCase):
         out, result = check(text)
         self.assertEqual(result, "RESULT: FAIL", out)
         self.assertIn("{{placeholder}}", out)
+
+    def test_stray_backtick_neither_hides_nor_invents_a_placeholder(self):
+        # Inline code ends at its line: a lone backtick mustn't pair with one lines later.
+        for extra, verdict in (
+            ("It costs 5` more.\n\nOwned by {{owner}}, see `x`.", "RESULT: FAIL"),
+            ("It costs 5` more.\n\nHelm renders `{{ .Values.x }}`.", "RESULT: PASS"),
+        ):
+            with self.subTest(extra=extra):
+                text = FIXTURE.read_text().replace(
+                    "### Counter-evidence", f"{extra}\n\n### Counter-evidence", 1
+                )
+                out, result = check(text)
+                self.assertEqual(result, verdict, out)
 
 
 class PoolRowsAreNotStale(unittest.TestCase):

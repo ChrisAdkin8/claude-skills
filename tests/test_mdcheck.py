@@ -365,5 +365,33 @@ class RecordFor(unittest.TestCase):
             self.assertEqual(mdcheck.record_for(doc, [specs / "old.md"]), new_record)
 
 
+class CheckerGaps(unittest.TestCase):
+    """From the 2026-10-04 review."""
+
+    def test_stray_cold_review_heading_does_not_hide_the_review(self):
+        record = [
+            "# Record",
+            "## Cold review",
+            "",
+            "To come.",
+            "## Cold review",
+            "",
+            "Reviewed on 2026-10-01 by cold-reviewer.",
+            "",
+            "No findings.",
+        ]
+        got = mdcheck.read_review([], record)
+        self.assertEqual((got.where, got.start, got.date), ("record", 4, "2026-10-01"))
+
+    def test_not_reviewed_takes_any_list_bullet(self):
+        for line in (
+            "+ Not reviewed: W1 changed.",
+            "1. Not reviewed: W1 changed.",
+            "12) Not reviewed: W1 changed.",
+        ):
+            with self.subTest(line=line):
+                self.assertTrue(mdcheck.NOT_REVIEWED.match(line))
+
+
 if __name__ == "__main__":
     unittest.main()

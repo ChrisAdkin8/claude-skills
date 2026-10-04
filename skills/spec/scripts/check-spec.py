@@ -39,10 +39,12 @@ line says what the spec claims is the spec-verifier agent's job.
 
 import argparse
 import collections
+import os
 import re
 import shlex
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "research" / "scripts"))
@@ -86,22 +88,24 @@ EXTENSIONLESS = (
     "Makefile", "GNUmakefile", "Dockerfile", "Containerfile", "Justfile", "Jenkinsfile",
     "Vagrantfile", "Gemfile", "Rakefile", "Procfile", "Brewfile", "CODEOWNERS",
 )  # fmt: skip
-# `path/to/file.py:12`, `file.py:12-20` or `Makefile:40`. The lookbehind stops matches starting
+# `path/to/file.py:12`, `file.py:12-20`, `file.py:12—20`, `file.py:3,7-9` or `Makefile:40`, and
+# `` `file.py`:12 `` with the path in its own backticks. The lookbehind stops matches starting
 # mid-URL (https://host/x.py:1) or mid-token; the lookahead stops `:1.2` version strings but lets
-# a citation end a sentence.
+# a citation end a sentence. Group 4 is the `,N` and `,N-M` items after the first range.
 CITATION = re.compile(
     r"(?<![\w/:.@-])((?:[\w.-]+/)+[\w.-]+|[\w-][\w.-]*\.\w+|"
     + "|".join(EXTENSIONLESS)
-    + r"):(\d+)(?:[-–](\d+))?(?!\w|\.\d)"
+    + r")`?:(\d+)(?:[-–—](\d+))?((?:,\d+(?:[-–—]\d+)?)*)(?!\w|\.\d)"
 )
+LIST_ITEM = re.compile(r",(\d+)(?:[-–—](\d+))?")
 # `:48`, `(:48)`, (:48) or (:14, :36-40), continuing the last full citation in the paragraph.
 # Group 1 is the list of `:N` or `:N-M` items.
 SHORTHAND = re.compile(
-    r"(?:`\(?|\()(:\d+(?:[-–]\d+)?(?:\s*,\s*:\d+(?:[-–]\d+)?)*)(?:\)?`|\))"
+    r"(?:`\(?|\()(:\d+(?:[-–—]\d+)?(?:\s*,\s*:\d+(?:[-–—]\d+)?)*)(?:\)?`|\))"
 )
-SHORT_ITEM = re.compile(r":(\d+)(?:[-–](\d+))?")
+SHORT_ITEM = re.compile(r":(\d+)(?:[-–—](\d+))?")
 # ~/path:12 or /abs/path:12: outside the cite repo, so they can't be checked.
-ABSOLUTE = re.compile(r"(?<![\w/.:-])(~?/[\w./-]+\.\w+):(\d+)(?:[-–](\d+))?(?!\w|\.\d)")
+ABSOLUTE = re.compile(r"(?<![\w/.:-])(~?/[\w./-]+\.\w+):(\d+)(?:[-–—](\d+))?(?!\w|\.\d)")
 READ_AT_LINE = re.compile(r"[Rr]ead at (?:commit )?`?([0-9a-f]{7,40})\b")
 # Bare filenames with these extensions are citations even if nothing matches; others
 # (example.com:443) may be hosts.
@@ -128,9 +132,10 @@ WORK_ITEM = re.compile(r"^#{2,3}\s+W(\d+)\b")
 DONE_WHEN = re.compile(
     r"\s*(?:[-*+]\s+|\d+[.)]\s+)?(?:\*\*|__)?done when\b(?:\*\*|__)?", re.IGNORECASE
 )
-# A placeholder, with any punctuation after it: `TBD.` is as empty as `TBD`.
+# A placeholder, with any punctuation after it: `TBD.` is as empty as `TBD`, and a lone dash or
+# `none` is as empty as either.
 PLACEHOLDER = re.compile(
-    r"(?:tbd|tbc|todo|n/a|\?+|\.\.\.|…)[\s.!?;:,…]*", re.IGNORECASE
+    r"(?:tbd|tbc|todo|n/a|none|\?+|\.\.\.|…|[-–—]+)[\s.!?;:,…]*", re.IGNORECASE
 )
 ACCEPTANCE = "## Acceptance criteria"
 EMPTY_FIELD = re.compile(r"^\s*-\s+\*\*[^*]+:\*\*\s*$")
@@ -227,9 +232,10 @@ class Snapshot:
             str(p) for f in self.files for p in Path(f).parents if str(p) != "."
         }
         tracked = (git(repo, "ls-files") or "").splitlines()
-        self.by_name = {}
+        self.by_name, self.by_lower = {}, {}
         for path in self.files | set(tracked):
             self.by_name.setdefault(Path(path).name, []).append(path)
+            self.by_lower.setdefault(path.lower(), path)
         self._lengths = {}
 
     def length_at_read(self, rel):
@@ -241,10 +247,31 @@ class Snapshot:
         return self._lengths[rel]
 
     def exists(self, rel):
-        return rel in self.files or (self.repo / rel).is_file()
+        return rel in self.files or exact_file(self.repo, rel)
+
+    def case_twin(self, rel):
+        """The tracked path that `rel` names in another case, else None: macOS finds it, Linux
+        doesn't."""
+        twin = self.by_lower.get(rel.lower())
+        return twin if twin != rel else None
 
     def dir_exists(self, top):
         return top in self.dirs or (self.repo / top).is_dir()
+
+
+def exact_file(root, rel):
+    """True if `rel` is a file under root with every part named in its exact case. Path.is_file()
+    alone would pass SRC/APP.PY for src/app.py on a case-insensitive filesystem."""
+    here = root
+    for part in Path(rel).parts:
+        try:
+            names = {unicodedata.normalize("NFC", n) for n in os.listdir(here)}
+        except OSError:
+            return False
+        if unicodedata.normalize("NFC", part) not in names:
+            return False
+        here = here / part
+    return here.is_file()
 
 
 def working_length(path):
@@ -291,9 +318,16 @@ def check_citations(body, snap, templated, fails, warns):
             last_file = last_bad = (
                 None  # a shorthand only continues within its paragraph
             )
-            continue
+            if not line.strip():
+                continue
         matches = [(m.start(), "full", m) for m in CITATION.finditer(line)]
-        matches += [(m.start(), "short", m) for m in SHORTHAND.finditer(line)]
+        # `src/app.py`:12 holds a backtick before its colon: that's the full citation's own.
+        full = [range(m.start(), m.end()) for _, _, m in matches]
+        matches += [
+            (m.start(), "short", m)
+            for m in SHORTHAND.finditer(line)
+            if not any(m.start() in span for span in full)
+        ]
         matches += [(m.start(), "abs", m) for m in ABSOLUTE.finditer(line)]
         for _, kind, m in sorted(matches, key=lambda t: t[0]):
             if kind == "abs":
@@ -318,31 +352,47 @@ def check_citations(body, snap, templated, fails, warns):
             path, start = m.group(1), int(m.group(2))
             end = int(m.group(3)) if m.group(3) else start
             rel = path.removeprefix("./")
-            ref = m.group(0)
+            ref = m.group(0).replace("`", "")
+            # The first range, then each `,N` or `,N-M` after it, all in the same file.
+            first = line[m.start() : m.start(4)].replace("`", "")
+            spans = [(start, end, first)] + [
+                (int(i.group(1)), int(i.group(2) or i.group(1)), f"{path}:{i.group(0)[1:]}")
+                for i in LIST_ITEM.finditer(m.group(4))
+            ]
             if ".." in Path(rel).parts:
                 unresolved.append(ref)  # climbs out of the cite repo
                 last_file, last_bad = None, rel
                 continue
             if snap.exists(rel):
-                count += 1
+                count += len(spans)
                 cited.add(rel)
                 last_file, last_bad = rel, None
-                check_range(snap, rel, start, end, ref, fails, warns)
-                ranges.append((rel, start, end))
+                for s, e, r in spans:
+                    check_range(snap, rel, s, e, r, fails, warns)
+                    ranges.append((rel, s, e))
+                continue
+            if twin := snap.case_twin(rel):
+                count += 1
+                fails.append(
+                    f"{ref}: no such file; {twin} differs only in case, which a "
+                    "case-sensitive filesystem (Linux, CI) won't match"
+                )
+                last_file, last_bad = None, rel
                 continue
             if "/" in rel and snap.dir_exists(rel.split("/")[0]):
                 count += 1
                 fails.append(f"{ref}: no such file in {snap.repo}")
             elif "/" not in rel and rel in snap.by_name:
-                count += 1
+                count += len(spans)
                 bare.append(ref)
                 owners = snap.by_name[rel]
                 if len(owners) == 1:
                     # Only one file it can mean, so its range is checked too: `howto.md:9999`
                     # mustn't pass because the name is short.
                     cited.add(owners[0])
-                    check_range(snap, owners[0], start, end, ref, fails, warns)
-                    ranges.append((owners[0], start, end))
+                    for s, e, r in spans:
+                        check_range(snap, owners[0], s, e, r, fails, warns)
+                        ranges.append((owners[0], s, e))
                     last_file, last_bad = owners[0], None
                     continue
                 unresolved.append(f"{ref} (could be {', '.join(sorted(owners)[:3])})")
@@ -357,6 +407,8 @@ def check_citations(body, snap, templated, fails, warns):
                 # registry.k8s.io/pause:3, host:port. Not a citation.
                 continue
             last_file, last_bad = None, rel
+        if is_heading(line):
+            last_file = last_bad = None  # nor does it run on from a heading
     if bare:
         shown = ", ".join(bare[:5]) + (
             f" and {len(bare) - 5} more" if len(bare) > 5 else ""
@@ -695,8 +747,9 @@ def main():
     if templated:
         leftovers = [p for p in template_prompts() if p in text]
         # Outside code only: Argo, Helm, Jinja and GitHub Actions write their own expressions
-        # as {{ ... }}, and a spec quotes them in backticks.
-        if "{{" in INLINE_CODE.sub("", "\n".join(lines[:start] + body)):
+        # as {{ ... }}, and a spec quotes them in backticks. Line by line: inline code ends at
+        # its line, so a stray backtick can't pair with one lines later.
+        if any("{{" in INLINE_CODE.sub("", l) for l in lines[:start] + body):
             leftovers.append("{{placeholder}}")
         if any(line.strip() == "-" for line in body):
             leftovers.append("empty '-' bullet")

@@ -171,6 +171,18 @@ class Placeholders(unittest.TestCase):
         self.assertEqual(result, "RESULT: FAIL", out)
         self.assertIn("{{placeholder}}", out)
 
+    def test_stray_backtick_neither_hides_nor_invents_a_placeholder(self):
+        # Inline code ends at its line: a lone backtick mustn't pair with one lines later.
+        out, result = check(
+            self.with_background("It costs 5` more.\n\nOwned by {{owner}}, see `x`.")
+        )
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("{{placeholder}}", out)
+        out, result = check(
+            self.with_background("It costs 5` more.\n\nHelm renders `{{ .Values.x }}`.")
+        )
+        self.assertEqual(result, "RESULT: PASS", out)
+
 
 class SpikeResultSecrets(unittest.TestCase):
     """Spike results are raw command output, committed beside the spec."""
@@ -915,6 +927,7 @@ class GateLoopholes(unittest.TestCase):
         # A full stop or other punctuation after a placeholder leaves it a placeholder.
         for placeholder in (
             "TBD", "TODO", "?", "...", "TBD.", "TODO.", "n/a.", "TBC!", "TBD …",
+            "—", "–", "-", "--", "none", "None.",
         ):  # fmt: skip
             with self.subTest(placeholder=placeholder):
                 out, result = check(base.replace("the tests pass.", placeholder))
@@ -1049,3 +1062,66 @@ class OneReviewParser(unittest.TestCase):
         self.assertIn("RESULT: PASS", run.stdout)
         self.assertRegex(run.stdout, r"WARN: its record is still under .*old-record.md")
         self.assertIn("git mv", run.stdout)
+
+
+class CheckerGaps(unittest.TestCase):
+    """Citations and fields that passed though they were broken, from the 2026-10-04 review."""
+
+    check = Citations.check
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.repo = Path(tmp.name) / "repo"
+        self.read_at = git_repo(self.repo, {"src/app.py": "one\ntwo\nthree\n"})
+
+    def test_list_and_dash_ranges_are_checked(self):
+        for text, bad in (
+            ("See src/app.py:1,999.", "src/app.py:999"),
+            ("See src/app.py:1,2-999.", "src/app.py:2-999"),
+            ("See src/app.py:2—999.", "src/app.py:2—999"),
+            ("See src/app.py:2–999.", "src/app.py:2–999"),
+            ("See `src/app.py`:999.", "src/app.py:999"),
+        ):
+            with self.subTest(text=text):
+                out, result = self.check(text)
+                self.assertEqual(result, "RESULT: FAIL", out)
+                self.assertIn(f"{bad}: the file had only 3 lines", out)
+
+    def test_list_and_dash_ranges_in_range_pass(self):
+        out, result = self.check(
+            "See src/app.py:1,3 and src/app.py:1-2,3 and src/app.py:1—3 and `src/app.py`:2."
+        )
+        self.assertEqual(result, "RESULT: PASS", out)
+        self.assertIn("6 citations to 1 files", out)
+
+    def test_citation_in_a_heading_is_checked(self):
+        text = (
+            FIXTURE.read_text()
+            .replace("read-at: none", f"read-at: {self.read_at}")
+            .replace("### W1: Do nothing", "### W1: fix src/app.py:999")
+            .replace("Nothing to cite, because read-at is none.", "See src/app.py:1.")
+        )
+        out, result = self.check("", spec_text=text)
+        self.assertEqual(result, "RESULT: FAIL", out)
+        self.assertIn("src/app.py:999: the file had only 3 lines", out)
+        out, _ = self.check(
+            "", spec_text=text.replace("src/app.py:999", "src/app.py:2")
+        )
+        self.assertIn("2 citations to 1 files", out)
+
+    def test_path_in_the_wrong_case_fails(self):
+        # macOS finds SRC/APP.PY; Linux, and CI, don't.
+        for cited in ("SRC/APP.PY:3", "src/App.py:3"):
+            with self.subTest(cited=cited):
+                out, result = self.check(f"See {cited}.")
+                self.assertEqual(result, "RESULT: FAIL", out)
+                self.assertIn(
+                    f"{cited}: no such file; src/app.py differs only in case", out
+                )
+        # An untracked file is held to its exact case too.
+        (self.repo / "src" / "new.py").write_text("one\n")
+        out, result = self.check("See src/NEW.py:1.")
+        self.assertEqual(result, "RESULT: FAIL", out)
+        out, result = self.check("See src/new.py:1.")
+        self.assertEqual(result, "RESULT: PASS", out)

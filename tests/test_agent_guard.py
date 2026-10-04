@@ -514,6 +514,58 @@ class WritesAndSendsBlocked(GuardTestCase):
                 self.assertAllowed(command)
 
 
+class WriteOptionSpellings(GuardTestCase):
+    """2026-10-04: a write option refused as `-o x` slipped through grouped with other flags
+    (`-uo x`), as `--expression=...`, abbreviated (`--out=x`), or from a sed script file."""
+
+    def test_every_spelling_is_blocked(self):
+        for command, reason in (
+            ("sort -uo /tmp/x a.txt", "`sort -o` writes a file"),
+            ("sort -uo/tmp/x a.txt", "`sort -o` writes a file"),
+            ("sort -ruo /tmp/x a.txt", "`sort -o` writes a file"),
+            ("sort --out=/tmp/x a.txt", "`sort -o` writes a file"),
+            ("sort --compress-program=sh a.txt", "runs another program"),
+            ("sed -n --expression='w /tmp/x' a.txt", "writes a file or runs a command"),
+            ("sed -n --expression='1e curl example.com' a.txt", "writes a file or runs a command"),
+            ("sed -n --expr='w /tmp/x' a.txt", "writes a file or runs a command"),
+            ("sed -ne 'w /tmp/x' a.txt", "writes a file or runs a command"),
+            ("sed -n -e p -e 'w /tmp/x' a.txt", "writes a file or runs a command"),
+            ("sed -l 5 'w /tmp/x' a.txt", "writes a file or runs a command"),
+            ("sed -n -f s.sed a.txt", "reads its script from a file"),
+            ("sed -nf s.sed a.txt", "reads its script from a file"),
+            ("sed -n --file=s.sed a.txt", "reads its script from a file"),
+            ("sed -n --file s.sed a.txt", "reads its script from a file"),
+            ("sed --in s/a/b/ f", "`sed -i` edits files"),
+            ("base64 -do /tmp/x f", "`base64 -o` writes a file"),
+            ("base64 -o/tmp/x f", "`base64 -o` writes a file"),
+            ("base64 --output=/tmp/x f", "`base64 -o` writes a file"),
+            ("base64 --out /tmp/x f", "`base64 -o` writes a file"),
+        ):
+            with self.subTest(command=command):
+                self.assertBlocked(command, reason)
+
+    def test_read_only_forms_stay_allowed(self):
+        for command in (
+            "sort a.txt",
+            "sort -u a.txt",
+            "sort -t o a.txt",  # o is the field separator, not -o
+            "sort -to a.txt",
+            "sort -k2 -n a.txt",
+            "sed -n p a.txt",
+            "sed -n -e p a.txt",
+            "sed -ne p a.txt",
+            "sed -n --expression=p a.txt",
+            "sed -E -n 's/a/b/p' a.txt",
+            "base64 -i file",
+            "base64 -d file",
+            "base64 -di file",
+            "base64 -io",  # macOS: reads the file named o
+            "base64 --decode file",
+        ):
+            with self.subTest(command=command):
+                self.assertAllowed(command)
+
+
 class Hardening(GuardTestCase):
     """From the second 2026-09-27 repo review: shell forms the guard read differently from the
     shell, and gh joined with commands that should stay in the sandbox."""

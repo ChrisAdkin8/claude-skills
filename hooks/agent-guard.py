@@ -954,6 +954,47 @@ def check_request_words(args, tool, clean=frozenset(), tainted=frozenset()):
             check_url(arg)
 
 
+def short_flags(arg, following, takes_value):
+    """Yield (letter, value) for each flag in a group of short flags like -uo. value is None for
+    a flag that takes none, else the rest of the group or, if that's empty, the next argument,
+    `following`. A flag that takes a value ends the group, so `sort -to` reads t's value as o."""
+    for j, letter in enumerate(arg[1:], 1):
+        if letter in takes_value:
+            yield letter, arg[j + 1 :] or following
+            return
+        yield letter, None
+
+
+def abbreviates(name, full):
+    """True if a long option as written, like --out, names `full`: GNU tools take any prefix."""
+    return bool(name) and name.startswith("--") and len(name) > 2 and full.startswith(name)
+
+
+def options(args, short_values, long_values=()):
+    """Yield (option, value) for each option in a command's args, and (None, arg) for the rest:
+    a letter for short flags in any grouping (short_flags), the name as written for long ones.
+    A value given as the next argument is consumed, so it isn't read as an option or operand."""
+    i = 0
+    while i < len(args):
+        arg, following = args[i], (args[i + 1] if i + 1 < len(args) else "")
+        if arg == "--":
+            yield from ((None, a) for a in args[i + 1 :])
+            return
+        if arg.startswith("--"):
+            name, eq, value = arg.partition("=")
+            if not eq and any(abbreviates(name, full) for full in long_values):
+                value, i = following, i + 1
+            yield name, value
+        elif arg.startswith("-") and len(arg) > 1:
+            flags = list(short_flags(arg, following, short_values))
+            yield from flags
+            if flags[-1][1] is not None and len(flags) == len(arg) - 1:
+                i += 1  # the last flag took the next argument as its value
+        else:
+            yield None, arg
+        i += 1
+
+
 def check_curl(args, clean=frozenset(), tainted=frozenset()):
     check_request_words(args, "curl", clean, tainted)
     if any(
@@ -988,30 +1029,18 @@ def check_curl(args, clean=frozenset(), tainted=frozenset()):
                     f"`curl {name} @file` sends a file's contents; give the value inline"
                 )
         elif arg.startswith("-") and len(arg) > 1:
-            letters = arg[1:]
-            for j, letter in enumerate(letters):
-                if letter in CURL_BLOCK_SHORT:
-                    value = letters[j + 1 :] or (
-                        args[i + 1] if i + 1 < len(args) else ""
-                    )
-                    if letter == "D" and value == "-":
-                        break
+            following = args[i + 1] if i + 1 < len(args) else ""
+            for letter, value in short_flags(arg, following, CURL_ARG_SHORT):
+                if letter in CURL_BLOCK_SHORT and not (letter == "D" and value == "-"):
                     block(
                         f"`curl -{letter}` writes a file or sends data; these agents only read"
                     )
-                if letter == "H" and (
-                    letters[j + 1 :] or (args[i + 1] if i + 1 < len(args) else "")
-                ).startswith("@"):
+                if letter == "H" and value.startswith("@"):
                     block(
                         "`curl -H @file` sends a file's contents; give the header inline"
                     )
                 if letter == "X":
-                    method = letters[j + 1 :] or (
-                        args[i + 1] if i + 1 < len(args) else ""
-                    )
-                    break
-                if letter in CURL_ARG_SHORT:
-                    break  # the rest of the token, or the next one, is this option's value
+                    method = value
         i += 1
     if method and method.upper() not in ("GET", "HEAD"):
         block(f"`curl -X {method}`: GET and HEAD only")
@@ -1056,10 +1085,18 @@ def check_reader(name, args):
             elif arg.startswith("-v") and len(arg) > 2:
                 check_bare_name(arg[2:])
     elif name == "sed":
-        if any(a == "--in-place" or re.fullmatch(r"-[a-zA-Z]*i.*", a) for a in args):
+        if any(
+            abbreviates(a.partition("=")[0], "--in-place") or re.fullmatch(r"-[a-zA-Z]*i.*", a)
+            for a in args
+        ):
             block("`sed -i` edits files; these agents may not write files from Bash")
-        scripts = [args[k + 1] for k, a in enumerate(args[:-1]) if a == "-e"]
-        scripts += [a for a in args if not a.startswith("-")][:1] if not scripts else []
+        opts = list(options(args, "efl", ("--expression", "--file", "--line-length")))
+        if any(o == "f" or abbreviates(o, "--file") for o, _ in opts):
+            block("`sed -f` reads its script from a file, which can't be checked; give it inline")
+        scripts = [v for o, v in opts if o == "e" or abbreviates(o, "--expression")]
+        # BSD's -l takes no value, so the script may be what GNU's -l would read as one.
+        if not scripts:
+            scripts = [v for o, v in opts if o is None][:1] + [v for o, v in opts if o == "l"]
         if any(sed_script_writes(s) for s in scripts):
             block("that sed script writes a file or runs a command (w or e)")
     elif name == "find" and set(args) & {
@@ -1070,11 +1107,19 @@ def check_reader(name, args):
         files = [a for a in args if not a.startswith("-")]
         if files and not set(args) & {"-c", "--stdout", "-l", "--list", "-t", "--test"}:
             block(f"`{name} <file>` replaces the file; use `{name} -c` or zcat")
-    elif name == "sort" and any(a.startswith(("-o", "--output")) for a in args):
+    elif name == "sort" and any(
+        o == "o" or abbreviates(o, "--output") for o, _ in options(args, "kotST")
+    ):
         block("`sort -o` writes a file")
+    elif name == "sort" and any(
+        abbreviates(o, "--compress-program") for o, _ in options(args, "kotST")
+    ):
+        block("`sort --compress-program` runs another program")
     elif name == "uniq" and len([a for a in args if not a.startswith("-")]) > 1:
         block("`uniq <in> <out>` writes a file")
-    elif name == "base64" and any(a.startswith(("-o", "--output")) for a in args):
+    elif name == "base64" and any(
+        o == "o" or abbreviates(o, "--output") for o, _ in options(args, "bimow")
+    ):
         block("`base64 -o` writes a file")
     elif name == "rg" and any(a.startswith("--pre") for a in args):
         block("`rg --pre` runs another program")

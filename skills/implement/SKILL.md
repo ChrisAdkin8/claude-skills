@@ -52,7 +52,7 @@ In order, from the repo's checkout, stopping at the first failure with what to d
 3. `${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/check-spec.py <spec> --repo <repo>` prints `RESULT: PASS`.
 4. `${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/check-spec.py <spec> --repo <repo> --drift-at HEAD` prints no `DRIFT:` line. Else: "run `/spec finish <spec>`, which re-reads those ranges and moves read-at, then commit it". Keep any file its drift WARN names, for step 3.
 
-On resume, run the Gate in the worktree instead, where the status must be `in-progress` and drift is checked with `--drift-at <the Started at commit>` (from the record's `## Evidence` on the branch), so the branch's own commits never count as drift.
+On resume, run the Gate in the worktree instead, where check 1 names only `<spec> <spikes>`: the implementer leaves lines in the record uncommitted (an evidence line for its next commit, the rest for step 6's), so a dirty record is expected there. The status must be `in-progress` and drift is checked with `--drift-at <the Started at commit>` (from the record's `## Evidence` on the branch), so the branch's own commits never count as drift.
 
 ## 3. Worktree
 

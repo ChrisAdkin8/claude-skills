@@ -589,8 +589,8 @@ def main():
     args = parser.parse_args()
 
     note = Path(args.note).expanduser()
-    if not note.exists():
-        print(f"FAIL: {note} does not exist")
+    if not note.is_file():
+        print(f"FAIL: {note} does not exist or is not a file")
         print("RESULT: FAIL")
         return 1
     lines = note.read_text(errors="replace").splitlines()

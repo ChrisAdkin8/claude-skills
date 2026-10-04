@@ -51,6 +51,16 @@ class Baseline(unittest.TestCase):
         out, result = check(FIXTURE.read_text())
         self.assertEqual(result, "RESULT: PASS", out)
 
+    def test_directory_fails_without_a_traceback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = subprocess.run(
+                [sys.executable, str(CHECKER), tmp],
+                capture_output=True, text=True, check=False,
+            )  # fmt: skip
+        self.assertEqual(run.returncode, 1, run.stderr)
+        self.assertNotIn("Traceback", run.stderr)
+        self.assertEqual(run.stdout.strip().splitlines()[-1], "RESULT: FAIL")
+
 
 class HeaderAgainstTable(unittest.TestCase):
     def test_mismatch_fails_a_final_note(self):

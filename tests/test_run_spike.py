@@ -92,7 +92,9 @@ class RunSpike(unittest.TestCase):
         self.assertEqual(
             call["argv"][call["argv"].index("--settings") + 1], "settings.json"
         )
-        self.assertEqual(call["argv"][-1], "the brief")  # $(cat) drops the newline
+        # $(cat) drops the newline. After `--`, so a brief that starts with a dash is never
+        # read as an option.
+        self.assertEqual(call["argv"][-2:], ["--", "the brief"])
         # The caps and containment the README promises: $2, 60 turns, no project settings,
         # writes only inside the scratch dir, no MCP servers.
         argv = call["argv"]

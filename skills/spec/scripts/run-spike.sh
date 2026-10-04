@@ -53,7 +53,7 @@ claude -p --model sonnet --setting-sources user \
   --allowedTools "Read Grep Glob Bash Write(./**) Edit(./**)" \
   --max-budget-usd 2 --max-turns 60 \
   --output-format json --strict-mcp-config --no-session-persistence \
-  "$(cat brief.md)" < /dev/null > run.json 2> run.err || status=$?
+  -- "$(cat brief.md)" < /dev/null > run.json 2> run.err || status=$?
 
 # The spike may write anything in its scratch dir, links included: the sandbox stops it reading
 # ~/.ssh, but not linking to it. /spec's own session then reads these three files and copies

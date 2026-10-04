@@ -383,6 +383,15 @@ class CheckerGaps(unittest.TestCase):
         got = mdcheck.read_review([], record)
         self.assertEqual((got.where, got.start, got.date), ("record", 4, "2026-10-01"))
 
+    def test_not_reviewed_takes_any_list_bullet(self):
+        for line in (
+            "+ Not reviewed: W1 changed.",
+            "1. Not reviewed: W1 changed.",
+            "12) Not reviewed: W1 changed.",
+        ):
+            with self.subTest(line=line):
+                self.assertTrue(mdcheck.NOT_REVIEWED.match(line))
+
 
 if __name__ == "__main__":
     unittest.main()

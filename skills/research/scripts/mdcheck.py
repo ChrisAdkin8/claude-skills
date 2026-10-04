@@ -31,10 +31,12 @@ SECRETS = [
 ACCOUNT_ID = re.compile(r"(?<![\w.:-])\d{12}(?![\w-]|\.\d)")
 # An ARN's account field, which ACCOUNT_ID's lookbehind skips: arn:aws:iam::123456789012:role/x.
 ARN_ACCOUNT = re.compile(r"\barn:aws[\w-]*:[\w-]*:[\w-]*:\d{12}(?::|/|$)", re.MULTILINE)
-# `- Not reviewed:`, and the same in bold, italics or lower case, with or without the bullet:
-# check-spec's delta-review gate and /cold-review's review-state.py count these, so a
-# hand-written variant mustn't slip past them.
-NOT_REVIEWED = re.compile(r"\s*(?:[-*]\s+)?[*_]*not reviewed[*_]*\s*:", re.IGNORECASE)
+# `- Not reviewed:`, and the same in bold, italics or lower case, with any bullet (`-`, `*`, `+`,
+# `1.`, `1)`) or none: check-spec's delta-review gate and /cold-review's review-state.py count
+# these, so a hand-written variant mustn't slip past them.
+NOT_REVIEWED = re.compile(
+    r"\s*(?:(?:[-*+]|\d+[.)])\s+)?[*_]*not reviewed[*_]*\s*:", re.IGNORECASE
+)
 # A research note's `topic`: area or area/sub-area, each lowercase and hyphenated. check-note.py
 # fails anything else, and build-index.py files anything else as Unfiled.
 TOPIC = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*(?:/[a-z0-9]+(?:-[a-z0-9]+)*)?")

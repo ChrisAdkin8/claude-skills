@@ -101,12 +101,12 @@ before you share it.
 
 | Eval set | Cost per run, one model | Cap |
 |---|---|---|
-| Agent evals, all eleven cases | $1.89 on Sonnet, $4.22 on Opus (2026-10-01) | $5 a case, $10 for `research-ideas` |
+| Agent evals, all eleven cases | $1.80 on Sonnet, $4.58 on Opus (2026-10-04) | $5 a case, $10 for `research-ideas` |
 | Skill evals, per case | about $0.15 to $0.45 | $3 a case |
 | Skill evals that launch agents (`spec-quick`, `research-quick-flow`, `implement-basic`, `implement-trap`) | about $0.35 to $1.30 each, agents included | $3 a case, plus $2 for each agent it launches; under `implement-*`, $5 for the implementer and each verifier |
 
-Both sets on both models cost **$22.78** on 2026-10-01, reruns included. The implement cases alone
-cost $3.04 on both models on 2026-10-03.
+Both sets on both models cost **$15.23** on 2026-10-04, agents and reruns included. The implement
+cases alone cost $3.00 on both models the same day.
 
 The agent-eval cases run at the same time, so a run that goes wrong can cost far more than the
 typical figure. A cap stops a run only after the turn that crosses it: a *turn* is one step of a

@@ -1518,3 +1518,27 @@ Totals, agents included: Sonnet $1.07 (2 of 2), Opus $1.97 (2 of 2). $3.04 in al
 - **The network-setting check didn't act here.** The user's `~/.claude/settings.json` sets no
   `sandbox.network` key, so these runs exercise the sandbox and ledger, not the new refusal, which
   `tests/test_run_implementer.py` covers.
+
+## The 2026-10-04 review fixes: the implement cases (2026-10-04)
+
+The implement skill-eval cases on `main` at `1cb15cd`, run by hand from the main checkout,
+`EVAL_MODEL=sonnet` then `opus`, one set at a time (results `tests/skill-evals/results/20261004-100730`
+and `20261004-100948`). They cover three fixes from a review of the whole repo: `scan-diff.py`
+splits a diff's lines at newlines only (`61f33b3`), the resume Gate leaves out the record
+(`d1f6bca`), and the implementer's before-snapshot goes through a file (`015af82`). The agent evals
+weren't run: no agent file changed, and none of their cases runs `/implement`.
+
+Skill evals, with the implementer and verifiers each case launches (from their `run.json` files):
+
+| Case | Sonnet | Opus |
+|---|---|---|
+| implement-basic | PASS (35, $0.37); implementer $0.23, verifier $0.11 | PASS (32, $0.55); implementer $0.56, verifier $0.22 |
+| implement-trap | PASS (19, $0.22); implementer $0.13 | PASS (20, $0.40); implementer $0.21 |
+
+Totals, agents included: Sonnet $1.06 (2 of 2), Opus $1.94 (2 of 2). $3.00 in all.
+
+- **No change from the 2026-10-03 round.** Both cases pass on both models, at about the same cost.
+- **The cases don't reach the fixes.** Neither resumes in a new session, has a diff with a form
+  feed, or has enough refs to pass the argument limit; the unit tests cover each
+  (`tests/test_scan_diff.py`, `tests/test_run_implementer.py`). This round shows the changes broke
+  nothing else.

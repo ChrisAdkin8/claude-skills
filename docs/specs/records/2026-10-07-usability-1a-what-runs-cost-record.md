@@ -156,3 +156,10 @@ Needs a run: 2, 3, 13
 ## Evidence
 
 - Started at d32b79e
+- Baseline: python3 -m unittest discover -s tests -> pass (605 tests)
+- Baseline: ruff check --isolated --select E9,F . -> pass (local ruff; CI's `pipx run ruff==0.16.7` needs the network)
+- Baseline: git ls-files -z '*.sh' | xargs -0 shellcheck -S warning -> pass
+- Baseline: claude plugin validate . --json -> pass
+- Baseline: claude plugin validate .claude-plugin/plugin.json -> pass
+- Baseline: python3 tests/replay_guard.py -> pass (SKIP: no recorded transcripts readable in the sandbox)
+- Baseline: tests/agent-evals/run.sh and tests/skill-evals/run.sh -> not run: paid, run by hand (CLAUDE.md)

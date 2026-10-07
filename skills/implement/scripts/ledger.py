@@ -5,7 +5,8 @@ Usage:
   ledger.py path <run name>             print the ledger's path
   ledger.py spent <run name>            print what the implementer calls have spent, in USD
   ledger.py next-call <run name>        print the number the next implementer call takes
-  ledger.py append <run name> <json>    append one line, adding "at" if it has none
+  ledger.py append <run name> <json>    append one line, adding "at" if it has none, and an end
+                                        or settled line's "usd" from its "session" and "total"
 
 <run name> is `<repo dir>--<spec basename>`, as in ~/.cache/implement-runs/. The ledger is
 ~/.cache/implement-ledger/<run name>.jsonl, in a 0700 dir outside everything the implementer's
@@ -13,14 +14,26 @@ sandbox can write, and nothing here ever removes or rewrites it: to go past the 
 IMPLEMENT_MAX_USD or removes the file by hand. run-implementer.sh and run-verify.sh write and read
 it only through this script, so the format and the path rule live here.
 
-Three kinds of line, each one JSON object:
+These kinds of line, each one JSON object, with exactly these keys:
   {"at", "who": "implementer", "call": <n>, "event": "start", "budget": <usd>}
-  {"at", "who": "implementer", "call": <n>, "event": "end", "usd": <usd>}
+  {"at", "who": "implementer", "call": <n>, "event": "end", "usd": <usd>,
+   "session": <the result's session_id>, "total": <its total_cost_usd>}
+  {"at", "who": "implementer", "call": <n>, "event": "end", "usd": <budget>, "no_total": true}
+  {"at", "who": "implementer", "call": <n>, "event": "end", "usd": <budget>, "interrupted": true}
+  {"at", "who": "implementer", "call": <n>, "event": "settled", "usd": <usd>}, with "session"
+   and "total" too when its cost comes from a result
   {"at", "who": "verifier V<n>", "usd": <usd or null>, "note": <text>}
+and the end line written before session and total were kept, {"at", "who", "call", "event": "end",
+"usd"}, which counts as it did.
+
 A start's call is one more than the start lines before it, so a number never repeats across fresh
-runs; an end must follow its own start, once. Spent is the sum over implementer calls of the end's
-usd, or the start's budget if no end follows. Verifier lines don't count; they're checked for shape.
-Any other line, or a negative or non-finite number, refuses: exit 2, naming the line.
+runs; an end must follow its own start, once. A resumed session's result reports its running total,
+so an end's usd is the call's own cost: its total less the latest total an earlier line holds for
+the same session, or the total itself when there is none or it is lower. A settled line replaces
+the charge of a call charged its budget (no_total, interrupted, or with no end line), at most once,
+and its usd follows the same rule. Spent is the sum over implementer calls of the settled usd, or
+the end's, or the start's budget if neither follows. Verifier lines don't count; they're checked for
+shape. Any other line, or a negative or non-finite number, refuses: exit 2, naming the line.
 """
 
 import datetime
@@ -55,8 +68,22 @@ def amount(value, what, *, positive=False):
     return float(value)
 
 
+# Each implementer line's possible key sets, by event.
+BASE = {"at", "who", "call", "event"}
+KEYS = {
+    "start": [BASE | {"budget"}],
+    "end": [
+        BASE | {"usd", "session", "total"},
+        BASE | {"usd", "no_total"},
+        BASE | {"usd", "interrupted"},
+        BASE | {"usd"},  # written before session and total were kept
+    ],
+    "settled": [BASE | {"usd", "session", "total"}, BASE | {"usd"}],
+}
+
+
 def shape(line):
-    """The line's kind, `start`, `end` or `verifier`, or Bad if it is none of them."""
+    """The line's kind, `start`, `end`, `settled` or `verifier`, or Bad if it is none of them."""
     if not isinstance(line, dict):
         raise Bad("not a JSON object")
     if not isinstance(line.get("at"), str):
@@ -64,25 +91,30 @@ def shape(line):
     who = line.get("who")
     if who == "implementer":
         event = line.get("event")
-        keys = {
-            "start": {"at", "who", "call", "event", "budget"},
-            "end": {"at", "who", "call", "event", "usd"},
-        }
-        if event not in keys:
+        if event not in KEYS:
             raise Bad(
-                f"an implementer line's event must be start or end, not {event!r}"
+                f"an implementer line's event must be start, end or settled, not {event!r}"
             )
-        if set(line) != keys[event]:
+        if set(line) not in KEYS[event]:
             raise Bad(
-                f"an implementer {event} line has the keys {sorted(keys[event])}, not {sorted(line)}"
+                f"an implementer {event} line has the keys "
+                + " or ".join(str(sorted(keys)) for keys in KEYS[event])
+                + f", not {sorted(line)}"
             )
         call = line["call"]
         if isinstance(call, bool) or not isinstance(call, int) or call < 1:
             raise Bad(f"call must be a whole number from 1, not {call!r}")
         if event == "start":
             amount(line["budget"], "budget", positive=True)
-        else:
-            amount(line["usd"], "usd")
+            return event
+        amount(line["usd"], "usd")
+        if "session" in line:
+            if not isinstance(line["session"], str) or not line["session"]:
+                raise Bad(f"session must be a string, not {line['session']!r}")
+            amount(line["total"], "total")
+        for flag in ("no_total", "interrupted"):
+            if flag in line and line[flag] is not True:
+                raise Bad(f"{flag} must be true, not {line[flag]!r}")
         return event
     if isinstance(who, str) and VERIFIER.fullmatch(who):
         if set(line) != {"at", "who", "usd", "note"}:
@@ -102,7 +134,9 @@ class Ledger:
 
     def __init__(self, lines):
         self.starts = {}  # call -> budget
-        self.ends = {}  # call -> usd
+        self.ends = {}  # call -> its end line
+        self.settled = {}  # call -> usd
+        self.totals = {}  # session -> the latest total a line holds for it
         for number, line in enumerate(lines, 1):
             try:
                 self.add(line)
@@ -117,15 +151,50 @@ class Ledger:
                     f"start of call {line['call']}, but the next call is {len(self.starts) + 1}"
                 )
             self.starts[line["call"]] = float(line["budget"])
-        elif kind == "end":
-            if line["call"] not in self.starts:
-                raise Bad(f"end of call {line['call']}, which has no start line")
-            if line["call"] in self.ends:
-                raise Bad(f"a second end of call {line['call']}")
-            self.ends[line["call"]] = float(line["usd"])
+        elif kind in ("end", "settled"):
+            call = line["call"]
+            if call not in self.starts:
+                raise Bad(f"{kind} line for call {call}, which has no start line")
+            if call in self.settled:
+                raise Bad(f"{'an end' if kind == 'end' else 'a second settled line'} of call"
+                          f" {call}, after its settled line")
+            if kind == "end" and call in self.ends:
+                raise Bad(f"a second end of call {call}")
+            if kind == "end" and ("no_total" in line or "interrupted" in line):
+                if float(line["usd"]) != self.starts[call]:
+                    raise Bad(f"call {call}'s end charges {line['usd']}, not its budget")
+            if kind == "settled" and not self.unsettled(call):
+                raise Bad(f"call {call} wasn't charged its budget, so it can't be settled")
+            if "session" in line:
+                self.totals[line["session"]] = float(line["total"])
+            if kind == "end":
+                self.ends[call] = line
+            else:
+                self.settled[call] = float(line["usd"])
+
+    def unsettled(self, call):
+        """Whether the call is charged its budget: no end line, or one with no total or interrupted."""
+        end = self.ends.get(call)
+        return call not in self.settled and (
+            end is None or "no_total" in end or "interrupted" in end
+        )
+
+    def own(self, session, total):
+        """A call's own cost, from its session's running total and the latest one the ledger holds."""
+        earlier = self.totals.get(session)
+        if earlier is None or total < earlier:
+            return total
+        return round(total - earlier, 6)
+
+    def charge(self, call):
+        if call in self.settled:
+            return self.settled[call]
+        if call in self.ends:
+            return float(self.ends[call]["usd"])
+        return self.starts[call]
 
     def spent(self):
-        return sum(self.ends.get(call, budget) for call, budget in self.starts.items())
+        return sum(self.charge(call) for call in self.starts)
 
 
 def read(path):
@@ -165,6 +234,14 @@ def append(path, line):
         **line,
     }
     ledger = check(path)
+    if (
+        line.get("event") in ("end", "settled")
+        and "usd" not in line
+        and isinstance(line.get("session"), str)
+        and isinstance(line.get("total"), (int, float))
+        and not isinstance(line.get("total"), bool)
+    ):
+        line["usd"] = ledger.own(line["session"], amount(line["total"], "total"))
     try:
         ledger.add(line)
     except Bad as e:

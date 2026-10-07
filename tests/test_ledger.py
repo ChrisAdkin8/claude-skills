@@ -102,6 +102,92 @@ class Ledger(unittest.TestCase):
         code, _, err = self.ledger("append", "proj--spec", '{"usd": NaN}')
         self.assertEqual(code, 2, err)
 
+    def test_an_end_is_charged_its_own_share_of_the_sessions_total(self):
+        self.append({**START, "call": 1, "budget": 20})
+        self.assertEqual(self.append({**END, "call": 1, "session": "s", "total": 1})[0], 0)
+        self.append({**START, "call": 2, "budget": 19})
+        self.assertEqual(self.append({**END, "call": 2, "session": "s", "total": 1.3})[0], 0)
+        self.assertEqual([l["usd"] for l in self.lines()[1::2]], [1, 0.3])
+        self.assertEqual(self.ledger("spent", "proj--spec")[1], "1.3")
+        # Another session's total is its own; a lower total, as after a crash, counts whole.
+        self.append({**START, "call": 3, "budget": 18})
+        self.append({**END, "call": 3, "session": "t", "total": 2})
+        self.append({**START, "call": 4, "budget": 16})
+        self.append({**END, "call": 4, "session": "s", "total": 0.5})
+        self.assertEqual([l["usd"] for l in self.lines()[5::2]], [2, 0.5])
+        self.assertEqual(self.ledger("spent", "proj--spec")[1], "3.8")
+
+    def test_every_line_shape_reads(self):
+        self.path.parent.mkdir(parents=True)
+        at = {"at": "2026-10-08T00:00:00+00:00"}
+        lines = [
+            {**START, "call": 1, "budget": 20},
+            {**END, "call": 1, "usd": 1.5},  # from before session and total were kept
+            {**START, "call": 2, "budget": 18.5},
+            {**END, "call": 2, "usd": 0.5, "session": "s", "total": 2},
+            {**START, "call": 3, "budget": 8},
+            {**END, "call": 3, "usd": 8, "no_total": True},
+            {**START, "call": 4, "budget": 8},
+            {**END, "call": 4, "usd": 8, "interrupted": True},
+            {**START, "call": 5, "budget": 8},
+            {"who": "verifier V1", "usd": 1, "note": "finished"},
+            {**START, "call": 6, "budget": 8},
+            {**END, "call": 6, "usd": 8, "interrupted": True},
+            {"who": "implementer", "event": "settled", "call": 3, "usd": 0.25},
+            {"who": "implementer", "event": "settled", "call": 4, "usd": 0.5, "session": "s",
+             "total": 2.5},
+            {"who": "implementer", "event": "settled", "call": 5, "usd": 1},
+        ]  # fmt: skip
+        self.path.write_text("".join(json.dumps({**at, **l}) + "\n" for l in lines))
+        # 1.5 + 0.5 + 0.25 + 0.5 + 1 + 8 (call 6, unsettled); the verifier doesn't count.
+        self.assertEqual(self.ledger("spent", "proj--spec")[:2], (0, "11.75"))
+        self.assertEqual(self.ledger("next-call", "proj--spec")[1], "7")
+
+    def test_a_ledger_from_before_reads_as_it_did(self):
+        self.path.parent.mkdir(parents=True)
+        lines = [
+            {**START, "call": 1, "budget": 20},
+            {**END, "call": 1, "usd": 2.5},
+            {**START, "call": 2, "budget": 17.5},
+            {**END, "call": 2, "usd": 6.5},
+            {**START, "call": 3, "budget": 11},
+        ]
+        self.path.write_text("".join(json.dumps({"at": "x", **l}) + "\n" for l in lines))
+        self.assertEqual(self.ledger("spent", "proj--spec")[:2], (0, "20"))
+
+    def test_new_shapes_out_of_order_or_out_of_shape_are_refused(self):
+        settled = {"who": "implementer", "event": "settled"}
+        self.append({**START, "call": 1, "budget": 8})
+        self.append({**END, "call": 1, "usd": 1, "session": "s", "total": 1})
+        self.append({**START, "call": 2, "budget": 7})
+        for line in (
+            {**END, "call": 2, "usd": 1, "session": "s", "total": 1, "extra": 1},
+            {**END, "call": 2, "usd": 1, "session": "s"},  # no total
+            {**END, "call": 2, "usd": 1, "session": "", "total": 1},
+            {**END, "call": 2, "usd": 1, "session": 3, "total": 1},
+            {**END, "call": 2, "usd": 1, "session": "s", "total": -1},
+            {**END, "call": 2, "usd": 7, "no_total": False},
+            {**END, "call": 2, "usd": 7, "interrupted": "yes"},
+            {**END, "call": 2, "usd": 3, "interrupted": True},  # not its budget
+            {**END, "call": 2, "usd": 7, "interrupted": True, "no_total": True},
+            {**settled, "call": 1, "usd": 1},  # charged its cost, not its budget
+            {**settled, "call": 3, "usd": 1},  # no start
+            {**settled, "call": 2, "usd": 1, "interrupted": True},
+            {"who": "implementer", "event": "paused", "call": 2, "usd": 1},
+        ):
+            with self.subTest(line=line):
+                self.assertEqual(self.append(line)[0], 2)
+        self.assertEqual(len(self.lines()), 3)
+        self.assertEqual(self.append({**END, "call": 2, "usd": 7, "interrupted": True})[0], 0)
+        self.assertEqual(self.append({**settled, "call": 2, "usd": 0.4})[0], 0)
+        for line in (
+            {**settled, "call": 2, "usd": 0.4},  # a second settled line
+            {**END, "call": 2, "usd": 1},
+        ):
+            with self.subTest(line=line):
+                self.assertEqual(self.append(line)[0], 2)
+        self.assertEqual(self.ledger("spent", "proj--spec")[1], "1.4")
+
     def test_a_bad_ledger_is_refused_naming_its_line(self):
         self.path.parent.mkdir(parents=True)
         for text in (

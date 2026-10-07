@@ -9,6 +9,7 @@ Part 1, `2026-10-07-usability-1-costs-and-accounts`, was split into parts 1a and
 - 2026-10-07: spec-verifier, 35 of 42 claims confirmed. Plan holds: yes. One citation corrected; seven quotes from Claude Code's documentation marked *(unverified)*, since the verifier's sandbox can't reach that site, with spike question 4 added for the one the Accounts decision rests on; the missed test stubs added to W6 and the step 6 report to W2.
 - Verifier round 2 ran on 2026-10-07: after the cold review, re-checking W1 to W7. 45 of 47 claims confirmed. Plan holds: yes. Two Background statements corrected (the measured token sums, the test stub's costs), one W2 wording made accurate, and `docs/containment.md` added to W7.
 - 2026-10-07: spec-verifier after the spikes (`/spec finish`), 49 of 51 claims confirmed. Plan holds: yes. One citation corrected (where each authentication message was seen); the bash 3.2 claim cited to spike S5; how the `apiKeyHelper` override reaches each launcher's settings added to the Design and W4; exit 5 added to `run-agent.sh`'s header (W4) and the repo guide (W7). `cite-repo: none` kept: the template uses it for a spec citing its own repo.
+- 2026-10-08: spec-verifier (`/spec finish`, after the second full review's folds), 42 of 43 claims confirmed. Plan holds: yes. One citation completed: the Background's `--setting-sources user` claim now cites each of the five launchers it covers, not only `run-agent.sh`. `cite-repo: none` kept again: the template sets it for a spec citing its own repo.
 
 ## Cold review
 

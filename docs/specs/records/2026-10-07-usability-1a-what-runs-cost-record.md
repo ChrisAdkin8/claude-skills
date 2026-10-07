@@ -9,6 +9,7 @@ Part 1, `2026-10-07-usability-1-costs-and-accounts`, was split into parts 1a and
 - 2026-10-07: spec-verifier, 35 of 42 claims confirmed. Plan holds: yes. One citation corrected; seven quotes from Claude Code's documentation marked *(unverified)*, since the verifier's sandbox can't reach that site, with spike question 4 added for the one the Accounts decision rests on; the missed test stubs added to W6 and the step 6 report to W2.
 - Verifier round 2 ran on 2026-10-07: after the cold review, re-checking W1 to W7. 45 of 47 claims confirmed. Plan holds: yes. Two Background statements corrected (the measured token sums, the test stub's costs), one W2 wording made accurate, and `docs/containment.md` added to W7.
 - 2026-10-07: spec-verifier after the spikes (`/spec finish`), 49 of 51 claims confirmed. Plan holds: yes. One citation corrected (where each authentication message was seen); the bash 3.2 claim cited to spike S5; how the `apiKeyHelper` override reaches each launcher's settings added to the Design and W4; exit 5 added to `run-agent.sh`'s header (W4) and the repo guide (W7). `cite-repo: none` kept: the template uses it for a spec citing its own repo.
+- 2026-10-08: spec-verifier (`/spec finish`, after the second full review's folds), 47 of 48 claims confirmed. Plan holds: yes. One citation corrected (the after-call check of git's config and hooks is at `run-implementer.sh:390-399`). Its other problem, that W2's per-call cap would change an existing test's first-call budget, turned out to touch five tests, two of which would change meaning: W2 now keeps their figures through the tests' shared environment, and checks `IMPLEMENT_CALL_MAX_USD` as `IMPLEMENT_MAX_USD` is.
 
 ## Cold review
 
@@ -138,6 +139,9 @@ Needs a run: 2, 3, 13
 - Not reviewed: W2 names `settle` in `ledger.py`'s usage text and the launcher's header, and W4 in the README, in place of deleting the ledger by hand, from second review row 11, on 2026-10-07.
 - Not reviewed: exit 6 writes no reply, and `/implement`'s step 4 reads nothing for it, from second review row 12, on 2026-10-07.
 - Not reviewed: W2's Done when asks for ten clean runs of the signal tests in a row, and Risks name CI's bash 3.2, from second review row 13, on 2026-10-07.
+
+- Not reviewed: W2's tests' shared environment clears `IMPLEMENT_CALL_MAX_USD` from the caller's and sets it to 100, so the five tests that expect a budget or charge above 8 keep their figures, and W2's own tests remove it to get the default, from the 2026-10-08 verifier round's other problems, on 2026-10-08.
+- Not reviewed: W2 checks `IMPLEMENT_CALL_MAX_USD` as `IMPLEMENT_MAX_USD` is, an empty value meaning 8, and its Done when tests the bad values `test_a_bad_cap_is_refused` tries, found while applying the 2026-10-08 verifier round, on 2026-10-08.
 
 ## Spikes
 

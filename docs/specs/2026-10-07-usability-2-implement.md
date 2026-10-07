@@ -14,7 +14,7 @@ cite-repo: none
 
 `/implement` says what it can't do before it spends anything. A repo whose checks need downloaded dependencies is flagged first, with a pause to install them, and every refusal the launcher would make comes before the worktree and first commit exist. A spec edited by hand since its review stops at the gate. Folder and file names with spaces or accents work. When the user's own git work trips the safety check, the message says what changed and how to carry on. The report ends with the commands to review, merge and clean up, and the verifier's copies of the code are deleted once used.
 
-Part 2 of 7 from the usability review of 2026-10-07; part 1 (`docs/specs/2026-10-07-usability-1-costs-and-accounts.md`) is a prerequisite for W1, which reuses its launch checks.
+Part 2 of 7 from the usability review of 2026-10-07; part 1b (`docs/specs/2026-10-07-usability-1b-which-account-pays.md`) is a prerequisite for W1, which reuses its launch checks.
 
 ## Decision
 
@@ -54,7 +54,7 @@ Read at `377b2dd` on 2026-10-07.
 
 **Gate, new checks 5 to 7** (`skills/implement/SKILL.md` step 2):
 
-5. `run-implementer.sh --check <repo> <spec basename>` runs the launcher's refusals: part 1's launch checks, the settings keys, the temp dir, the run name and the cap. It changes nothing and launches nothing.
+5. `run-implementer.sh --check <repo> <spec basename>` runs the launcher's refusals: part 1b's launch checks, the settings keys, the temp dir, the run name and the cap. It changes nothing and launches nothing.
 6. `review-state.py <spec>`: on `unlogged`, stop with "the spec changed after its review and the change isn't logged: run `/cold-review <spec>`, which logs it and reviews it". On `delta` with unreviewed lines, `check-spec.py` already fails.
 7. **Dependencies.** Look in the repo root for `package.json`, `pyproject.toml`, `requirements*.txt`, `uv.lock`, `poetry.lock`, `Pipfile`, `Cargo.toml`, `go.mod`, `Gemfile`, `pom.xml`, `build.gradle*` and `composer.json`. If any is there, ask one question before spending: install dependencies into the worktree first (recommended), carry on knowing checks may come back CANNOT-RUN, or stop. On the first answer, step 3 makes the worktree, prints the path and the repo's own install command if its `CLAUDE.md` or CI names one, and ends the turn; the user says when it's done.
 
@@ -122,7 +122,7 @@ Read at `377b2dd` on 2026-10-07.
 
 | Item | Estimate | Depends on |
 |---|---|---|
-| W1 | 2 h | part 1's W6 |
+| W1 | 2 h | part 1b's W5 and W7 |
 | W2 | 2 h | none |
 | W3 | 3 h, after spike question 1 | W1 |
 | W4 | 3 h | none |

@@ -14,7 +14,7 @@ cite-repo: none
 
 `/spec status` tells a returning user where a spec stands and the one command to run next. Reports recommend which findings to fold in, and explain any in-house word they use. The skill evals cover the paths no case reaches today: `/idea`, a full `/cold-review` and its prompt mode, `/spec finish` and `/spec spike`, `/implement` resuming after a question, a fresh setup, and the real back-and-forth of an agent running in the background while the session waits. The session miner counts every command, and a test stops the skills' instructions from quietly growing.
 
-Part 7 of 7 from the usability review of 2026-10-07. W4 needs parts 1 and 3 (the account token and the starter notes); the rest stands alone.
+Part 7 of 7 from the usability review of 2026-10-07. W4 needs parts 1b and 3 (the account token and the starter notes); the rest stands alone.
 
 ## Decision
 
@@ -68,7 +68,7 @@ With no spec named, it lists every spec in the repo's spec folder with its statu
 - `spec-finish`: a hand-edited spec gets its check and a verifier round recorded.
 - `spec-spike`: one local spike question runs, its answer is folded, and the results file is written.
 - `implement-question`: a spec whose W1 is ambiguous makes the implementer ask; the prompt answers it; the grader finds the answer logged as a departure and W1's commit after it.
-- `fresh-setup`: `HOME` points at a scratch folder holding nothing; the case runs `/idea setup`, then `/idea` and `/research quick`, authenticated by `CLAUDE_CODE_OAUTH_TOKEN` (part 1), since the keychain login may not follow a changed home folder (spike question 2).
+- `fresh-setup`: `HOME` points at a scratch folder holding nothing; the case runs `/idea setup`, then `/idea` and `/research quick`, authenticated by `CLAUDE_CODE_OAUTH_TOKEN` (part 1b), since the keychain login may not follow a changed home folder (spike question 2).
 - `background-flow`: `/spec quick` run through `--input-format stream-json`, with stdin held open until the session's final report, so the verifier runs in the background and the session resumes from its checklist (spike question 1).
 
 **Miner.** `tests/mine-sessions.py` adds `implement` and `implementer`, strips a `<plugin>:` prefix before matching, and reports, per skill, the Bash calls whose command matches none of that skill's `allowed-tools` rules: the calls a user outside auto mode would have been asked about.
@@ -126,10 +126,10 @@ With no spec named, it lists every spec in the repo's spec folder with its statu
 | W1 | 4 h | part 2's closing commands, for the last row |
 | W2 | 1 h | part 3's glossary |
 | W3 | 6 h, plus the cases' first runs | none |
-| W4 | 2 h, after spike question 2 | parts 1 and 3 |
+| W4 | 2 h, after spike question 2 | parts 1b and 3 |
 | W5 | 4 h, after spike question 1 | none |
 | W6 | 3 h | none |
-| W7 | 1 h | parts 1 to 6, so the budgets start from the new sizes |
+| W7 | 1 h | parts 1a, 1b and 2 to 6, so the budgets start from the new sizes |
 | Evals | both sets on both models, the new cases included | W1 to W7 |
 
 The hours are guesses. Each new case costs about $0.40 for the skill's own session, capped at $3, plus up to $2 for each agent it launches and $5 for an implementer (`CLAUDE.md:27-30`, `:35-38`); with eight new cases on two models, budget about $25 a full run on top of today's $15.23 (`docs/repo-guide.md:108-109`).

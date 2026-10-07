@@ -14,7 +14,7 @@ cite-repo: none
 
 The research and checking agents can reach the package registries, GitLab and Azure's price list, and when a site is blocked they can tell it was blocked rather than empty. The guard stops refusing ordinary project names in searches, and its refusals name the allowed way round. The credential files and secret variables it misses today are covered, in every settings file, and a moved Claude Code folder is guarded like `~/.claude`. The user hears, in one line per run, what the guard refused.
 
-Part 5 of 7 from the usability review of 2026-10-07. It stands alone. Part 1 adds the two Claude tokens to the hidden variables; this part adds the rest.
+Part 5 of 7 from the usability review of 2026-10-07. It stands alone. Part 1b adds the two Claude tokens to the hidden variables; this part adds the rest.
 
 ## Decision
 
@@ -122,9 +122,9 @@ Read at `377b2dd` on 2026-10-07.
 | W2 | 30 min | none |
 | W3 | 1 h | none |
 | W4 | 4 h | none |
-| W5 | 3 h | part 1's W5, to edit each list once |
+| W5 | 3 h | part 1b's W6, to edit each list once |
 | W6 | 3 h | none |
-| W7 | 2 h | part 1's W3, which adds the cost to the same last line |
+| W7 | 2 h | part 1a's W3, which adds the cost to the same last line |
 | Evals | the agent evals on both models, and the replay | W1 to W7 |
 
 The hours are guesses from reading the guard. Every item changes agent files or the guard, so the agent evals run on both models (`CLAUDE.md:23-26`), and `tests/replay_guard.py` must pass, with each intended difference listed by fingerprint (`CLAUDE.md:19-21`).

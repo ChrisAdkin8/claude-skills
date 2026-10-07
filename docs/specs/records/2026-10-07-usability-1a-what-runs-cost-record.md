@@ -152,3 +152,7 @@ Needs a run: 2, 3, 13
 - Question 5: Route: spike, by hand, the stop-the-task half only; closing the session needs the user. Changes: the Design's Interruptions paragraph and W2. Expect: stopping a background task sends `TERM` to its whole process group, so a parent and its child both log it. Box: by hand, a background Bash task stopped with TaskStop; no model.
 - Question 6: Route: spike, by hand. Changes: W1 and the Background's budget sentence. Expect: a resumed call with `--max-budget-usd` below the session's earlier spend runs several turns, because the budget counts only its own spend. Box: by hand, Haiku, under $0.10.
 - Question 7: Route: spike, by hand. Changes: W5's exception for `tests/skill-evals/agent-case-settings.json`. Expect (written after the run, which came first): a variable on the deny list still reaches a command in `excludedCommands`, since the deny applies to sandboxed commands. Box: by hand, Haiku; $0.0079 for two calls.
+
+## Evidence
+
+- Started at d32b79e

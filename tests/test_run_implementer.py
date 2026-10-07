@@ -27,10 +27,21 @@ with open(calls, "a") as f:
 n = sum(1 for _ in open(calls))
 exec(os.environ.get("STUB_EXEC", ""))
 tail = os.environ.get("STUB_TAIL", "Implementer: done")
-out = {"session_id": "sess-1", "result": f"reply {n}\\n{tail}", "subtype": "success"}
+# A fresh call's session is sess-<n>; a resumed one keeps the session it resumes.
+argv = sys.argv[1:]
+session = argv[argv.index("--resume") + 1] if "--resume" in argv else f"sess-{n}"
+out = {"session_id": session, "result": f"reply {n}\\n{tail}", "subtype": "success"}
 cost = os.environ.get("STUB_COST", "0.5")
 if cost != "none":
     out["total_cost_usd"] = float(cost)
+    # Cumulative mode: STUB_COST is this call's own spend, and the result reports the session's
+    # running total, as claude -p does for a resumed session. Keyed on the session, not the call.
+    if os.environ.get("STUB_CUMULATIVE"):
+        totals_path = calls + ".totals"
+        totals = json.load(open(totals_path)) if os.path.exists(totals_path) else {}
+        totals[session] = totals.get(session, 0) + float(cost)
+        json.dump(totals, open(totals_path, "w"))
+        out["total_cost_usd"] = totals[session]
 print(json.dumps(out))
 """
 LEDGER = REPO / "skills" / "implement" / "scripts" / "ledger.py"
@@ -438,6 +449,8 @@ class RunImplementer(unittest.TestCase):
 
     def test_resume_gets_the_cap_less_what_was_spent(self):
         self.brief()
+        # Each result reports the session's running total; each call is charged its share.
+        self.env["STUB_CUMULATIVE"] = "1"
         self.env["IMPLEMENT_MAX_USD"] = "10"
         self.env["STUB_COST"] = "2.5"
         code, out = self.launch(self.worktree, self.run_dir)
@@ -464,6 +477,8 @@ class RunImplementer(unittest.TestCase):
 
     def test_resume_refused_once_the_cap_is_spent(self):
         self.brief()
+        # Each result reports the session's running total; each call is charged its share.
+        self.env["STUB_CUMULATIVE"] = "1"
         self.env["IMPLEMENT_MAX_USD"] = "5"
         self.env["STUB_COST"] = "3"
         self.assertEqual(self.launch(self.worktree, self.run_dir)[0], 0)
@@ -501,6 +516,19 @@ class RunImplementer(unittest.TestCase):
             capture_output=True, text=True, env=self.env, check=True,
         )  # fmt: skip
         return run.stdout.strip()
+
+    def test_a_resumed_call_is_charged_only_its_own_cost(self):
+        # claude -p reports a resumed session's running total, not the call's own spend.
+        self.brief()
+        self.env["STUB_COST"] = "1.00"
+        self.assertEqual(self.launch(self.worktree, self.run_dir)[0], 0)
+        (self.run_dir / "followup.md").write_text("Carry on.\n")
+        self.env["STUB_COST"] = "1.30"
+        self.assertEqual(self.launch(self.worktree, self.run_dir, "--resume")[0], 0)
+        self.assertEqual(self.spent(), "1.3")
+        first, second = (l for l in self.ledger_lines() if l["event"] == "end")
+        self.assertEqual((first["session"], first["total"], first["usd"]), ("sess-1", 1, 1))
+        self.assertEqual((second["session"], second["total"], second["usd"]), ("sess-1", 1.3, 0.3))
 
     def test_a_fresh_run_keeps_the_count(self):
         self.brief()

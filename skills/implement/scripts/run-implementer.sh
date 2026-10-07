@@ -29,9 +29,10 @@
 # digits with an optional decimal part, above 0). Spent is read from the ledger,
 # ~/.cache/implement-ledger/<repo dir>--<spec basename>.jsonl (ledger.py beside this script), which
 # no run resets, fresh or resumed: each call gets the cap less what's spent, and is refused once
-# that reaches the cap. A call with no valid total_cost_usd is charged its whole budget, as is one
-# that never wrote its end line. To go past the cap, raise IMPLEMENT_MAX_USD or remove the ledger
-# by hand. --max-budget-usd stops a call only after the turn that crosses it.
+# that reaches the cap. A resumed call's total_cost_usd is its session's running total, so each
+# call is charged its own share of it. A call with no valid total_cost_usd is charged its whole
+# budget, as is one that never wrote its end line. To go past the cap, raise IMPLEMENT_MAX_USD or
+# remove the ledger by hand. --max-budget-usd stops a call only after the turn that crosses it.
 #
 # On the user's default model, or on $RUN_AGENT_MODEL if it's set, as hooks/run-agent.sh does, so
 # the skill evals' per-model runs reach it.
@@ -345,6 +346,31 @@ else:
 PY
 }
 
+# The ledger line for a call's result, given run.json and the event (end or settled): the
+# result's session_id and total_cost_usd, from which ledger.py charges the call's own share of the
+# session's running total; or, for an end with no finite, non-negative total, the whole budget.
+# A result with a total but no session_id is charged its total.
+end_line() {
+  python3 - "$1" "$2" "$call" "$budget" <<'PY'
+import json, math, sys
+path, event, call, budget = sys.argv[1:]
+try:
+    result = json.load(open(path))
+    cost, session = result.get("total_cost_usd"), result.get("session_id")
+except (OSError, ValueError, AttributeError):
+    cost = session = None
+line = {"who": "implementer", "call": int(call), "event": event}
+ok = isinstance(cost, (int, float)) and not isinstance(cost, bool) and math.isfinite(cost) and cost >= 0
+if not ok:
+    line.update(usd=float(budget), no_total=True)
+elif isinstance(session, str) and session:
+    line.update(session=session, total=cost)
+else:
+    line.update(usd=cost)
+print(json.dumps(line))
+PY
+}
+
 # The ledger's start line, then its hash: nothing but this script writes the ledger, so a change
 # by the end of the call is a write the sandbox should have stopped.
 sha() { shasum -a 256 < "$ledger" | cut -d' ' -f1; }
@@ -369,19 +395,7 @@ if [ "$(sha)" != "$before" ]; then
     "reply was written, so act on nothing from this run" >&2
   exit 4
 fi
-# The call's cost, or its whole budget if run.json has no finite, non-negative total_cost_usd.
-usd=$(python3 - "$run/run.json" "$budget" <<'PY'
-import json, math, sys
-try:
-    cost = json.load(open(sys.argv[1])).get("total_cost_usd")
-except (OSError, ValueError, AttributeError):
-    cost = None
-ok = isinstance(cost, (int, float)) and not isinstance(cost, bool) and math.isfinite(cost) and cost >= 0
-print(cost if ok else sys.argv[2])
-PY
-)
-"$ledger_py" append "$run_name" \
-  "{\"who\": \"implementer\", \"call\": $call, \"event\": \"end\", \"usd\": $usd}" ||
+"$ledger_py" append "$run_name" "$(end_line "$run/run.json" end)" ||
   die "couldn't write the ledger's end line for call $call to $ledger"
 
 n=1; while [ -e "$run/run-$n.json" ]; do n=$((n + 1)); done

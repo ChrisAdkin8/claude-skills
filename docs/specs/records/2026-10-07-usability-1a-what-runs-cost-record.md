@@ -163,3 +163,7 @@ Needs a run: 2, 3, 13
 - Baseline: claude plugin validate .claude-plugin/plugin.json -> pass
 - Baseline: python3 tests/replay_guard.py -> pass (SKIP: no recorded transcripts readable in the sandbox)
 - Baseline: tests/agent-evals/run.sh and tests/skill-evals/run.sh -> not run: paid, run by hand (CLAUDE.md)
+
+## Implementation
+
+- 2026-10-08, W1 (pending): a result with a valid `total_cost_usd` but no `session_id` gets an end line in the old shape (`usd` only), charged its total, since the Design's end shapes have no case for it and charging the budget would over-count a known cost; `ledger.py append` fills an end's `usd` from its `session` and `total`, so the rule lives in `ledger.py` beside the format.

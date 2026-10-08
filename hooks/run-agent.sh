@@ -15,6 +15,8 @@
 # Exit 3: the run finished, but reply.md doesn't have that shape: an API error such as "Request
 # timed out", a budget stop, or an agent that ignored its format. Don't act on it as a verdict.
 # Exit 2: the run couldn't start. Any other non-zero exit is claude's own, with run.err saying why.
+# Once a run has finished, the line the script ends with, the `finished` line or the exit 3 one,
+# ends with what it cost, from run.json's total_cost_usd: `cost $0.64`, or `cost unknown`.
 #
 # Each run is capped at $RUN_AGENT_MAX_USD (default $10 for the researcher, $5 for the others;
 # the costliest recorded researcher run, the research-ideas eval, was $2.59 on 2026-09-27) and 200 turns. --max-budget-usd stops a
@@ -137,6 +139,19 @@ reply = d.get("result") or f"run-agent: the run ended with subtype {d.get('subty
 (run / "reply.md").write_text(reply + "\n")
 PY
 
+# What the run cost, for whichever line the script ends with: run.json's total_cost_usd, the
+# session's running total on a resumed run, so the latest figure is the whole session's.
+cost=$(python3 - "$run/run.json" <<'PY'
+import json, math, sys
+try:
+    cost = json.load(open(sys.argv[1])).get("total_cost_usd")
+except (OSError, ValueError, AttributeError):
+    cost = None
+ok = isinstance(cost, (int, float)) and not isinstance(cost, bool) and math.isfinite(cost) and cost >= 0
+print(f"cost ${cost:.2f}" if ok else "cost unknown")
+PY
+)
+
 # The closing lines each agent's file tells it to reply with. A reply without them is not a
 # verdict, whatever it says, so the skill mustn't read it as one.
 shape_ok() {
@@ -157,8 +172,8 @@ PY
 }
 if [ "$status" -eq 0 ] && ! shape_ok; then
   echo "run-agent: $agent finished, but its reply isn't in the shape its instructions ask for;" \
-    "see $run/reply.md" >&2
+    "see $run/reply.md; $cost" >&2
   exit 3
 fi
-echo "run-agent: $agent finished (exit $status); reply in $run/reply.md"
+echo "run-agent: $agent finished (exit $status); reply in $run/reply.md; $cost"
 exit "$status"

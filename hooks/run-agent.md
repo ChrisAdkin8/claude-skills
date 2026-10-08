@@ -12,6 +12,8 @@ How `/research`, `/spec` and `/cold-review` run their agents: `researcher`, `res
    - **2:** the run never started (a bad argument, a missing brief, `--resume` with no session). The command's own output says why; a `run.err` in the run dir is from an earlier run.
    - **Any other:** no reply. `run.err` and `run.json` in the run dir say why.
 
+   Keep the cost the script's last line ends with, `cost $0.64` or `cost unknown`, for the skill's report. A resumed run's figure is the whole session's, earlier calls included, so for each run dir keep only its latest. The skill's report adds one line for its agents, worded `Agents cost $<total> (<agent> $<cost>, …)`, or `Agents cost at least $<known> (<agent> unknown, …)` when any run's cost is unknown.
+
 ## Follow-ups
 
 To send an agent a follow-up in the same session, Write `<run dir>/followup.md` and run the same command with `--resume` added. Its new reply replaces `reply.md`, and the earlier one is kept as `reply-<n>.md`.

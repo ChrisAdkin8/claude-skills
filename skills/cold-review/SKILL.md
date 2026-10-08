@@ -155,7 +155,9 @@ If the reply can't be used, relay nothing. Tell the user in one line, and end yo
    - the `neither` ones: one line in total;
    - `Cold read: no`: where it had to stop;
    - rows `Needs a run` names: offer to run those commands yourself;
-   - a finding you think is wrong: say why in one line, but keep it.
+   - a finding you think is wrong: say why in one line, but keep it;
+   - what the reviewer cost, from `run-agent.sh`'s last line as `${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.md`
+     step 3 says, in one line: `Agents cost $<total> (<agent> $<cost>, …)`, or `Agents cost at least $<known> (<agent> unknown, …)` when any run's cost is unknown.
 3. **Offer, in one line each:** folding in the `correctness` and `requirement` findings, and saving
    the review. Do neither unasked, but save a spec's review, full or delta, without asking.
    - **Folding in:** fold only the ones the user picks. A document with a saved review logs each

@@ -494,6 +494,8 @@ claude -p --agents "$run/agents.json" --agent implementer --output-format json -
   -- "$prompt" < /dev/null > "$run/run.json" 2> "$run/run.err" &
 pid=$!
 wait "$pid" || status=$?
+# The call is over: a signal now would have the trap charge it again, against a stale hash.
+trap '' INT TERM HUP
 
 ledger_unchanged || exit 4
 "$ledger_py" append "$run_name" "$(end_line "$run/run.json" end)" ||

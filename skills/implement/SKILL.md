@@ -40,7 +40,7 @@ You frame, relay and verify; you don't write the code. The work items are done b
 - `<spec>`: the path given; stop if there is none. `<repo>`: `git-read.py -C <spec's dir> rev-parse --show-toplevel`, which must be under `~/code` (else stop: `/implement` works only on repos there). `<repo dir>`: its directory name.
 - `<basename>`: the spec's filename without `.md`. `<record>`: `<spec dir>/records/<basename>-record.md`. `<spikes>`: `<spec dir>/spikes/<basename>-results.md` (it may not exist). Paths below are from the repo root unless they start with `~`.
 - `<worktree>`: `<repo>/../<repo dir>-worktrees/<basename>`, written with `~`. `<branch>`: `implement/<basename>`.
-- `<run name>`: `<repo dir>--<basename>`. `<run dir>`: `~/.cache/implement-runs/<run name>/implementer`. `<baseline>`: `~/.cache/implement-runs/<run name>/scratch/baseline.txt`, in the one dir outside the worktree the implementer may write. `<ledger>`: `~/.cache/implement-ledger/<run name>.jsonl`, the cost of every implementer and verifier run for this spec. `<scratch V<n>>`: `~/.cache/implement-verify/<repo dir>/<basename>/V<n>`.
+- `<run name>`: `<repo dir>--<basename>`. `<run dir>`: `~/.cache/implement-runs/<run name>/implementer`. `<baseline>`: `~/.cache/implement-runs/<run name>/scratch/baseline.txt`, in the one dir outside the worktree the implementer may write. `<scratch V<n>>`: `~/.cache/implement-verify/<repo dir>/<basename>/V<n>`.
 - **New or resume.** `git-read.py -C <repo> branch --list <branch>`: empty means a new run; a branch means resume (step 3's Resume).
 
 ## 2. Gate

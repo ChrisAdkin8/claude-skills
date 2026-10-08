@@ -149,3 +149,4 @@ Needs a run: 1, 3
 - Baseline: claude plugin validate . --json -> pass (only the expected plugin.json version warning)
 - Baseline: claude plugin validate .claude-plugin/plugin.json -> pass
 - Baseline: python3 tests/replay_guard.py -> pass (SKIP: the sandbox can't read the recorded transcripts, so nothing was checked)
+- W5 (d406b6f): Done when `python3 -m unittest tests.test_launch_checks tests.test_implement_skill` -> pass (12 + 7 tests; failed first: 19 failures and 11 errors in the new launcher test, 2 failures in the new step 4 and 5 test); the changed assertions in `tests/test_prepare_verify.py`, `tests/test_run_spike.py` and `tests/test_eval_runners.py` pass; `shellcheck -S warning` passes on every changed script; suite pass (617 tests); scan clean

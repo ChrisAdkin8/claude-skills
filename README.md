@@ -10,8 +10,8 @@ what was written, not what was meant.
 
 **Is it for you?** It's for people who use Claude Code most days and want a plan checked before
 code gets written. It has only been tried on macOS. The research and each check run a paid
-agent, capped at $5 a run ($10 for the research). Each `/implement` run's implementer is capped at
-$20 in all, and each of its up to two checker runs at $5.
+agent, capped at $5 a run ($10 for the research). `/implement`'s implementer is capped at $20 per
+spec, across all its runs, and each of its up to two checker runs at $5 on top of that.
 
 [Try it](#try-it) · [How it works](#from-idea-to-merged-change) ·
 [A worked example](#a-worked-example) · [Safety and cost](#safety-and-cost)
@@ -368,12 +368,21 @@ What things cost:
   environment variable overrides both. Agents run on your default model, or on the one
   `RUN_AGENT_MODEL` names (`sonnet` or `opus`).
 - **Each spec's implementer** is capped at $20 in all, across every `/implement` run of that
-  spec and every resume with an answer, until you remove its cost ledger,
-  `~/.cache/implement-ledger/<repo>--<spec>.jsonl`, by hand. The `IMPLEMENT_MAX_USD` environment
-  variable overrides the cap. Each of its up to two checker runs is capped at $5.
+  spec and every resume with an answer, and each call at $8 of that. The `IMPLEMENT_MAX_USD`
+  environment variable overrides the $20, and `IMPLEMENT_CALL_MAX_USD` the $8. What it has spent
+  is kept in a cost ledger, `~/.cache/implement-ledger/<repo>--<spec>.jsonl`. A call whose cost is
+  never known, such as one stopped before it could report it, is charged its whole budget, at most
+  $8. If you know what it cost, from the Claude Console's usage page, run the `ledger.py settle`
+  command that the refusal at the cap names, to charge it that instead. Don't delete the ledger.
+- **Each of its up to two checker runs** is capped at $5, outside the implementer's $20.
 - **Each spike** is capped at $2 and 60 turns. A *turn* is one step: Claude replies once, and may
   use a tool. Assume a spike that fetches anything from the web costs close to its cap.
 - A cap stops a run only after the turn that crosses it, so a run can go over by up to one turn.
+- **The figures are estimates**, Claude Code's own count, not your bill. On a subscription they
+  measure use against your plan, not money spent.
+- **Set the variables** `IMPLEMENT_MAX_USD`, `IMPLEMENT_CALL_MAX_USD`, `RUN_AGENT_MAX_USD` and
+  `RUN_AGENT_MODEL` in the shell that starts Claude Code, or under `env` in
+  `~/.claude/settings.json`.
 
 ## Working on this repo
 

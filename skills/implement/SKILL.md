@@ -81,6 +81,7 @@ On resume, run the Gate in the worktree instead, where check 1 names only `<spec
    - **3**: the reply doesn't end with an `Implementer:` line. Send one follow-up asking it to reply again, in full, ending with that line. If that exits 3 too, stop and tell the user.
    - **2**: the run never started, or its cap is spent. Stop and give the script's message.
    - **4**: the run changed the repo's shared git config or hooks, a worktree's git pointers or the ledger, or left a submodule config that names a program. Stop at once: run no git command in the repo or the worktree, `git-read.py` included, read nothing the run wrote, and tell the user each path the script's message names, so they can check it before anything runs git there.
+   - **5**: the run found no Claude account to use. Stop, send no follow-up (the session has no account to answer it), and give the user the script's account guidance as it printed it.
    - **6**: the call was interrupted (the task was stopped, or the session closed) and wrote no reply. Read nothing, `reply.md` included: stop, and tell the user the call was interrupted, what the script's message says it was charged, and that `/implement <spec>` carries on from the last committed work item.
    - **Any other**: stop; `run.err` and `run.json` in the run dir say why.
 
@@ -93,6 +94,7 @@ On resume, run the Gate in the worktree instead, where check 1 names only `<spec
 3. Run `${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/run-verify.sh <scratch V1>` with `run_in_background: true`, and end your turn. When it returns, go by its exit code before you read anything:
    - **0**: read `<scratch V1>/reply.md`.
    - **4**: the run left a link, or something else that isn't a plain file, where its output goes, which the Read tool would follow out of the scratch directory; or it changed an input the verifier reads (the spec, the record, a diff), so its verdict may rest on something you didn't write. Read none of its files, `run.json` included, so its cost is unknown. Under the record's `## Evidence` in the worktree, add `- Verifier V1 (<head commit>): refused: <the script's message>`, use nothing from its reply, go on to step 6 (Evidence and report), and say in the report that the implementation wasn't verified.
+   - **5**: the run found no Claude account to use. Stop, and give the user the script's account guidance as it printed it.
    - **2, 3 or any other**: stop and tell the user, as step 4 does.
 4. **Copy its reply**, the table, the `Other commits:` line and the closing lines, under the record's `## Evidence` in the worktree, headed `- Verifier V1 (<head commit>):`.
 5. **CANNOT-RUN rows.** If any, write a follow-up listing each (its Done when and the verifier's reason) to `<run dir>/followup.md`, and resume the implementer. It runs them in the worktree and adds `implementer-run:` lines, apart from the table.

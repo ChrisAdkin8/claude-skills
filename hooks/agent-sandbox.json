@@ -18,6 +18,8 @@
       "envVars": [
         {"name": "CLAUDE_CODE_MESSAGING_TOKEN", "mode": "deny"},
         {"name": "ANTHROPIC_API_KEY", "mode": "deny"},
+        {"name": "ANTHROPIC_AUTH_TOKEN", "mode": "deny"},
+        {"name": "CLAUDE_CODE_OAUTH_TOKEN", "mode": "deny"},
         {"name": "GH_TOKEN", "mode": "deny"},
         {"name": "GITHUB_TOKEN", "mode": "deny"},
         {"name": "TFE_TOKEN", "mode": "deny"},

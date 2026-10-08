@@ -10,6 +10,7 @@ How `/research`, `/spec` and `/cold-review` run their agents: `researcher`, `res
    - **0:** `reply.md` is the agent's reply.
    - **3:** the reply lacks the closing lines its instructions ask for: an API error, a budget stop, or a reply out of format. Send one follow-up asking it to reply again, in full, in the format its instructions give. If that exits 3 too, tell the user and don't act on the reply.
    - **2:** the run never started (a bad argument, a missing brief, `--resume` with no session). The command's own output says why; a `run.err` in the run dir is from an earlier run.
+   - **5:** the run found no Claude account to use. Stop, send no follow-up, and give the user the script's account guidance as it printed it.
    - **Any other:** no reply. `run.err` and `run.json` in the run dir say why.
 
    Keep the cost the script's last line ends with, `cost $0.64` or `cost unknown`, for the skill's report. A resumed run's figure is the whole session's, earlier calls included, so for each run dir keep only its latest. The skill's report adds one line for its agents, worded `Agents cost $<total> (<agent> $<cost>, …)`, or `Agents cost at least $<known> (<agent> unknown, …)` when any run's cost is unknown.

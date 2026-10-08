@@ -30,6 +30,10 @@ AGENT_RUN = TESTS / "agent-evals" / "run.sh"
 SKILL_RUN = TESTS / "skill-evals" / "run.sh"
 STUB = """#!/usr/bin/env python3
 import json, os, re, sys
+# The launchers' version check (hooks/launch-checks.sh), answered before the call is logged.
+if sys.argv[1:] == ["--version"]:
+    print("2.1.285 (Claude Code)")
+    sys.exit(0)
 from pathlib import Path
 with open(os.environ["STUB_ARGV"], "a") as f:
     f.write(json.dumps(sys.argv[1:]) + "\\n")
@@ -177,7 +181,8 @@ class Runners(unittest.TestCase):
         """`path` is the file agent-settings.py makes from `source` with the checkout as its
         root, written under this run's results: no runner passes a placeholder through. With
         `overlay`, the agent runner's read denies follow the file's own, which come first and
-        unchanged (test_agent_evals_settings_deny_the_answer_keys checks what they are)."""
+        unchanged (test_agent_evals_settings_deny_the_answer_keys checks what they are). Both
+        runners add the account override (hooks/launch-checks.sh), which is checked and set aside."""
         self.assertTrue(path.startswith(str(self.tmp / "out")), path)
         text = Path(path).read_text()
         self.assertNotIn("${", text)
@@ -190,6 +195,8 @@ class Runners(unittest.TestCase):
             ).stdout
         )
         settings = json.loads(text)
+        self.assertEqual(settings.pop("apiKeyHelper"), "")
+        self.assertEqual(settings.pop("env"), {"ANTHROPIC_API_KEY": ""})
         if overlay:
             fs, base_fs = (
                 settings["sandbox"]["filesystem"],
@@ -463,11 +470,16 @@ class Runners(unittest.TestCase):
         self.assertIn(
             f"{REPO}/tests/agent-evals", rendered["sandbox"]["filesystem"]["denyRead"]
         )
-        self.assertEqual(sorted(rendered), ["permissions", "sandbox"])
-        # Set empty, it still passes no --settings.
+        self.assertEqual(
+            sorted(rendered), ["apiKeyHelper", "env", "permissions", "sandbox"]
+        )
+        # Set empty, it passes no settings file: only the account override, as JSON.
         self.env["EVAL_SETTINGS"] = ""
         self.run_script(AGENT_RUN)
-        self.assertNotIn("--settings", self.argv()[-1])
+        self.assertEqual(
+            json.loads(self.flag(self.argv()[-1], "--settings")),
+            {"apiKeyHelper": "", "env": {"ANTHROPIC_API_KEY": ""}},
+        )
 
     def test_agent_eval_cap_override(self):
         self.agent_case("plain", "says yes\n")
@@ -528,7 +540,11 @@ class Runners(unittest.TestCase):
     def test_skill_evals_fail_without_a_result(self):
         # No result JSON, no verdict, whatever the files say.
         self.skill_case("good", passes=True)
-        (self.tmp / "bin" / "claude").write_text("#!/bin/sh\necho 'not JSON'\n")
+        (self.tmp / "bin" / "claude").write_text(
+            "#!/bin/sh\n"
+            "[ \"$1\" = --version ] && { echo '2.1.285 (Claude Code)'; exit 0; }\n"
+            "echo 'not JSON'\n"
+        )
         code, out = self.run_script(SKILL_RUN)
         self.assertEqual(code, 1, out)
         self.assertIn("FAIL good", out)

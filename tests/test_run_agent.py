@@ -18,6 +18,10 @@ REPO = Path(__file__).resolve().parents[1]
 SCRIPT = REPO / "hooks" / "run-agent.sh"
 STUB = """#!/usr/bin/env python3
 import json, os, sys
+# The launchers' version check (hooks/launch-checks.sh), answered before the call is logged.
+if sys.argv[1:] == ["--version"]:
+    print("2.1.285 (Claude Code)")
+    sys.exit(0)
 calls = os.environ["STUB_CALLS"]
 with open(calls, "a") as f:
     f.write(json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd(),

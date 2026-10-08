@@ -14,9 +14,15 @@
 # Exit 0: reply.md holds a reply in the shape the agent's file asks for (REPLY_SHAPES below).
 # Exit 3: the run finished, but reply.md doesn't have that shape: an API error such as "Request
 # timed out", a budget stop, or an agent that ignored its format. Don't act on it as a verdict.
-# Exit 2: the run couldn't start. Any other non-zero exit is claude's own, with run.err saying why.
-# Once a run has finished, the line the script ends with, the `finished` line or the exit 3 one,
+# Exit 2: the run couldn't start. Exit 5: the run found no Claude account to use; the script says
+# how to give it one (hooks/launch-checks.sh), and that comes before 3. Any other non-zero exit is
+# claude's own, with run.err saying why.
+# Once a run has finished, the `finished` line or the exit 3 one, whichever the script ends with,
 # ends with what it cost, from run.json's total_cost_usd: `cost $0.64`, or `cost unknown`.
+#
+# The run is on the user's Claude account: ANTHROPIC_API_KEY is unset, and the settings switch off
+# an apiKeyHelper and a key in the user's settings, unless CHECKED_PLANS_USE_API_KEY=1 is set
+# (hooks/launch-checks.sh).
 #
 # Each run is capped at $RUN_AGENT_MAX_USD (default $10 for the researcher, $5 for the others;
 # the costliest recorded researcher run, the research-ideas eval, was $2.59 on 2026-09-27) and 200 turns. --max-budget-usd stops a
@@ -44,6 +50,10 @@
 set -euo pipefail
 
 die() { echo "run-agent: $*" >&2; exit 2; }
+# shellcheck source=hooks/launch-checks.sh
+source "$(dirname "$0")/launch-checks.sh"
+launch_version run-agent
+launch_account run-agent
 
 [ $# -eq 3 ] || [ $# -eq 4 ] || die "usage: run-agent.sh <agent> <work dir> <run dir> [--resume]"
 agent=$1 work=$2 run=$3 mode=${4:-}
@@ -108,8 +118,9 @@ fi
 "$here/sandbox-prompt.py" > "$run/sandbox.md" || die "couldn't write $run/sandbox.md"
 
 # The settings with ${CLAUDE_PLUGIN_ROOT} filled in as an absolute path: an excludedCommands entry
-# is matched as written, so it must spell the path the agent's calls use.
-"$here/agent-settings.py" "$here/agent-sandbox.json" "$plugin_root" > "$run/settings.json" \
+# is matched as written, so it must spell the path the agent's calls use. With the account override,
+# written without following a link left at the name.
+"$here/agent-settings.py" "$here/agent-sandbox.json" "$plugin_root" | account_settings - "$run/settings.json" \
   || die "couldn't render $here/agent-sandbox.json"
 
 cd "$work"
@@ -170,6 +181,7 @@ if missing:
 sys.exit(1 if missing else 0)
 PY
 }
+account_exit run-agent "$run/run.json"
 if [ "$status" -eq 0 ] && ! shape_ok; then
   echo "run-agent: $agent finished, but its reply isn't in the shape its instructions ask for;" \
     "see $run/reply.md; $cost" >&2

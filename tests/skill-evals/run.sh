@@ -15,6 +15,9 @@
 #                       exported as RUN_AGENT_MODEL, so the agents a skill launches run on it too
 #   EVAL_CASES, EVAL_OUT  the cases and results directories (default: cases/ and
 #                         results/<timestamp>/ here); tests/test_eval_runners.py points them elsewhere
+#   CHECKED_PLANS_USE_API_KEY  1 to run on ANTHROPIC_API_KEY; otherwise, as the skills' launchers do,
+#                         the runner unsets it and each case's settings switch off an apiKeyHelper
+#                         and a key in the user's settings (hooks/launch-checks.sh)
 #
 # A case may also hold:
 #   location.txt  "code": the fixture is ~/code/eval-<case>-<stamp>, not a temp dir, for /spec,
@@ -39,6 +42,10 @@
 set -uo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd -P)
+# shellcheck source=hooks/launch-checks.sh
+source "$repo/hooks/launch-checks.sh"
+launch_version skill-evals
+launch_account skill-evals
 stamp=$(date +%Y%m%d-%H%M%S)
 out=${EVAL_OUT:-$here/results/$stamp}
 mkdir -p "$out"
@@ -85,7 +92,8 @@ run_case() {
   settings="$repo/hooks/agent-sandbox.json"
   [ -f "$dir/settings.txt" ] && settings="$here/$(cat "$dir/settings.txt")"
   # ${CLAUDE_PLUGIN_ROOT} in the settings becomes this checkout, as an absolute path.
-  "$repo/hooks/agent-settings.py" "$settings" "$repo" > "$out/$c.settings.json" 2> "$out/$c.settings.err" \
+  # With the account override, as the skills' launchers add it.
+  { "$repo/hooks/agent-settings.py" "$settings" "$repo" | account_settings - "$out/$c.settings.json"; } 2> "$out/$c.settings.err" \
     || { echo "FAIL $c (settings)"; echo FAIL > "$out/$c.result"; rm -rf "$work"; return; }
   settings="$out/$c.settings.json"
   prompt=$(sed -e "s#{{NOTE}}#$note#g" -e "s#{{STAMP}}#$stamp#g" "$dir/prompt.txt")

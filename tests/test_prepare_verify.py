@@ -674,8 +674,17 @@ class RunVerify(Home):
         argv = call["argv"]
         flag = lambda name: argv[argv.index(name) + 1]
         self.assertEqual(Path(call["cwd"]).resolve(), self.scratch.resolve())
+        # A copy of verify-settings.json with the account override, beside the scratch dir
+        # (hooks/launch-checks.sh; tests/test_launch_checks.py).
+        copy = self.scratch.resolve().parent / "V1.settings.json"
+        self.assertEqual(flag("--settings"), str(copy))
         self.assertEqual(
-            flag("--settings"), str(SCRIPTS.parent / "verify-settings.json")
+            json.loads(copy.read_text()),
+            {
+                **json.loads((SCRIPTS.parent / "verify-settings.json").read_text()),
+                "apiKeyHelper": "",
+                "env": {"ANTHROPIC_API_KEY": ""},
+            },
         )
         self.assertEqual(
             flag("--append-system-prompt-file"), str(SCRIPTS.parent / "verifier.md")

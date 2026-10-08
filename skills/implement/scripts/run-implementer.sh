@@ -21,7 +21,8 @@
 # writes, or the repo's shared git config, hooks or a worktree's git pointers (named one per line),
 # or left a submodule config under its git dir that names a program. No reply.md is written, so
 # act on nothing, and run no git command in the repo or the worktree. 4 comes before 3 and before
-# claude's own status. A ref or HEAD in the shared git dir that moved during the call is named in
+# claude's own status. Exit 5: the run found no Claude account to use; the script says how to give
+# it one, after 4 and before 3, and /implement stops and relays it. A ref or HEAD in the shared git dir that moved during the call is named in
 # a `run-implementer: moved during the run: <ref> <old> -> <new>` line, without stopping: the
 # user's own commits and fetches move them too.
 #
@@ -32,6 +33,10 @@
 # that reaches the cap. A call with no valid total_cost_usd is charged its whole budget, as is one
 # that never wrote its end line. To go past the cap, raise IMPLEMENT_MAX_USD or remove the ledger
 # by hand. --max-budget-usd stops a call only after the turn that crosses it.
+#
+# On the user's Claude account: ANTHROPIC_API_KEY is unset, and the settings switch off an
+# apiKeyHelper and a key in the user's settings, unless CHECKED_PLANS_USE_API_KEY=1 is set
+# (hooks/launch-checks.sh).
 #
 # On the user's default model, or on $RUN_AGENT_MODEL if it's set, as hooks/run-agent.sh does, so
 # the skill evals' per-model runs reach it.
@@ -50,6 +55,9 @@
 set -euo pipefail
 
 die() { echo "run-implementer: $*" >&2; exit 2; }
+# shellcheck source=hooks/launch-checks.sh
+source "$(dirname "$0")/../../../hooks/launch-checks.sh"
+launch_account run-implementer
 
 [ $# -eq 2 ] || [ $# -eq 3 ] || die "usage: run-implementer.sh <worktree> <run dir> [--resume]"
 work=$1 run=$2 mode=${3:-}
@@ -157,7 +165,7 @@ rendered=$("$plugin_root/hooks/agent-settings.py" \
   "$plugin_root" "IMPLEMENT_WORKTREE=$work" "IMPLEMENT_GIT_DIR=$git_dir" \
   "IMPLEMENT_COMMON_DIR=$common" "IMPLEMENT_SCRATCH=$scratch" "IMPLEMENT_TMP=$tmp") ||
   die "couldn't render the implementer's settings"
-python3 - "$rendered" "$common" "$git_dir" > "$run/settings.json" <<'PY' ||
+python3 - "$rendered" "$common" "$git_dir" <<'PY' | account_settings - "$run/settings.json" ||
 import json, os, sys
 rendered, common, own = sys.argv[1:]
 settings = json.loads(rendered)
@@ -427,6 +435,10 @@ if not ok:
 sys.exit(0 if ok else 1)
 PY
 }
+if account_failed "$run/run.json"; then
+  account_guidance run-implementer
+  exit 5
+fi
 if [ "$status" -eq 0 ] && ! shape_ok; then
   echo "run-implementer: the implementer finished, but its reply doesn't end with an" \
     "Implementer: line; see $run/reply.md" >&2

@@ -11,10 +11,21 @@
 # Exit 2: the run couldn't start. Exit 4: the spike left results.md, run.json or run.err as a
 # symlink, or as anything else but a regular file. /spec's own session, which no sandbox limits,
 # reads those files, so the script removes the entry unread, and /spec records the spike as
-# BLOCKED. Any other exit is claude's own, with run.err saying why when it isn't 0.
+# BLOCKED. Exit 5: the spike found no Claude account to use; the script says how to give it one,
+# and /spec stops and relays it. Any other exit is claude's own, with run.err saying why when it
+# isn't 0.
+#
+# The spike runs on the user's Claude account: ANTHROPIC_API_KEY is unset, unless
+# CHECKED_PLANS_USE_API_KEY=1 is set, and claude gets a copy of the spike's settings.json with an
+# override that switches off an apiKeyHelper and a key in the user's settings (hooks/launch-checks.sh).
+# The copy is S<n>.settings.json beside the scratch dir, not in it, so the spike, which may write
+# its scratch dir, can't leave a link at its name or rewrite it.
 set -euo pipefail
 
 die() { echo "run-spike: $*" >&2; exit 2; }
+# shellcheck source=hooks/launch-checks.sh
+source "$(dirname "$0")/../../../hooks/launch-checks.sh"
+launch_account run-spike
 
 [ $# -eq 1 ] || die "usage: run-spike.sh <scratch dir>"
 # Both sides resolved, so a symlinked home still matches. The layout is prepare-spike.sh's:
@@ -45,6 +56,8 @@ export CLAUDE_CODE_DISABLE_AUTO_MEMORY=1
 # from loading. The spike's own settings.json still applies through --settings.
 # The spiker prompt sits beside this script's directory, wherever the skill is installed.
 spiker=$(cd "$(dirname "$0")/.." && pwd -P)/spiker.md
+settings="$scratch.settings.json"
+account_settings "$scratch/settings.json" "$settings" || die "couldn't write $settings"
 cd "$scratch"
 # The redirects below would follow a link that an earlier, refused run left and couldn't remove,
 # and /spec reads any results.md here as this run's. As in run-verify.sh.
@@ -55,7 +68,7 @@ done
 status=0
 claude -p --model sonnet --setting-sources user \
   --append-system-prompt-file "$spiker" \
-  --settings settings.json \
+  --settings "$settings" \
   --allowedTools "Read Grep Glob Bash Write(./**) Edit(./**)" \
   --max-budget-usd 2 --max-turns 60 \
   --output-format json --strict-mcp-config --no-session-persistence \
@@ -86,5 +99,9 @@ done
 if [ "$refused" -eq 1 ]; then
   echo "run-spike: exit 4: record this spike as BLOCKED, and read none of its files" >&2
   exit 4
+fi
+if account_failed run.json; then
+  account_guidance run-spike
+  exit 5
 fi
 exit "$status"

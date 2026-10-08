@@ -177,7 +177,8 @@ class Runners(unittest.TestCase):
         """`path` is the file agent-settings.py makes from `source` with the checkout as its
         root, written under this run's results: no runner passes a placeholder through. With
         `overlay`, the agent runner's read denies follow the file's own, which come first and
-        unchanged (test_agent_evals_settings_deny_the_answer_keys checks what they are)."""
+        unchanged (test_agent_evals_settings_deny_the_answer_keys checks what they are). Both
+        runners add the account override (hooks/launch-checks.sh), which is checked and set aside."""
         self.assertTrue(path.startswith(str(self.tmp / "out")), path)
         text = Path(path).read_text()
         self.assertNotIn("${", text)
@@ -190,6 +191,8 @@ class Runners(unittest.TestCase):
             ).stdout
         )
         settings = json.loads(text)
+        self.assertEqual(settings.pop("apiKeyHelper"), "")
+        self.assertEqual(settings.pop("env"), {"ANTHROPIC_API_KEY": ""})
         if overlay:
             fs, base_fs = (
                 settings["sandbox"]["filesystem"],
@@ -463,11 +466,16 @@ class Runners(unittest.TestCase):
         self.assertIn(
             f"{REPO}/tests/agent-evals", rendered["sandbox"]["filesystem"]["denyRead"]
         )
-        self.assertEqual(sorted(rendered), ["permissions", "sandbox"])
-        # Set empty, it still passes no --settings.
+        self.assertEqual(
+            sorted(rendered), ["apiKeyHelper", "env", "permissions", "sandbox"]
+        )
+        # Set empty, it passes no settings file: only the account override, as JSON.
         self.env["EVAL_SETTINGS"] = ""
         self.run_script(AGENT_RUN)
-        self.assertNotIn("--settings", self.argv()[-1])
+        self.assertEqual(
+            json.loads(self.flag(self.argv()[-1], "--settings")),
+            {"apiKeyHelper": "", "env": {"ANTHROPIC_API_KEY": ""}},
+        )
 
     def test_agent_eval_cap_override(self):
         self.agent_case("plain", "says yes\n")

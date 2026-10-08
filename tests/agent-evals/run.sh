@@ -12,6 +12,10 @@
 #   EVAL_SETTINGS  the settings file passed as --settings (default: hooks/agent-sandbox.json, the
 #                  sandbox run-agent.sh uses, so the evals run the agents as the skills do;
 #                  set it empty to run without a sandbox)
+#   CHECKED_PLANS_USE_API_KEY  1 to run the agents on ANTHROPIC_API_KEY; otherwise, as the skills do,
+#                  the runner unsets it and its settings switch off an apiKeyHelper and a key in the
+#                  user's settings, so the agents run on the Claude account (hooks/launch-checks.sh).
+#                  With EVAL_SETTINGS empty, that override is all --settings passes.
 #
 # Each case directory in cases/ holds a fixture, agent.txt (the subagent), brief.txt (the brief,
 # with {{CASE}}, {{HOME}}, {{REPO}} and {{DATE}} filled in) and expect.txt: one Python regex per line that
@@ -50,6 +54,9 @@ set -uo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd -P)
+# shellcheck source=hooks/launch-checks.sh
+source "$repo/hooks/launch-checks.sh"
+launch_account agent-evals
 # The agent files live in hooks/agents; each case passes its agent by --agents, as run-agent.sh does.
 agents="$repo/hooks/agents"
 stamp=$(date +%Y%m%d-%H%M%S)
@@ -120,7 +127,11 @@ run_case() {
     "$repo/hooks/agent-settings.py" "$settings" "$repo" > "$out/$c.settings.json" 2> "$out/$c.settings.err" || return
     # On this run's rendered copy only: the committed file is what run-agent.sh gives the skills.
     deny_answer_keys "$out/$c.settings.json" 2>> "$out/$c.settings.err" || return
+    account_settings "$out/$c.settings.json" "$out/$c.settings.json" 2>> "$out/$c.settings.err" || return
     case_settings="$out/$c.settings.json"
+  else
+    # No settings file: the account override alone, or nothing under the opt-in.
+    case_settings=$(account_override)
   fi
   (cd "$work" && claude -p --agents "$out/$c.agents.json" --agent "$agent" --output-format json --max-turns "$turns" \
     --allowedTools "$tools" --add-dir "$HOME/notes" "$clone" "$fixture" \

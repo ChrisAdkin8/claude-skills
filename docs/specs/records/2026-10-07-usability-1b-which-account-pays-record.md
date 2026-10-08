@@ -143,3 +143,9 @@ Needs a run: 1, 3
 ## Evidence
 
 - Started at d32b79e
+- Baseline: python3 -m unittest discover -s tests -> pass (605 tests)
+- Baseline: ruff check --isolated --select E9,F . -> pass (local ruff 0.16.7, CI's pinned version; `pipx run` needs the network)
+- Baseline: git ls-files -z '*.sh' | xargs -0 shellcheck -S warning -> pass
+- Baseline: claude plugin validate . --json -> pass (only the expected plugin.json version warning)
+- Baseline: claude plugin validate .claude-plugin/plugin.json -> pass
+- Baseline: python3 tests/replay_guard.py -> pass (SKIP: the sandbox can't read the recorded transcripts, so nothing was checked)

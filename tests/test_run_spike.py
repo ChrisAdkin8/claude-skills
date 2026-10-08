@@ -89,8 +89,13 @@ class RunSpike(unittest.TestCase):
             Path(call["cwd"]).resolve(), (self.root / "repo/spec/S1").resolve()
         )
         self.assertIn("--settings", call["argv"])
+        # A copy of the spike's settings.json with the account override, beside the scratch dir
+        # (hooks/launch-checks.sh; tests/test_launch_checks.py).
+        copy = (self.root / "repo/spec/S1.settings.json").resolve()
+        self.assertEqual(call["argv"][call["argv"].index("--settings") + 1], str(copy))
         self.assertEqual(
-            call["argv"][call["argv"].index("--settings") + 1], "settings.json"
+            json.loads(copy.read_text()),
+            {"apiKeyHelper": "", "env": {"ANTHROPIC_API_KEY": ""}},
         )
         # $(cat) drops the newline. After `--`, so a brief that starts with a dash is never
         # read as an option.

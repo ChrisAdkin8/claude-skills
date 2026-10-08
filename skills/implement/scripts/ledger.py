@@ -248,14 +248,10 @@ def append(path, line):
         **line,
     }
     ledger = check(path)
-    if (
-        line.get("event") in ("end", "settled")
-        and "usd" not in line
-        and isinstance(line.get("session"), str)
-        and isinstance(line.get("total"), (int, float))
-        and not isinstance(line.get("total"), bool)
+    if line.get("event") in ("end", "settled") and "usd" not in line and isinstance(
+        line.get("session"), str
     ):
-        line["usd"] = ledger.own(line["session"], amount(line["total"], "total"))
+        line["usd"] = ledger.own(line["session"], amount(line.get("total"), "total"))
     try:
         ledger.add(line)
     except Bad as e:
@@ -308,7 +304,8 @@ def report(ledger):
             source = (f"its budget ({why}; unsettled: ledger.py settle <run name> {call} <usd>"
                       " if you know its cost)")
         out.append(f"implementer call {call}: ${number(ledger.charge(call))}, {source}")
-    known, unknown = ledger.spent(), []
+    spent = ledger.spent()
+    known, unknown = spent, []
     for line in ledger.verifiers:
         if line["usd"] is None:
             unknown.append(line["who"])
@@ -316,7 +313,7 @@ def report(ledger):
         else:
             known += line["usd"]
             out.append(f"{line['who']}: ${number(line['usd'])}")
-    out.append(f"implementer total: ${number(ledger.spent())}, which counts against the cap")
+    out.append(f"implementer total: ${number(spent)}, which counts against the cap")
     if unknown:
         out.append(f"all runs: at least ${number(known)} ({', '.join(unknown)} unknown)")
     else:

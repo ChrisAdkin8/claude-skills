@@ -65,7 +65,9 @@ How to read it:
 - **Claude Code 2.1.277 or later.** The agents rely on a sandbox rule that holds from that version
   on. Before it, one command allowed to run outside the sandbox, such as `gh`, took any command run
   along with it outside too. Last tested on 2.1.285; don't assume the sandbox works on anything
-  older.
+  older. The commands refuse to start an agent on an older one.
+- **A Claude account** (Pro, Max, Team or Enterprise), which the agents run on, or an Anthropic
+  API key if you choose to pay that way ([Safety and cost](#safety-and-cost)).
 - **macOS.** Nothing has been tried anywhere else ([Linux notes](docs/containment.md#on-linux)).
 - **`python3`**, for the checking scripts. Some spikes also use `uv`.
 - **Your code in git repos under `~/code`**, such as `~/code/my-app`. `/spec` and `/implement`
@@ -374,6 +376,12 @@ What things cost:
 - **Each spike** is capped at $2 and 60 turns. A *turn* is one step: Claude replies once, and may
   use a tool. Assume a spike that fetches anything from the web costs close to its cap.
 - A cap stops a run only after the turn that crosses it, so a run can go over by up to one turn.
+- **Who pays.** Every run uses your Claude account: the one you signed in to with `/login`, or a
+  token from `claude setup-token` set as `CLAUDE_CODE_OAUTH_TOKEN`. An `ANTHROPIC_API_KEY` in your
+  shell or settings would bill the key instead, so the runs drop it, and an `apiKeyHelper` too,
+  and say so in one line. Set `CHECKED_PLANS_USE_API_KEY=1` to bill the key. A run that finds no
+  account stops and says how to fix it. `ANTHROPIC_AUTH_TOKEN` and cloud-provider settings work
+  as before. The agents' own commands can see none of these keys or tokens.
 
 ## Working on this repo
 

@@ -10,8 +10,10 @@ Run with: python3 -m unittest discover -s tests
 
 import json
 import os
+import signal
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -42,6 +44,23 @@ if cost != "none":
         totals[session] = totals.get(session, 0) + float(cost)
         json.dump(totals, open(totals_path, "w"))
         out["total_cost_usd"] = totals[session]
+# Wait mode: run for STUB_WAIT seconds, as a long call would. A child started with & from a script
+# begins with INT ignored, so the stub sets its own handler, as claude does: on INT it prints its
+# result and exits, unless STUB_IGNORE_INT is set, when it ignores INT and TERM. It logs each
+# signal it gets, and writes its pid once its handlers are set.
+if os.environ.get("STUB_WAIT"):
+    import signal, time
+    def on(sig, frame):
+        with open(calls + ".signals", "a") as f:
+            f.write(signal.Signals(sig).name + "\\n")
+        if sig == signal.SIGINT and not os.environ.get("STUB_IGNORE_INT"):
+            print(json.dumps(out))
+            sys.exit(0)
+    signal.signal(signal.SIGINT, on)
+    if os.environ.get("STUB_IGNORE_INT"):
+        signal.signal(signal.SIGTERM, on)
+    open(calls + ".pid", "w").write(str(os.getpid()))
+    time.sleep(float(os.environ["STUB_WAIT"]))
 print(json.dumps(out))
 """
 LEDGER = REPO / "skills" / "implement" / "scripts" / "ledger.py"
@@ -72,11 +91,15 @@ class RunImplementer(unittest.TestCase):
             "HOME": str(self.home),
             "PATH": f"{bin_dir}:{os.environ['PATH']}",
             "STUB_CALLS": str(self.calls),
+            # Above every budget these tests expect, which test the cap less what's spent; the
+            # per-call budget's own tests remove it to get the default.
+            "IMPLEMENT_CALL_MAX_USD": "100",
         }
         # CLAUDE_CODE_DISABLE_AUTO_MEMORY is unset here, so only the script can turn it on.
         for var in (
             "RUN_AGENT_MODEL",
             "IMPLEMENT_MAX_USD",
+            "IMPLEMENT_INTERRUPT_WAIT",
             "CLAUDE_CODE_DISABLE_AUTO_MEMORY",
         ):
             self.env.pop(var, None)
@@ -681,6 +704,211 @@ class RunImplementer(unittest.TestCase):
         self.assertEqual(self.launch(self.worktree, self.run_dir, "--resume")[0], 0)
         second = self.calls_made()[-1]["argv"]
         self.assertEqual(self.flag(second, "--max-budget-usd"), "8")
+
+    def ledger_cli(self, *args):
+        run = subprocess.run(
+            [str(LEDGER), *args], capture_output=True, text=True, env=self.env, check=False
+        )
+        return run.returncode, run.stdout + run.stderr
+
+    def test_each_call_is_capped_at_8_by_default(self):
+        self.brief()
+        for value in (None, ""):
+            with self.subTest(value=value):
+                self.ledger().unlink(missing_ok=True)
+                self.calls.unlink(missing_ok=True)
+                self.env.pop("IMPLEMENT_CALL_MAX_USD", None)
+                if value is not None:
+                    self.env["IMPLEMENT_CALL_MAX_USD"] = value
+                self.assertEqual(self.launch(self.worktree, self.run_dir)[0], 0)
+                (call,) = self.calls_made()
+                self.assertEqual(self.flag(call["argv"], "--max-budget-usd"), "8")
+        # Below the per-call cap, the cap less what's spent is the budget.
+        self.env["IMPLEMENT_CALL_MAX_USD"] = "3"
+        self.env["IMPLEMENT_MAX_USD"] = "10"
+        self.assertEqual(self.launch(self.worktree, self.run_dir)[0], 0)
+        self.assertEqual(self.flag(self.calls_made()[-1]["argv"], "--max-budget-usd"), "3")
+
+    def test_a_bad_per_call_cap_is_refused(self):
+        self.brief()
+        for cap in ("inf", "nan", "abc", "-1", "0", "1e3", "0.0", " 5", "5."):
+            with self.subTest(cap=cap):
+                self.env["IMPLEMENT_CALL_MAX_USD"] = cap
+                code, out = self.launch(self.worktree, self.run_dir)
+                self.assertEqual(code, 2, out)
+                self.assertIn("IMPLEMENT_CALL_MAX_USD", out)
+                self.assertNotIn("Traceback", out)
+        self.assertEqual(self.calls_made(), [])
+
+    def test_unsettled_calls_at_the_cap_are_named_with_settle(self):
+        self.brief()
+        start = {"who": "implementer", "call": 1, "event": "start", "budget": 20}
+        for end in (
+            None,
+            {"who": "implementer", "call": 1, "event": "end", "usd": 20, "no_total": True},
+            {"who": "implementer", "call": 1, "event": "end", "usd": 20, "interrupted": True},
+        ):
+            with self.subTest(end=end):
+                self.ledger().unlink(missing_ok=True)
+                self.plant(start, *([end] if end else []))
+                code, out = self.launch(self.worktree, self.run_dir)
+                self.assertEqual(code, 2, out)
+                self.assertIn("ledger.py settle", out)
+                self.assertIn("call 1", out)
+                self.assertEqual(self.spent(), "20")
+                self.assertEqual(self.ledger_cli("settle", "proj--spec", "1", "0.4")[0], 0)
+                self.assertEqual(self.spent(), "0.4")
+        self.assertEqual(self.calls_made(), [])
+
+    # The signal tests: the launcher in a process group of its own, as a background task's is.
+
+    def start(self, *args):
+        proc = subprocess.Popen(
+            [str(SCRIPT), *map(str, args)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            env=self.env,
+            start_new_session=True,
+        )
+        self.addCleanup(self.reap, proc)
+        pid_file = Path(f"{self.calls}.pid")
+        for _ in range(300):
+            if pid_file.exists() and pid_file.read_text():
+                return proc, int(pid_file.read_text())
+            if proc.poll() is not None:
+                self.fail(f"the launcher exited {proc.returncode}: {proc.stdout.read()}")
+            time.sleep(0.05)
+        self.fail("the stub never started")
+
+    def reap(self, proc):
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+        proc.communicate()
+
+    def finish(self, proc):
+        out, _ = proc.communicate(timeout=30)
+        return proc.returncode, out
+
+    def gone(self, pid):
+        for _ in range(60):
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                return True
+            time.sleep(0.05)
+        return False
+
+    def signals(self):
+        log = Path(f"{self.calls}.signals")
+        return log.read_text().split() if log.exists() else []
+
+    def interruptible(self):
+        self.brief()
+        self.env.pop("IMPLEMENT_CALL_MAX_USD")
+        self.env["IMPLEMENT_INTERRUPT_WAIT"] = "1"
+        self.env["STUB_WAIT"] = "30"
+
+    def test_stopping_the_task_charges_the_budget(self):
+        self.interruptible()
+        proc, stub = self.start(self.worktree, self.run_dir)
+        os.killpg(proc.pid, signal.SIGTERM)
+        time.sleep(1.5)
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):  # macOS: a group left only a zombie
+            pass
+        self.finish(proc)
+        self.assertTrue(self.gone(stub))
+        start, end = self.ledger_lines()
+        self.assertEqual(start["budget"], 8)
+        self.assertEqual((end["event"], end["usd"], end.get("interrupted")), ("end", 8, True))
+        self.assertEqual(self.spent(), "8")
+        # The next run starts with 12 of the 20 left.
+        for var in ("STUB_WAIT", "IMPLEMENT_INTERRUPT_WAIT"):
+            self.env.pop(var)
+        self.env["IMPLEMENT_CALL_MAX_USD"] = "100"
+        self.assertEqual(self.launch(self.worktree, self.run_dir)[0], 0)
+        self.assertEqual(self.flag(self.calls_made()[-1]["argv"], "--max-budget-usd"), "12")
+
+    def test_an_interrupted_call_is_settled_from_its_result(self):
+        self.interruptible()
+        self.env["STUB_COST"] = "0.4"
+        proc, stub = self.start(self.worktree, self.run_dir)
+        os.kill(proc.pid, signal.SIGINT)
+        code, out = self.finish(proc)
+        self.assertEqual(code, 6, out)
+        self.assertTrue(self.gone(stub))
+        self.assertEqual(self.signals(), ["SIGINT"])
+        _, end, settled = self.ledger_lines()
+        self.assertEqual((end["usd"], end["interrupted"]), (8, True))
+        self.assertEqual((settled["event"], settled["usd"]), ("settled", 0.4))
+        self.assertEqual(self.spent(), "0.4")
+        self.assertIn("charged $0.4, its cost from its result", out)
+        self.assertFalse((self.run_dir / "reply.md").exists())
+
+    def test_a_stub_that_ignores_int_gets_term_then_kill(self):
+        self.interruptible()
+        self.env["STUB_IGNORE_INT"] = "1"
+        proc, stub = self.start(self.worktree, self.run_dir)
+        os.kill(proc.pid, signal.SIGINT)
+        code, out = self.finish(proc)
+        self.assertEqual(code, 6, out)
+        self.assertTrue(self.gone(stub))
+        self.assertEqual(self.signals(), ["SIGINT", "SIGTERM"])
+        self.assertEqual([l["event"] for l in self.ledger_lines()], ["start", "end"])
+        self.assertEqual(self.spent(), "8")
+        self.assertIn("charged its whole budget, $8", out)
+
+    def test_an_interrupted_resumed_call_is_settled_its_own_share(self):
+        self.brief()
+        self.env["STUB_CUMULATIVE"] = "1"
+        self.env["STUB_COST"] = "1"
+        self.assertEqual(self.launch(self.worktree, self.run_dir)[0], 0)
+        (self.run_dir / "followup.md").write_text("Carry on.\n")
+        self.interruptible()
+        self.env["STUB_COST"] = "0.4"
+        proc, stub = self.start(self.worktree, self.run_dir, "--resume")
+        os.kill(proc.pid, signal.SIGINT)
+        code, out = self.finish(proc)
+        self.assertEqual(code, 6, out)
+        settled = self.ledger_lines()[-1]
+        self.assertEqual(
+            (settled["event"], settled["session"], settled["total"], settled["usd"]),
+            ("settled", "sess-1", 1.4, 0.4),
+        )
+        self.assertEqual(self.spent(), "1.4")
+
+    def test_a_ledger_changed_during_an_interrupted_call_exits_4(self):
+        self.interruptible()
+        self.env["STUB_EXEC"] = (
+            "import pathlib\n"
+            "p = pathlib.Path(os.environ['HOME'], '.cache/implement-ledger/proj--spec.jsonl')\n"
+            "p.write_text(p.read_text() + p.read_text().splitlines()[-1] + '\\n')\n"
+        )
+        proc, stub = self.start(self.worktree, self.run_dir)
+        os.kill(proc.pid, signal.SIGINT)
+        code, out = self.finish(proc)
+        self.assertEqual(code, 4, out)
+        self.assertIn("implement-ledger", out)
+        self.assertTrue(self.gone(stub))
+        self.assertNotIn("end", [l.get("event") for l in self.ledger_lines()])
+        self.assertNotIn("settled", [l.get("event") for l in self.ledger_lines()])
+
+    def test_a_git_hook_written_during_an_interrupted_call_exits_4(self):
+        self.interruptible()
+        self.env["STUB_COST"] = "0.4"
+        self.stub_does(
+            "(common / 'hooks' / 'post-commit').write_text('#!/bin/sh\\n')"
+        )
+        proc, stub = self.start(self.worktree, self.run_dir)
+        os.kill(proc.pid, signal.SIGINT)
+        code, out = self.finish(proc)
+        self.assertEqual(code, 4, out)
+        self.assertIn("hooks/post-commit", out)
+        self.assertEqual(self.spent(), "0.4")
 
 if __name__ == "__main__":
     unittest.main()

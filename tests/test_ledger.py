@@ -188,6 +188,75 @@ class Ledger(unittest.TestCase):
                 self.assertEqual(self.append(line)[0], 2)
         self.assertEqual(self.ledger("spent", "proj--spec")[1], "1.4")
 
+    def test_interrupt_charges_the_budget_once(self):
+        self.append({**START, "call": 1, "budget": 8})
+        self.assertEqual(self.ledger("interrupt", "proj--spec", "1", "8")[0], 0)
+        end = self.lines()[-1]
+        self.assertEqual((end["event"], end["usd"], end["interrupted"]), ("end", 8, True))
+        # A call that already has an end line gets nothing more.
+        self.assertEqual(self.ledger("interrupt", "proj--spec", "1", "8")[0], 0)
+        self.append({**START, "call": 2, "budget": 8})
+        self.append({**END, "call": 2, "session": "s", "total": 1})
+        self.assertEqual(self.ledger("interrupt", "proj--spec", "2", "8")[0], 0)
+        self.assertEqual(len(self.lines()), 4)
+        self.assertEqual(self.ledger("spent", "proj--spec")[1], "9")
+        for args in (("3", "8"), ("x", "8"), ("1", "-1")):
+            with self.subTest(args=args):
+                self.assertEqual(self.ledger("interrupt", "proj--spec", *args)[0], 2)
+
+    def test_settle_replaces_a_budget_charge(self):
+        self.append({**START, "call": 1, "budget": 8})
+        self.append({**START, "call": 2, "budget": 8})
+        self.append({**END, "call": 2, "usd": 8, "no_total": True})
+        self.append({**START, "call": 3, "budget": 4})
+        self.append({**END, "call": 3, "session": "s", "total": 1})
+        self.assertEqual(self.ledger("spent", "proj--spec")[1], "17")
+        self.assertEqual(self.ledger("settle", "proj--spec", "1", "0.4")[0], 0)
+        self.assertEqual(self.ledger("spent", "proj--spec")[1], "9.4")
+        self.assertEqual(self.ledger("settle", "proj--spec", "2", "2")[0], 0)
+        self.assertEqual(self.ledger("spent", "proj--spec")[1], "3.4")
+        settled = self.lines()[-1]
+        self.assertEqual((settled["event"], settled["call"], settled["usd"]), ("settled", 2, 2))
+        for args in (("1", "1"), ("3", "1"), ("4", "1"), ("2", "-1"), ("2", "x")):
+            with self.subTest(args=args):
+                code, _, err = self.ledger("settle", "proj--spec", *args)
+                self.assertEqual(code, 2, err)
+        self.assertEqual(self.ledger("spent", "proj--spec")[1], "3.4")
+
+    def test_report_lists_every_run(self):
+        self.append({**START, "call": 1, "budget": 20})
+        self.append({**END, "call": 1, "session": "s", "total": 1.5})
+        self.append({"who": "verifier V1", "usd": 0.5, "note": "finished"})
+        self.append({**START, "call": 2, "budget": 8})
+        self.append({**END, "call": 2, "usd": 8, "interrupted": True})
+        self.append({"who": "implementer", "event": "settled", "call": 2, "usd": 0.25})
+        self.append({**START, "call": 3, "budget": 8})
+        self.append({"who": "verifier V2", "usd": None, "note": "refused"})
+        code, out, err = self.ledger("report", "proj--spec")
+        self.assertEqual(code, 0, err)
+        lines = out.splitlines()
+        self.assertEqual(len(lines), 7, out)
+        self.assertRegex(lines[0], r"^implementer call 1: \$1\.5, from its end line$")
+        self.assertRegex(lines[1], r"^implementer call 2: \$0\.25, settled")
+        self.assertRegex(lines[2], r"^implementer call 3: \$8, its budget .*unsettled")
+        self.assertEqual(lines[3], "verifier V1: $0.5")
+        self.assertEqual(lines[4], "verifier V2: unknown")
+        spent = self.ledger("spent", "proj--spec")[1]
+        self.assertEqual(spent, "9.75")
+        self.assertRegex(lines[5], rf"^implementer total: \${spent}\b")
+        self.assertRegex(lines[6], r"^all runs: at least \$10\.25 ")
+        self.assertEqual(
+            self.ledger("report", "other--spec")[:2],
+            (0, "implementer total: $0, which counts against the cap\nall runs: $0"),
+        )
+
+    def test_the_usage_names_settle_not_removing_the_ledger(self):
+        code, _, err = self.ledger()
+        self.assertEqual(code, 2)
+        for command in ("interrupt", "settle", "report"):
+            self.assertIn(f"ledger.py {command} <run name>", err)
+        self.assertNotIn("removes the file by hand", err)
+
     def test_a_bad_ledger_is_refused_naming_its_line(self):
         self.path.parent.mkdir(parents=True)
         for text in (

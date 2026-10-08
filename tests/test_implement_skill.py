@@ -79,6 +79,23 @@ class GitCommandsInTheSteps(unittest.TestCase):
         self.assertIn("revert", rules)
 
 
+class InterruptsAndCosts(unittest.TestCase):
+    def step(self, number):
+        return body(SKILL).split(f"\n## {number}. ", 1)[1].split("\n## ", 1)[0]
+
+    def test_step_4_handles_exit_6_without_reading_the_reply(self):
+        exit_6 = re.search(r"^\s*- \*\*6\*\*:(.*)$", self.step(4), re.MULTILINE)
+        self.assertIsNotNone(exit_6, "no exit 6 in step 4")
+        self.assertIn("interrupted", exit_6[1])
+        self.assertIn("nothing", exit_6[1])
+
+    def test_step_6_reads_the_ledger_report(self):
+        command = "${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/ledger.py report <run name>"
+        self.assertIn(f"`{command}`", self.step(6))
+        rules = BASH_RULE.findall(allowed_tools(SKILL))
+        self.assertTrue(any(fnmatch.fnmatchcase(command, rule) for rule in rules), rules)
+
+
 class PlantedWatcherAndHook(unittest.TestCase):
     """A scratch repo's git dir gets a core.fsmonitor command and a post-commit hook, each
     writing a marker. status, add and commit, run with the flags as SKILL.md writes them, leave

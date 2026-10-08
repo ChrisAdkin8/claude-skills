@@ -7,12 +7,23 @@ Usage:
   ledger.py next-call <run name>        print the number the next implementer call takes
   ledger.py append <run name> <json>    append one line, adding "at" if it has none, and an end
                                         or settled line's "usd" from its "session" and "total"
+  ledger.py interrupt <run name> <call> <budget>
+                                        end an interrupted call, charging its budget, unless it
+                                        already has an end line
+  ledger.py settle <run name> <call> <usd>
+                                        charge a call that was charged its budget what it cost,
+                                        once; only for a call whose cost you know, for example
+                                        from the Claude Console's usage page
+  ledger.py report <run name>           print each implementer call's cost and where it comes
+                                        from, each verifier run's, the implementer total that
+                                        counts against the cap, and the total of all runs
 
 <run name> is `<repo dir>--<spec basename>`, as in ~/.cache/implement-runs/. The ledger is
 ~/.cache/implement-ledger/<run name>.jsonl, in a 0700 dir outside everything the implementer's
-sandbox can write, and nothing here ever removes or rewrites it: to go past the cap, the user raises
-IMPLEMENT_MAX_USD or removes the file by hand. run-implementer.sh and run-verify.sh write and read
-it only through this script, so the format and the path rule live here.
+sandbox can write, and nothing here ever removes or rewrites a line: to go past the cap, the user
+raises IMPLEMENT_MAX_USD, or settles a call charged its budget whose cost they know.
+run-implementer.sh and run-verify.sh write and read it only through this script, so the format and
+the path rule live here.
 
 These kinds of line, each one JSON object, with exactly these keys:
   {"at", "who": "implementer", "call": <n>, "event": "start", "budget": <usd>}
@@ -137,6 +148,7 @@ class Ledger:
         self.ends = {}  # call -> its end line
         self.settled = {}  # call -> usd
         self.totals = {}  # session -> the latest total a line holds for it
+        self.verifiers = []  # verifier lines, in order
         for number, line in enumerate(lines, 1):
             try:
                 self.add(line)
@@ -145,7 +157,9 @@ class Ledger:
 
     def add(self, line):
         kind = shape(line)
-        if kind == "start":
+        if kind == "verifier":
+            self.verifiers.append(line)
+        elif kind == "start":
             if line["call"] != len(self.starts) + 1:
                 raise Bad(
                     f"start of call {line['call']}, but the next call is {len(self.starts) + 1}"
@@ -257,8 +271,62 @@ def number(value):
     return f"{value:.6f}".rstrip("0").rstrip(".")
 
 
+def whole(text, what):
+    if not re.fullmatch(r"[1-9][0-9]*", text):
+        raise Bad(f"{what} must be a whole number from 1, not {text!r}")
+    return int(text)
+
+
+def usd(text, what):
+    try:
+        value = float(text)
+    except ValueError:
+        raise Bad(f"{what} is not a number: {text!r}") from None
+    return amount(value, what)
+
+
+def interrupt(path, call, budget):
+    """Charge an interrupted call its budget, unless it already has an end line."""
+    ledger = check(path)
+    if call in ledger.ends or call in ledger.settled:
+        return
+    append(path, {"who": "implementer", "call": call, "event": "end", "usd": budget,
+                  "interrupted": True})
+
+
+def report(ledger):
+    out = []
+    for call in ledger.starts:
+        end = ledger.ends.get(call)
+        if call in ledger.settled:
+            source = "settled"
+        elif end is not None and not ledger.unsettled(call):
+            source = "from its end line"
+        else:
+            why = ("no end line" if end is None
+                   else "interrupted" if "interrupted" in end else "no total in its result")
+            source = (f"its budget ({why}; unsettled: ledger.py settle <run name> {call} <usd>"
+                      " if you know its cost)")
+        out.append(f"implementer call {call}: ${number(ledger.charge(call))}, {source}")
+    known, unknown = ledger.spent(), []
+    for line in ledger.verifiers:
+        if line["usd"] is None:
+            unknown.append(line["who"])
+            out.append(f"{line['who']}: unknown")
+        else:
+            known += line["usd"]
+            out.append(f"{line['who']}: ${number(line['usd'])}")
+    out.append(f"implementer total: ${number(ledger.spent())}, which counts against the cap")
+    if unknown:
+        out.append(f"all runs: at least ${number(known)} ({', '.join(unknown)} unknown)")
+    else:
+        out.append(f"all runs: ${number(known)}")
+    return "\n".join(out)
+
+
 def main(argv):
-    commands = {"path": 1, "spent": 1, "next-call": 1, "append": 2}
+    commands = {"path": 1, "spent": 1, "next-call": 1, "append": 2, "interrupt": 3,
+                "settle": 3, "report": 1}
     if len(argv) < 2 or commands.get(argv[0]) != len(argv) - 1:
         print((__doc__ or "").split("\n\n")[1], file=sys.stderr)
         return 2
@@ -270,6 +338,13 @@ def main(argv):
             print(number(check(path).spent()))
         elif argv[0] == "next-call":
             print(len(check(path).starts) + 1)
+        elif argv[0] == "interrupt":
+            interrupt(path, whole(argv[2], "call"), usd(argv[3], "budget"))
+        elif argv[0] == "settle":
+            append(path, {"who": "implementer", "call": whole(argv[2], "call"),
+                          "event": "settled", "usd": usd(argv[3], "usd")})
+        elif argv[0] == "report":
+            print(report(check(path)))
         else:
             try:
                 line = json.loads(argv[2])

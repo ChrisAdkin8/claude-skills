@@ -166,10 +166,7 @@ if missing:
 sys.exit(1 if missing else 0)
 PY
 }
-if account_failed "$run/run.json"; then
-  account_guidance run-agent
-  exit 5
-fi
+account_exit run-agent "$run/run.json"
 if [ "$status" -eq 0 ] && ! shape_ok; then
   echo "run-agent: $agent finished, but its reply isn't in the shape its instructions ask for;" \
     "see $run/reply.md" >&2

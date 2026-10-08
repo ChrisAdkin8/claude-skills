@@ -22,9 +22,9 @@
 # or left a submodule config under its git dir that names a program. No reply.md is written, so
 # act on nothing, and run no git command in the repo or the worktree. 4 comes before 3 and before
 # claude's own status. Exit 5: the run found no Claude account to use; the script says how to give
-# it one, after 4 and before 3, and /implement stops and relays it. A ref or HEAD in the shared git dir that moved during the call is named in
-# a `run-implementer: moved during the run: <ref> <old> -> <new>` line, without stopping: the
-# user's own commits and fetches move them too.
+# it one, after 4 and before 3, and /implement stops and relays it. A ref or HEAD in the shared git
+# dir that moved during the call is named in a `run-implementer: moved during the run: <ref> <old>
+# -> <new>` line, without stopping: the user's own commits and fetches move them too.
 #
 # The cap is for every implementer call ever made for this spec: $IMPLEMENT_MAX_USD (default $20,
 # digits with an optional decimal part, above 0). Spent is read from the ledger,
@@ -436,10 +436,7 @@ if not ok:
 sys.exit(0 if ok else 1)
 PY
 }
-if account_failed "$run/run.json"; then
-  account_guidance run-implementer
-  exit 5
-fi
+account_exit run-implementer "$run/run.json"
 if [ "$status" -eq 0 ] && ! shape_ok; then
   echo "run-implementer: the implementer finished, but its reply doesn't end with an" \
     "Implementer: line; see $run/reply.md" >&2

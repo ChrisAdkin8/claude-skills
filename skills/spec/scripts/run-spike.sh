@@ -101,8 +101,5 @@ if [ "$refused" -eq 1 ]; then
   echo "run-spike: exit 4: record this spike as BLOCKED, and read none of its files" >&2
   exit 4
 fi
-if account_failed run.json; then
-  account_guidance run-spike
-  exit 5
-fi
+account_exit run-spike run.json
 exit "$status"

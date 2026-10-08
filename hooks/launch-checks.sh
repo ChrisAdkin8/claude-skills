@@ -8,7 +8,7 @@
 # the user's /login account and CLAUDE_CODE_OAUTH_TOKEN, and so is an apiKeyHelper or a key in the
 # env block of the user's settings. So unless CHECKED_PLANS_USE_API_KEY=1 is set, launch_account
 # unsets the key, and account_settings writes settings that switch off the other two. A run that
-# then finds no account is told how to get one (account_failed, account_guidance). The plugin
+# then finds no account is told how to get one (account_exit). The plugin
 # launchers exit 5 for it. ANTHROPIC_AUTH_TOKEN and the cloud-provider variables are left alone:
 # they are a route an organization chose, not a stray key.
 #
@@ -115,9 +115,12 @@ sys.exit(0 if failed else 1)
 PY
 }
 
-# account_guidance <launcher>: how to give the run an account, on stderr.
-account_guidance() {
+# account_exit <launcher> <run.json>: if the run found no account (account_failed), says how to
+# give it one, on stderr, and exits 5, as the plugin launchers do.
+account_exit() {
+  account_failed "$2" || return 0
   echo "$1: exit 5: the run found no Claude account to use. Run /login in Claude Code; or run" \
     "\`claude setup-token\` and set CLAUDE_CODE_OAUTH_TOKEN to the token it prints; or set" \
     "CHECKED_PLANS_USE_API_KEY=1 to bill ANTHROPIC_API_KEY instead." >&2
+  exit 5
 }

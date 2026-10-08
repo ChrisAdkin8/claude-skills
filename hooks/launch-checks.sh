@@ -35,14 +35,15 @@ PY
 }
 
 # launch_account <launcher>: unsets ANTHROPIC_API_KEY, unless the opt-in is set, and says so in
-# one line if one was set.
+# one line if it held a key. An empty one, as a session under account_settings' override passes
+# to the commands it runs, is no key: it's unset without a note.
 launch_account() {
   [ "${CHECKED_PLANS_USE_API_KEY:-}" = 1 ] && return 0
-  if [ -n "${ANTHROPIC_API_KEY+set}" ]; then
-    unset ANTHROPIC_API_KEY
+  if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
     echo "$1: this run uses your Claude account, not ANTHROPIC_API_KEY" \
       "(set CHECKED_PLANS_USE_API_KEY=1 to bill the key)" >&2
   fi
+  unset ANTHROPIC_API_KEY
   return 0
 }
 
@@ -116,9 +117,17 @@ PY
 }
 
 # account_exit <launcher> <run.json>: if the run found no account (account_failed), says how to
-# give it one, on stderr, and exits 5, as the plugin launchers do.
+# give it one, on stderr, and exits 5, as the plugin launchers do. Under the opt-in the run was on
+# ANTHROPIC_API_KEY, so that's what to check.
 account_exit() {
   account_failed "$2" || return 0
+  if [ "${CHECKED_PLANS_USE_API_KEY:-}" = 1 ]; then
+    echo "$1: exit 5: the run couldn't authenticate with ANTHROPIC_API_KEY, which" \
+      "CHECKED_PLANS_USE_API_KEY=1 bills. Check the key; or unset CHECKED_PLANS_USE_API_KEY to" \
+      "run on your Claude account (/login in Claude Code, or \`claude setup-token\` and" \
+      "CLAUDE_CODE_OAUTH_TOKEN)." >&2
+    exit 5
+  fi
   echo "$1: exit 5: the run found no Claude account to use. Run /login in Claude Code; or run" \
     "\`claude setup-token\` and set CLAUDE_CODE_OAUTH_TOKEN to the token it prints; or set" \
     "CHECKED_PLANS_USE_API_KEY=1 to bill ANTHROPIC_API_KEY instead." >&2

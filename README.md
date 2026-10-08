@@ -378,10 +378,10 @@ What things cost:
 - A cap stops a run only after the turn that crosses it, so a run can go over by up to one turn.
 - **Who pays.** Every run uses your Claude account: the one you signed in to with `/login`, or a
   token from `claude setup-token` set as `CLAUDE_CODE_OAUTH_TOKEN`. An `ANTHROPIC_API_KEY` in your
-  shell or settings would bill the key instead, so the runs drop it, and an `apiKeyHelper` too,
-  and say so in one line. Set `CHECKED_PLANS_USE_API_KEY=1` to bill the key. A run that finds no
-  account stops and says how to fix it. `ANTHROPIC_AUTH_TOKEN` and cloud-provider settings work
-  as before. The agents' own commands can see none of these keys or tokens.
+  shell or settings would bill the key instead, so the runs drop it, saying so in one line, and
+  switch off an `apiKeyHelper` too. Set `CHECKED_PLANS_USE_API_KEY=1` to bill the key. A run that
+  finds no account stops and says how to fix it. `ANTHROPIC_AUTH_TOKEN` and cloud-provider
+  settings work as before. The agents' sandboxed commands can see none of these keys or tokens.
 
 ## Working on this repo
 

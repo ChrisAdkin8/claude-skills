@@ -57,6 +57,7 @@ set -euo pipefail
 die() { echo "run-implementer: $*" >&2; exit 2; }
 # shellcheck source=hooks/launch-checks.sh
 source "$(dirname "$0")/../../../hooks/launch-checks.sh"
+launch_version run-implementer
 launch_account run-implementer
 
 [ $# -eq 2 ] || [ $# -eq 3 ] || die "usage: run-implementer.sh <worktree> <run dir> [--resume]"

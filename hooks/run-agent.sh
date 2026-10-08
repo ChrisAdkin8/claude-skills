@@ -50,6 +50,7 @@ set -euo pipefail
 die() { echo "run-agent: $*" >&2; exit 2; }
 # shellcheck source=hooks/launch-checks.sh
 source "$(dirname "$0")/launch-checks.sh"
+launch_version run-agent
 launch_account run-agent
 
 [ $# -eq 3 ] || [ $# -eq 4 ] || die "usage: run-agent.sh <agent> <work dir> <run dir> [--resume]"

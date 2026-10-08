@@ -56,6 +56,7 @@ here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd -P)
 # shellcheck source=hooks/launch-checks.sh
 source "$repo/hooks/launch-checks.sh"
+launch_version agent-evals
 launch_account agent-evals
 # The agent files live in hooks/agents; each case passes its agent by --agents, as run-agent.sh does.
 agents="$repo/hooks/agents"

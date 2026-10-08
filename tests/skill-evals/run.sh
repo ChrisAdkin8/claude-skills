@@ -44,6 +44,7 @@ here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd -P)
 # shellcheck source=hooks/launch-checks.sh
 source "$repo/hooks/launch-checks.sh"
+launch_version skill-evals
 launch_account skill-evals
 stamp=$(date +%Y%m%d-%H%M%S)
 out=${EVAL_OUT:-$here/results/$stamp}

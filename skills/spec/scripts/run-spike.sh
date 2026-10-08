@@ -25,6 +25,7 @@ set -euo pipefail
 die() { echo "run-spike: $*" >&2; exit 2; }
 # shellcheck source=hooks/launch-checks.sh
 source "$(dirname "$0")/../../../hooks/launch-checks.sh"
+launch_version run-spike
 launch_account run-spike
 
 [ $# -eq 1 ] || die "usage: run-spike.sh <scratch dir>"

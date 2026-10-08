@@ -140,6 +140,10 @@ Needs a run: 1, 3
 - Question 6: Route: spike, by hand. Changes: W1 and the Background's budget sentence. Expect: a resumed call with `--max-budget-usd` below the session's earlier spend runs several turns, because the budget counts only its own spend. Box: by hand, Haiku, under $0.10.
 - Question 7: Route: spike, by hand. Changes: W5's exception for `tests/skill-evals/agent-case-settings.json`. Expect (written after the run, which came first): a variable on the deny list still reaches a command in `excludedCommands`, since the deny applies to sandboxed commands. Box: by hand, Haiku; $0.0079 for two calls.
 
+## Implementation
+
+- 2026-10-08, W7 (pending): each of the six launchers W5 changed (`hooks/run-agent.sh`, `skills/spec/scripts/run-spike.sh`, `skills/implement/scripts/run-implementer.sh`, `skills/implement/scripts/run-verify.sh`, `tests/agent-evals/run.sh`, `tests/skill-evals/run.sh`) gets one `launch_version <launcher>` line, before its account step, which W7's Files don't list: `hooks/launch-checks.sh` defines functions only, and each launcher calls them, as W5's account step does, so the refusal names its launcher.
+
 ## Evidence
 
 - Started at d32b79e
@@ -150,3 +154,4 @@ Needs a run: 1, 3
 - Baseline: claude plugin validate .claude-plugin/plugin.json -> pass
 - Baseline: python3 tests/replay_guard.py -> pass (SKIP: the sandbox can't read the recorded transcripts, so nothing was checked)
 - W5 (d406b6f): Done when `python3 -m unittest tests.test_launch_checks tests.test_implement_skill` -> pass (12 + 7 tests; failed first: 19 failures and 11 errors in the new launcher test, 2 failures in the new step 4 and 5 test); the changed assertions in `tests/test_prepare_verify.py`, `tests/test_run_spike.py` and `tests/test_eval_runners.py` pass; `shellcheck -S warning` passes on every changed script; suite pass (617 tests); scan clean
+- W6 (231af81): Done when `python3 -m unittest tests.test_sandbox_settings` -> pass (12 tests; the new test failed first, 10 failures: both names missing from all five files); the existing agreement tests still pass; suite pass (618 tests); scan clean

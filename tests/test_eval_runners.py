@@ -30,6 +30,10 @@ AGENT_RUN = TESTS / "agent-evals" / "run.sh"
 SKILL_RUN = TESTS / "skill-evals" / "run.sh"
 STUB = """#!/usr/bin/env python3
 import json, os, re, sys
+# The launchers' version check (hooks/launch-checks.sh), answered before the call is logged.
+if sys.argv[1:] == ["--version"]:
+    print("2.1.285 (Claude Code)")
+    sys.exit(0)
 from pathlib import Path
 with open(os.environ["STUB_ARGV"], "a") as f:
     f.write(json.dumps(sys.argv[1:]) + "\\n")
@@ -536,7 +540,11 @@ class Runners(unittest.TestCase):
     def test_skill_evals_fail_without_a_result(self):
         # No result JSON, no verdict, whatever the files say.
         self.skill_case("good", passes=True)
-        (self.tmp / "bin" / "claude").write_text("#!/bin/sh\necho 'not JSON'\n")
+        (self.tmp / "bin" / "claude").write_text(
+            "#!/bin/sh\n"
+            "[ \"$1\" = --version ] && { echo '2.1.285 (Claude Code)'; exit 0; }\n"
+            "echo 'not JSON'\n"
+        )
         code, out = self.run_script(SKILL_RUN)
         self.assertEqual(code, 1, out)
         self.assertIn("FAIL good", out)

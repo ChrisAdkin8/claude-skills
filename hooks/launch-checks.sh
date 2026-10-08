@@ -11,6 +11,28 @@
 # then finds no account is told how to get one (account_failed, account_guidance). The plugin
 # launchers exit 5 for it. ANTHROPIC_AUTH_TOKEN and the cloud-provider variables are left alone:
 # they are a route an organization chose, not a stray key.
+#
+# Version. The sandbox rule the launchers rely on holds from Claude Code 2.1.277 (README, Safety and
+# cost), so launch_version refuses anything older, or a version it can't read, before the launcher
+# does anything else.
+
+# launch_version <launcher>: runs `claude --version` once and exits 2 unless its first field is
+# 2.1.277 or later, printing what it read.
+launch_version() {
+  local found
+  found=$(claude --version 2>/dev/null | head -n 1) || true
+  if ! python3 - "$found" <<'PY'
+import re, sys
+
+fields = sys.argv[1].split()
+m = re.fullmatch(r"[0-9]+(\.[0-9]+)*", fields[0]) if fields else None
+sys.exit(0 if m and tuple(map(int, fields[0].split("."))) >= (2, 1, 277) else 1)
+PY
+  then
+    echo "$1: needs Claude Code 2.1.277 or later; this is ${found:-unreadable}" >&2
+    exit 2
+  fi
+}
 
 # launch_account <launcher>: unsets ANTHROPIC_API_KEY, unless the opt-in is set, and says so in
 # one line if one was set.

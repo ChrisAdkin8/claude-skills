@@ -15,6 +15,7 @@ Run with: python3 -m unittest discover -s tests
 
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -79,7 +80,9 @@ def plugin_files():
     return found
 
 
-class Launchers(unittest.TestCase):
+class LauncherCase(unittest.TestCase):
+    """A home of its own and the four plugin launchers, set up to run under the stub."""
+
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
@@ -183,6 +186,13 @@ class Launchers(unittest.TestCase):
         self.assertEqual(settings["apiKeyHelper"], "")
         self.assertEqual(settings["env"]["ANTHROPIC_API_KEY"], "")
 
+    def fresh_home(self):
+        """A fresh home for the next launcher's setup, which makes the same paths."""
+        shutil.rmtree(self.home)
+        (self.home / ".claude").mkdir(parents=True)
+
+
+class Launchers(LauncherCase):
     def test_plugin_launchers_run_on_the_account(self):
         before = plugin_files()
         for name, make in self.plugin_launchers().items():
@@ -305,6 +315,76 @@ class Launchers(unittest.TestCase):
         )
         code, out, _ = self.launch(script, args, reply, STUB_RESULT=result)
         self.assertEqual(code, 0, out)
+
+
+class Version(LauncherCase):
+    """Each launcher checks `claude --version` once, before anything else, and refuses below
+    2.1.277, the version the sandbox rule holds from."""
+
+    def test_an_old_claude_is_refused_before_any_call(self):
+        for version in ("2.1.276 (Claude Code)", "2.0.999", "1.9.300 (Claude Code)"):
+            for name, make in self.plugin_launchers().items():
+                with self.subTest(launcher=name, version=version):
+                    script, args, reply, copy = make()
+                    code, out, calls = self.launch(
+                        script, args, reply, STUB_VERSION=version
+                    )
+                    self.assertEqual(code, 2, out)
+                    self.assertIn(
+                        f"needs Claude Code 2.1.277 or later; this is {version}", out
+                    )
+                    self.assertEqual(calls, [])
+                    # Before anything else: no settings were written.
+                    self.assertFalse(copy.exists())
+                self.fresh_home()
+
+    def test_an_unreadable_version_is_refused(self):
+        for version in ("", "Claude Code", "v2.1.285", "2.1.x"):
+            for name, make in self.plugin_launchers().items():
+                with self.subTest(launcher=name, version=version):
+                    script, args, reply, _ = make()
+                    code, out, calls = self.launch(
+                        script, args, reply, STUB_VERSION=version
+                    )
+                    self.assertEqual(code, 2, out)
+                    self.assertIn("needs Claude Code 2.1.277 or later; this is", out)
+                    self.assertEqual(calls, [])
+                self.fresh_home()
+
+    def test_a_current_claude_carries_on(self):
+        for version in (
+            "2.1.277 (Claude Code)",
+            "2.1.285 (Claude Code)",
+            "2.2.0",
+            "3.0.1",
+        ):
+            for name, make in self.plugin_launchers().items():
+                with self.subTest(launcher=name, version=version):
+                    script, args, reply, _ = make()
+                    code, out, calls = self.launch(
+                        script, args, reply, STUB_VERSION=version
+                    )
+                    self.assertEqual(code, 0, out)
+                    self.assertEqual(len(calls), 1)
+                    self.assertNotIn("needs Claude Code", out)
+                self.fresh_home()
+
+    def test_the_eval_runners_refuse_an_old_claude_too(self):
+        cases = self.tmp / "cases"
+        (cases / "plain").mkdir(parents=True)
+        for script in (AGENT_EVALS, SKILL_EVALS):
+            with self.subTest(runner=script.parent.name):
+                code, out, calls = self.launch(
+                    script,
+                    [],
+                    "",
+                    STUB_VERSION="2.1.276 (Claude Code)",
+                    EVAL_CASES=str(cases),
+                    EVAL_OUT=str(self.tmp / "out"),
+                )
+                self.assertEqual(code, 2, out)
+                self.assertIn("needs Claude Code 2.1.277 or later", out)
+                self.assertEqual(calls, [])
 
 
 class EvalRunners(unittest.TestCase):

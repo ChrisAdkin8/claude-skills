@@ -39,6 +39,7 @@ set -euo pipefail
 die() { echo "run-verify: $*" >&2; exit 2; }
 # shellcheck source=hooks/launch-checks.sh
 source "$(dirname "$0")/../../../hooks/launch-checks.sh"
+launch_version run-verify
 launch_account run-verify
 # The ledger line for this run: its cost (a number, or null) and a note. Set once the scratch path
 # is checked; until then there is no run to record.

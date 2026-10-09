@@ -143,6 +143,9 @@ Needs a run: 1, 3
 ## Implementation
 
 - 2026-10-08, W7 (cd2cfc0): each of the six launchers W5 changed (`hooks/run-agent.sh`, `skills/spec/scripts/run-spike.sh`, `skills/implement/scripts/run-implementer.sh`, `skills/implement/scripts/run-verify.sh`, `tests/agent-evals/run.sh`, `tests/skill-evals/run.sh`) gets one `launch_version <launcher>` line, before its account step, which W7's Files don't list: `hooks/launch-checks.sh` defines functions only, and each launcher calls them, as W5's account step does, so the refusal names its launcher.
+- 2026-10-08, W5 (0ce89f9): an empty `ANTHROPIC_API_KEY`, which a session under the override passes to the commands it runs, is unset without the one-line note, where the Design prints the note whenever the key is set; and exit 5 under `CHECKED_PLANS_USE_API_KEY=1` says to check the key or unset the opt-in, since that run was on the key, where the Design gives every run the same guidance. The README says only the agents' sandboxed commands can't see the keys. From the code-review clean-up; the commit message says only "code-review fixes", and `hooks/launch-checks.sh`'s comments give the why.
+- 2026-10-08, W8 (5b65919): with part 1a merged, the README's list of where to set the variables, from part 1a's W4, names `CHECKED_PLANS_USE_API_KEY` too, as W8 asks for it beside the others; the merge's message says so.
+- 2026-10-09, W8 (5b9becb): the `BASELINE.md` section comes from one set of eval runs on the merge with part 1a (`5b65919`), one dated section for both parts. From the user, who chose to join the branches so the evals would run once; the commit message gives the results, not that why.
 
 ## Evidence
 

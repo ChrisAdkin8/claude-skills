@@ -1,7 +1,7 @@
 ---
 title: "Usability, part 1a: what runs cost"
 created: 2026-10-07
-status: in-progress # draft | reviewed | in-progress | done | superseded
+status: done # draft | reviewed | in-progress | done | superseded
 research: none
 idea: none
 read-at: 377b2dd

@@ -195,6 +195,7 @@ Needs a run: 2, 3, 13
   Verified: 15 of 17
   Implementation holds: no
 - No fix round and no V2: W4's two FAIL rows (the cost-and-time table, the `BASELINE.md` section) and W3's CANNOT-RUN row (the two graders on Sonnet and Opus) are the parts the user chose on 2026-10-08 to leave until the paid eval runs, which the implementer's rule 6 forbids it to run, so neither a fix round nor a second verifier could add them. They're for the user to run by hand, as `CLAUDE.md:23-38` asks.
+- After the build, on 2026-10-09: the parts left for the paid evals are done. Both eval sets ran on both models at `5b65919`, the merge with part 1b, by hand in the user's session, not by a verifier; results in `tests/agent-evals/BASELINE.md` (`5b9becb`). W3: `research-quick-flow` and `spec-quick` pass on Sonnet and Opus, each finding an `Agents cost` line. W4: the README's cost-and-time table is `3f4b4c1`, and the dated BASELINE.md section `5b9becb`.
 
 ## Implementation
 

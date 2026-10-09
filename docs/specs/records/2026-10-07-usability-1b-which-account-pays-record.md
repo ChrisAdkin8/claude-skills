@@ -190,3 +190,4 @@ Needs a run: 1, 3
 - implementer-run: W5, W7: `python3 -m unittest -v tests.test_no_stale_paths tests.test_replay_guard.Main tests.test_research_scripts.RepoHealth` -> ok: test_no_stale_paths 4 tests, test_replay_guard.Main 5 tests, RepoHealth 5 tests
 - implementer-run: W5, W7: `python3 -m unittest discover -s tests` -> 622 tests OK, no failures or errors
 - No fix round and no V2: W8's one FAIL row, the `BASELINE.md` section, waits on the paid eval runs, as the user chose for part 1a on 2026-10-08; the implementer's rule 6 forbids it to run them, so neither a fix round nor a second verifier could add it. They're for the user to run by hand, as `CLAUDE.md:23-38` asks.
+- After the build, on 2026-10-09: W8's `BASELINE.md` section is `5b9becb`: both eval sets on both models at `5b65919`, the merge with part 1a, run by hand in the user's session, not by a verifier. Every run was on the Claude account, through the new version and account steps.

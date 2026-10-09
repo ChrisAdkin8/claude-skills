@@ -392,6 +392,23 @@ What things cost:
   `RUN_AGENT_MODEL` and `CHECKED_PLANS_USE_API_KEY` in the shell that starts Claude Code, or under
   `env` in `~/.claude/settings.json`.
 
+Typical cost and time of each command's agents, from this repo's eval runs on 2026-10-09: each
+agent run's `total_cost_usd` and `duration_ms` in its `run.json`, on the small cases in
+`tests/skill-evals` and `tests/agent-evals`.
+
+| Command | Its agents | On Sonnet | On Opus |
+|---|---|---|---|
+| `/research`, a quick note | researcher, then research-verifier | $0.19, 42 s | $0.54, 85 s |
+| `/spec quick` | spec-verifier | $0.05, 16 s | $0.10, 38 s |
+| `/cold-review` | cold-reviewer | $0.12 to $0.15, 25 s | $0.24 to $0.29, 32 to 39 s |
+| `/implement` | implementer, then implement-verifier | $0.43, 61 s | $0.77, 111 s |
+
+The session you run the command in costs extra: $0.24 to $0.36 a command on Sonnet and $0.27 to
+$0.58 on Opus in the same runs. A full `/spec` adds a cold review and any spikes. Real work costs
+more than these small cases: on this repo's own two-part spec, on Opus on 2026-10-07 and
+2026-10-08, each part's implementer cost $7.32 and $9.00 over about an hour, its checker runs
+$1.57 and $1.91, the spec-verifier runs $0.79 and $0.97, and the cold-reviewer runs $1.34 and $1.57.
+
 ## Working on this repo
 
 [Working on this repo](docs/repo-guide.md) has what's where, how to test a change, and what the

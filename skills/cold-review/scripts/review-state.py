@@ -144,11 +144,9 @@ def changed_lines(hunks):
     return lines
 
 
-def shown(root, commit, source, doc, record, rel):
-    """The lines of the file a `Not reviewed:` line came from (`source` starts with document or
-    record), as it was at `commit`, stripped; empty if it wasn't there."""
-    path = (doc if source.startswith("document") else record) or doc
-    name = path_at(root, commit, path.relative_to(root).as_posix() if path != doc else rel)
+def lines_at(root, commit, path):
+    """The stripped lines of `path` as it was at `commit`; empty if it wasn't there."""
+    name = path_at(root, commit, path.relative_to(root).as_posix())
     return {line.strip() for line in (git(root, "show", f"{commit}:{name}") or "").splitlines()}
 
 
@@ -236,7 +234,7 @@ def main():
     out["repo"] = str(root) if root else "none"
     if plan:
         out["plan"] = "yes: only the Decision, Design and Work items count"
-    base, since_delta, delta_cut_off = None, None, False
+    base, since_delta, delta_commit, delta_cut_off = None, None, None, False
     if root:
         out["head"] = (git(root, "rev-parse", "--short", "HEAD") or "none").strip()
         if where != "none":
@@ -263,10 +261,15 @@ def main():
                 out["delta-commit"] = delta_commit or "none"
                 if delta_commit:
                     base = (git(root, "rev-parse", "--short", delta_commit) or delta_commit).strip()
+                    # `Not reviewed:` lines that weren't in their file at that commit.
+                    then = {
+                        "document": lines_at(root, delta_commit, doc),
+                        "record": lines_at(root, delta_commit, record) if record else set(),
+                    }
                     since_delta = [
                         line
                         for source, _, line in review.not_reviewed
-                        if line not in shown(root, delta_commit, source, doc, record, rel)
+                        if line not in then[source.split(" ", 1)[0]]
                     ]
                 elif delta_cut_off:
                     base = None
@@ -307,7 +310,7 @@ def main():
         state = "full"
     elif delta and delta_cut_off:
         state = "no-base"
-    elif delta and out.get("delta-commit", "none") == "none":
+    elif delta and not delta_commit:
         state = "done"  # not committed yet, as /cold-review leaves it, or no repo
     elif delta:
         unlogged = out.get("changed") == "yes" and not since_delta

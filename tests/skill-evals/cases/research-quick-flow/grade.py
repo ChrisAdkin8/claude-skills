@@ -53,6 +53,18 @@ def finished(run, shape):
     return ok and all(re.search(p, reply) for p in shape)
 
 
+def reply_of(path):
+    """The session's final reply, from the runner's result JSON."""
+    try:
+        return json.loads(Path(path).read_text()).get("result") or ""
+    except (OSError, ValueError, AttributeError):
+        return ""
+
+
+# The report's line for what its agents cost, as hooks/run-agent.md step 3 words it.
+COST_LINE = re.compile(r"Agents cost (at least )?\$[0-9]")
+
+
 checks = {
     "the note exists": bool(text),
     "check-note passes": "RESULT: PASS" in check,
@@ -62,6 +74,7 @@ checks = {
     "the note has a status": bool(re.search(r"(?m)^status: \w", text)),
     "~/notes is a git repo": "NOT A GIT REPO" not in before + after,
     "nothing else in ~/notes changed": before == after,
+    "the final reply has an Agents cost line": bool(COST_LINE.search(reply_of(sys.argv[2]))),
 }
 for agent, shape in SHAPES.items():
     # <agent>, or <agent>-<n> for a later run of it.

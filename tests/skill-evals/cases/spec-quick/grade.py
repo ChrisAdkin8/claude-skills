@@ -65,6 +65,18 @@ def finished(run):
     return ok and all(re.search(p, reply) for p in SHAPE)
 
 
+def reply_of(path):
+    """The session's final reply, from the runner's result JSON."""
+    try:
+        return json.loads(Path(path).read_text()).get("result") or ""
+    except (OSError, ValueError, AttributeError):
+        return ""
+
+
+# The report's line for what its agents cost, as hooks/run-agent.md step 3 words it.
+COST_LINE = re.compile(r"Agents cost (at least )?\$[0-9]")
+
+
 verifiers = sorted(runs.glob(f"{repo.name}--*/spec-verifier*"))
 verified = bool(verifiers) and all(finished(r) for r in verifiers)
 checks = {
@@ -83,6 +95,7 @@ checks = {
     f"every spec-verifier run ended in success, with a reply in its shape ({len(verifiers)} runs)": verified,
     "no cold review was launched": not any(runs.glob(f"{repo.name}--*/cold-reviewer*")),
     "nothing committed": git("rev-parse", "--short", "HEAD") == head,
+    "the final reply has an Agents cost line": bool(COST_LINE.search(reply_of(sys.argv[2]))),
 }
 for name, ok in checks.items():
     print(("ok   " if ok else "FAIL ") + name)

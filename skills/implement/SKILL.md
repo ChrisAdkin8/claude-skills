@@ -5,7 +5,7 @@ disable-model-invocation: true
 argument-hint: <spec path>
 allowed-tools: Read Grep Glob Edit(~/.cache/implement-runs/**) Edit(~/.cache/implement-verify/**) Edit(~/code/**/*-worktrees/*/docs/specs/**)
   Bash(git -C * status *) Bash(git -C * worktree add *) Bash(git -C * add *) Bash(git -C * commit *) Bash(git -C * revert *)
-  Bash(${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/check-spec.py *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/run-implementer.sh *)
+  Bash(${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/check-spec.py *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/run-implementer.sh *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/ledger.py report *)
   Bash(${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/prepare-verify.sh ~/.cache/implement-verify/*) Bash(${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/run-verify.sh ~/.cache/implement-verify/*)
 ---
 
@@ -40,7 +40,7 @@ You frame, relay and verify; you don't write the code. The work items are done b
 - `<spec>`: the path given; stop if there is none. `<repo>`: `git-read.py -C <spec's dir> rev-parse --show-toplevel`, which must be under `~/code` (else stop: `/implement` works only on repos there). `<repo dir>`: its directory name.
 - `<basename>`: the spec's filename without `.md`. `<record>`: `<spec dir>/records/<basename>-record.md`. `<spikes>`: `<spec dir>/spikes/<basename>-results.md` (it may not exist). Paths below are from the repo root unless they start with `~`.
 - `<worktree>`: `<repo>/../<repo dir>-worktrees/<basename>`, written with `~`. `<branch>`: `implement/<basename>`.
-- `<run name>`: `<repo dir>--<basename>`. `<run dir>`: `~/.cache/implement-runs/<run name>/implementer`. `<baseline>`: `~/.cache/implement-runs/<run name>/scratch/baseline.txt`, in the one dir outside the worktree the implementer may write. `<ledger>`: `~/.cache/implement-ledger/<run name>.jsonl`, the cost of every implementer and verifier run for this spec. `<scratch V<n>>`: `~/.cache/implement-verify/<repo dir>/<basename>/V<n>`.
+- `<run name>`: `<repo dir>--<basename>`. `<run dir>`: `~/.cache/implement-runs/<run name>/implementer`. `<baseline>`: `~/.cache/implement-runs/<run name>/scratch/baseline.txt`, in the one dir outside the worktree the implementer may write. `<scratch V<n>>`: `~/.cache/implement-verify/<repo dir>/<basename>/V<n>`.
 - **New or resume.** `git-read.py -C <repo> branch --list <branch>`: empty means a new run; a branch means resume (step 3's Resume).
 
 ## 2. Gate
@@ -73,7 +73,7 @@ On resume, run the Gate in the worktree instead, where check 1 names only `<spec
 
    Add `Resume` on its own line on resume, and `Unattended` if the user said no one will answer questions.
 2. **Launch** `${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/run-implementer.sh <worktree> <run dir>` with `run_in_background: true`. Tell the user in one line that the implementer is running, and end your turn.
-3. **When it returns**, read `<run dir>/reply.md`. By exit code:
+3. **When it returns**, go by its exit code; for 0 and 3, read `<run dir>/reply.md`:
    - **0**, and the last line says:
      - `Implementer: done`: go to step 5.
      - `Implementer: question: <text>`: put it to the user with AskUserQuestion, recommended answer first. Write the answer to `<run dir>/followup.md` and run the same command with `--resume` added, in the background. Unattended, don't ask: stop and report the question.
@@ -81,6 +81,8 @@ On resume, run the Gate in the worktree instead, where check 1 names only `<spec
    - **3**: the reply doesn't end with an `Implementer:` line. Send one follow-up asking it to reply again, in full, ending with that line. If that exits 3 too, stop and tell the user.
    - **2**: the run never started, or its cap is spent. Stop and give the script's message.
    - **4**: the run changed the repo's shared git config or hooks, a worktree's git pointers or the ledger, or left a submodule config that names a program. Stop at once: run no git command in the repo or the worktree, `git-read.py` included, read nothing the run wrote, and tell the user each path the script's message names, so they can check it before anything runs git there.
+   - **5**: the run found no Claude account to use. Stop, send no follow-up (the session has no account to answer it), and give the user the script's account guidance as it printed it.
+   - **6**: the call was interrupted (the task was stopped, or the session closed) and wrote no reply. Read nothing, `reply.md` included: stop, and tell the user the call was interrupted, what the script's message says it was charged, and that `/implement <spec>` carries on from the last committed work item.
    - **Any other**: stop; `run.err` and `run.json` in the run dir say why.
 
    On any exit, keep each `run-implementer: moved during the run: <ref> <old> -> <new>` line the script printed, for the report.
@@ -92,6 +94,7 @@ On resume, run the Gate in the worktree instead, where check 1 names only `<spec
 3. Run `${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/run-verify.sh <scratch V1>` with `run_in_background: true`, and end your turn. When it returns, go by its exit code before you read anything:
    - **0**: read `<scratch V1>/reply.md`.
    - **4**: the run left a link, or something else that isn't a plain file, where its output goes, which the Read tool would follow out of the scratch directory; or it changed an input the verifier reads (the spec, the record, a diff), so its verdict may rest on something you didn't write. Read none of its files, `run.json` included, so its cost is unknown. Under the record's `## Evidence` in the worktree, add `- Verifier V1 (<head commit>): refused: <the script's message>`, use nothing from its reply, go on to step 6 (Evidence and report), and say in the report that the implementation wasn't verified.
+   - **5**: the run found no Claude account to use. Stop, and give the user the script's account guidance as it printed it.
    - **2, 3 or any other**: stop and tell the user, as step 4 does.
 4. **Copy its reply**, the table, the `Other commits:` line and the closing lines, under the record's `## Evidence` in the worktree, headed `- Verifier V1 (<head commit>):`.
 5. **CANNOT-RUN rows.** If any, write a follow-up listing each (its Done when and the verifier's reason) to `<run dir>/followup.md`, and resume the implementer. It runs them in the worktree and adds `implementer-run:` lines, apart from the table.
@@ -100,4 +103,4 @@ On resume, run the Gate in the worktree instead, where check 1 names only `<spec
 ## 6. Evidence and report
 
 1. `git -C <worktree> -c core.fsmonitor=false -c core.hooksPath=/dev/null add <record>`, then `git -C <worktree> -c core.fsmonitor=false -c core.hooksPath=/dev/null commit -m '<area>: implementation evidence'`: the branch's last commit. The verifier ran on the commit before it, which changes only the record. `git -C <worktree> -c core.fsmonitor=false -c core.hooksPath=/dev/null status --porcelain` must then print nothing; if it doesn't, name what's left.
-2. **Report**, one short line each: each work item, its commit and Done when result, and, for one no verifier row passed, that only the implementer checked it (`implementer-run:`) or no one did; the clean-up commits and any revert; the verifier's `Verified` and `Implementation holds` lines, per round, or that a round was refused and why; any departure or question and its answer; each `moved during the run:` line, for the user to confirm they made that change themselves (their own commit or fetch) and not the implementer; the cost of every run, from `<ledger>`, which you read with Read: each implementer call's `end` line's `usd` (or its `start` line's `budget`, if no end line follows), each `verifier V<n>` line's `usd`, a `null` one as unknown, and their total, which counts every run of this spec, earlier ones included. Then: "run `/spec done <absolute path of the spec in the worktree>` here, in this session". Don't push, merge or remove the worktree.
+2. **Report**, one short line each: each work item, its commit and Done when result, and, for one no verifier row passed, that only the implementer checked it (`implementer-run:`) or no one did; the clean-up commits and any revert; the verifier's `Verified` and `Implementation holds` lines, per round, or that a round was refused and why; any departure or question and its answer; each `moved during the run:` line, for the user to confirm they made that change themselves (their own commit or fetch) and not the implementer; the cost of every run, from `${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/ledger.py report <run name>`, whose lines you copy: each implementer call's cost and where it comes from, each verifier run's, the implementer total that counts against the cap, and the total of all runs of this spec, earlier ones included. Don't add up the ledger's lines yourself. Then: "run `/spec done <absolute path of the spec in the worktree>` here, in this session". Don't push, merge or remove the worktree.

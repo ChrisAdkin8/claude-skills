@@ -44,7 +44,8 @@ runs a copy in Claude Code's plugin cache, which an edit here doesn't reach.
 |---|---|
 | `hooks/agents/` | `researcher`, `research-verifier`, `spec-verifier`, `cold-reviewer`, which `run-agent.sh` passes to `claude` per run, and `implementer`, which `run-implementer.sh` does |
 | `hooks/agent-def.py` | turns an agent file into the definition `claude --agents` takes |
-| `hooks/run-agent.sh` | launches an agent; exits with code 3 when a reply lacks its expected ending, so an error is never mistaken for a verdict |
+| `hooks/run-agent.sh` | launches an agent; exits with code 3 when a reply lacks its expected ending, so an error is never mistaken for a verdict, and 5 when the run found no Claude account to use |
+| `hooks/launch-checks.sh` | the checks every launcher sources: it refuses a Claude Code older than 2.1.277, runs the session on the Claude account rather than `ANTHROPIC_API_KEY` unless `CHECKED_PLANS_USE_API_KEY=1`, and says how to fix a run with no account; `tests/test_launch_checks.py` tests it through the six launchers |
 | `hooks/run-agent.md` | how `/research`, `/spec` and `/cold-review` run an agent with `run-agent.sh` and read its reply |
 | `hooks/agent-sandbox.json` | the agents' sandbox settings, with `${CLAUDE_PLUGIN_ROOT}` where a path names the repo |
 | `hooks/agent-settings.py` | renders a settings file with `${CLAUDE_PLUGIN_ROOT}` replaced by the repo's absolute path; `run-agent.sh` and both eval runners pass the result to `--settings` |

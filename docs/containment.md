@@ -68,10 +68,10 @@ Some things run outside the sandbox, and not all of them are checked by the guar
   run outside the sandbox. Your own hooks and plugins' hooks still do, so know what they run. If
   your `~/.claude/settings.json` sets a sandbox key that could widen its sandbox, the launcher
   refuses to run. After each call it checks that the shared git config and hooks are unchanged.
-  Its spend goes in a ledger it can't write, `~/.cache/implement-ledger/`, capped at $20 for
-  every run of a spec. The implement-verifier that re-runs its checks is sandboxed, with no
-  network and a uv cache of its own, which spikes can't write
-  (`skills/implement/verify-settings.json`).
+  Its spend goes in a ledger it can't write, `~/.cache/implement-ledger/`, capped at $20 per spec,
+  across all its runs, and $8 a call. The implement-verifier that re-runs its checks sits outside
+  that cap, at $5 a run. It is sandboxed, with no network and a uv cache of its own, which spikes
+  can't write (`skills/implement/verify-settings.json`).
 
 Every agent is also told these rules: [`hooks/agent-sandbox.md`](../hooks/agent-sandbox.md) is
 added to its instructions, with the list of allowed websites filled in from the sandbox settings.

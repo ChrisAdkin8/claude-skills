@@ -134,6 +134,22 @@ class SandboxSettings(unittest.TestCase):
             AGENT["sandbox"]["credentials"]["envVars"],
         )
 
+    def test_every_sandbox_hides_the_account_and_gateway_tokens(self):
+        # The session itself still gets them: a deny applies to the sandboxed commands only, and
+        # a command the settings exclude, such as the skill evals' run-agent.sh, keeps them too
+        # (spike S7 of docs/specs/2026-10-07-usability-1b-which-account-pays.md).
+        for name, settings in (
+            ("agent-sandbox.json", AGENT),
+            ("spike-settings.json", SPIKE),
+            ("implementer-settings.json", IMPLEMENTER),
+            ("verify-settings.json", VERIFY),
+            ("agent-case-settings.json", AGENT_CASE),
+        ):
+            env = settings["sandbox"].get("credentials", {}).get("envVars", [])
+            for var in ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_AUTH_TOKEN"):
+                with self.subTest(file=name, var=var):
+                    self.assertIn({"name": var, "mode": "deny"}, env)
+
     def test_verify_settings_deny_what_the_spike_settings_deny(self):
         # The verifier runs code in an export as a spike does, under the same sandbox: no
         # network, the same denies and hidden environment variables. It writes only to a uv

@@ -138,6 +138,7 @@ If it's still missing, say in the report that novelty wasn't independently check
    - verification, e.g. `9 of 10 claims confirmed (a sample of 31 cited), 1 corrected, 1 left unverified`, and whether the conclusion changed;
    - the status and, if draft, why;
    - the commit hash;
+   - what its agents cost, from each `run-agent.sh` run's last line as `${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.md` step 3 says: `Agents cost $<total> (<agent> $<cost>, …)`, or `Agents cost at least $<known> (<agent> unknown, …)` when any run's cost is unknown;
    - at ideas depth: the pool size and lenses covered, the prior-art verdict on #1 and #2, and the idea notes filed.
 
    If the recommendation is to change a repo, add a line: the next step is `/spec <note>`, run from that repo. If the Recommendation is conditional or the options are close, suggest recording the choice in `~/notes/decisions/` first.

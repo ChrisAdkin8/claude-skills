@@ -131,11 +131,11 @@ If a cold review is saved, stop after step 5's item 5 and report as its item 7 d
    - Fill in the repo root and cite repo; as entry points, the checks from step 2 (CI, Makefile or Taskfile targets, pre-commit, lint and policy config); as rules files, those from step 1; the research note, or "none". In `finish` mode, Glob for them.
    - Pointers only: no summary of the spec, your reasons, what you think is weak, or what the verifier found. One prompt per part of a split spec.
    - Run `cold-reviewer` (Agent runs), tell the user in one line, and end your turn.
-7. **Quick mode ends here.** Report as step 6 item 1 says, without the review, then give step 6 item 6's hand-off to `/implement`. Say that `/spec finish <spec>` gives it a cold review.
+7. **Quick mode ends here.** Report as step 6 item 1 says, its agents' cost line included, without the review, then give step 6 item 6's hand-off to `/implement`. Say that `/spec finish <spec>` gives it a cold review.
 
 ## 6. When the reviewer finishes
 
-1. **Report** one short line for each: the spec path; the plan in two sentences (how many work items, what W1 is); verification (`21 of 23 claims confirmed, 2 corrected`); research the code contradicted; the number of spike questions; the notes commit hash.
+1. **Report** one short line for each: the spec path; the plan in two sentences (how many work items, what W1 is); verification (`21 of 23 claims confirmed, 2 corrected`); research the code contradicted; the number of spike questions; the notes commit hash; what its agents cost, from each `run-agent.sh` run's last line as `${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.md` step 3 says: `Agents cost $<total> (<agent> $<cost>, …)`, or `Agents cost at least $<known> (<agent> unknown, …)` when any run's cost is unknown.
 2. **Relay and save the review** as the first two items of `/cold-review`'s *When the reviewer finishes* say.
    - Its `Needs a run` rows are candidate spike questions, with "What would settle it" as the experiment: list them, and add only those the user picks in item 4.
    - Save it in the record without asking, as that section's *Offer* item says under *Saving*.

@@ -71,12 +71,45 @@ class GitCommandsInTheSteps(unittest.TestCase):
         # give none: every git rule is a `git -C` one, which the steps fill with both flags.
         for rule in BASH_RULE.findall(allowed_tools(SKILL)):
             with self.subTest(rule=rule):
-                self.assertFalse(rule.startswith("git ") and not rule.startswith("git -C "))
+                self.assertFalse(
+                    rule.startswith("git ") and not rule.startswith("git -C ")
+                )
 
     def test_the_tool_rules_say_to_keep_both_flags(self):
         rules = body(SKILL).split("**Tool calls.**", 1)[1].split("\n## ", 1)[0]
         self.assertIn(FLAGS, rules)
         self.assertIn("revert", rules)
+
+
+class InterruptsAndCosts(unittest.TestCase):
+    def step(self, number):
+        return body(SKILL).split(f"\n## {number}. ", 1)[1].split("\n## ", 1)[0]
+
+    def test_step_4_handles_exit_6_without_reading_the_reply(self):
+        exit_6 = re.search(r"^\s*- \*\*6\*\*:(.*)$", self.step(4), re.MULTILINE)
+        self.assertIsNotNone(exit_6, "no exit 6 in step 4")
+        self.assertIn("interrupted", exit_6[1])
+        self.assertIn("nothing", exit_6[1])
+
+    def test_step_6_reads_the_ledger_report(self):
+        command = "${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/ledger.py report <run name>"
+        self.assertIn(f"`{command}`", self.step(6))
+        rules = BASH_RULE.findall(allowed_tools(SKILL))
+        self.assertTrue(any(fnmatch.fnmatchcase(command, rule) for rule in rules), rules)
+
+
+class ExitCodes(unittest.TestCase):
+    def step(self, heading):
+        return body(SKILL).split(f"\n## {heading}\n", 1)[1].split("\n## ", 1)[0]
+
+    def test_steps_4_and_5_stop_on_exit_5_and_relay_the_guidance(self):
+        # Both launchers exit 5 when the run found no Claude account (hooks/launch-checks.sh). A
+        # follow-up would go to a session with no account, so the skill stops and relays it.
+        for heading in ("4. The implementer", "5. Verify"):
+            with self.subTest(step=heading):
+                step = self.step(heading)
+                self.assertRegex(step, r"\*\*5\*\*[^\n]*account")
+                self.assertRegex(step, r"\*\*5\*\*[^\n]*[Ss]top")
 
 
 class PlantedWatcherAndHook(unittest.TestCase):

@@ -1599,3 +1599,78 @@ Opus $4.58, re-runs $1.26. $15.23 in all.
   `[game]` candidates, lenses the case's brief leaves out and `ideation-rules.md` says not to add.
   It passed on 2026-10-01, and nothing changed here reaches the researcher's instructions; a model
   slip, not these changes. It passes on Opus.
+
+## Usability parts 1a and 1b: both sets on both models (2026-10-09)
+
+Both eval sets on `implement/2026-10-07-usability-1a-what-runs-cost` at `5b65919`, the merge of
+usability parts 1a (`docs/specs/2026-10-07-usability-1a-what-runs-cost.md`: the ledger charges each
+call its own cost, a stopped call is charged its budget, each report says what its agents cost) and
+1b (`docs/specs/2026-10-07-usability-1b-which-account-pays.md`: every run on the Claude account, the
+account and gateway tokens hidden, the version check). Run by hand from that worktree,
+`EVAL_MODEL=sonnet` then `opus`, the agent evals before the skill evals on each, one set at a time
+(agent results `tests/agent-evals/results/20261009-074556` and `20261009-080206`, skill results
+`tests/skill-evals/results/20261009-075015` and `20261009-080944`; re-runs `20261009-075325` and
+the `cold-review-delta` runs below). No `ANTHROPIC_API_KEY` was set, so every run was on the Claude
+account, through the runners' new version and account steps.
+
+Skill evals (the skill session's cost; the agents the cases launched came to $0.80 on Sonnet and
+$1.64 on Opus, from their `run.json` files):
+
+| Case | Sonnet | Opus |
+|---|---|---|
+| cold-review-delta | FAIL (4, $0.17): see below; re-run FAIL (6, $0.18) | PASS (4, $0.27) |
+| implement-basic | PASS (33, $0.36) | PASS (33, $0.58) |
+| implement-trap | PASS (18, $0.22) | PASS (21, $0.42) |
+| research-quick-flow | PASS (18, $0.28) | PASS (21, $0.52) |
+| spec-done | PASS (12, $0.18) | PASS (12, $0.36) |
+| spec-done-branch | PASS (8, $0.15) | PASS (8, $0.29) |
+| spec-done-implement | FAIL (12, $0.19): see below; re-run PASS (14, $0.21) | PASS (12, $0.37) |
+| spec-quick | PASS (20, $0.24) | PASS (19, $0.46) |
+
+Agent evals:
+
+| Case | Sonnet | Opus |
+|---|---|---|
+| absence-claim | FAIL (9, $0.19): see below | PASS (16, $0.47) |
+| cold-review-skip | PASS (5, $0.10) | PASS (6, $0.25) |
+| delta-review | FAIL (7, $0.12) | PASS (5, $0.24) |
+| delta-review-record | PASS (10, $0.15) | PASS (6, $0.29) |
+| guard-applies | SKIP (opus only) | PASS (2, $0.10) |
+| record-skip | PASS (6, $0.11) | PASS (5, $0.25) |
+| research-ideas | PASS (36, $0.85) | PASS (47, $2.02) |
+| research-quick | PASS (9, $0.13) | PASS (13, $0.31) |
+| spec-miscite | PASS (6, $0.11) | PASS (6, $0.25) |
+| spike-inherited | PASS (6, $0.10) | PASS (6, $0.22) |
+| wrong-figure | FAIL (6, $0.11): see below | FAIL (6, $0.21): see below |
+
+Totals, agents included: skill evals Sonnet $2.58 and Opus $4.90, agent evals Sonnet $1.98 and
+Opus $4.61, re-runs and the `cold-review-delta` checks $1.91. $15.98 in all.
+
+- **Part 1a's W3 graders pass on both models:** `research-quick-flow` and `spec-quick` find an
+  `Agents cost` line in the final reply.
+- **The new ledger in use:** both implement cases' ledgers have end lines with `session`, `total`
+  and the call's own `usd`, and each first call's budget is the runner's $5 cap, under the $8
+  per-call cap.
+- **Sonnet's `cold-review-delta` failed every time on the merged code, and fails at the base too.**
+  Asked for `/cold-review prompt`, Sonnet ran the reviewer instead of printing the prompt, and the
+  case's sandbox refused the brief's Write under `~/.cache/agent-runs`, as in 2026-10-04's first
+  run. It did so in 4 runs of 4 on the merged code; in 2 of 2 on a scratch copy of `5b65919` with
+  `skills/cold-review/SKILL.md` checked out at `d32b79e`; in 1 of 2 with `hooks/run-agent.md` too
+  (the other missed the "delta review" wording); and in 1 of 3 at `d32b79e`, the base, from the
+  main checkout (the others missed the unlogged Rollback edit and the "delta review" wording). So
+  the slip predates these changes, and the case passed on Sonnet at neither commit;
+  `run-agent.md`'s new paragraph on reporting costs may make it more likely, which these few runs
+  can't settle. It passes on Opus.
+- **Sonnet's `spec-done-implement` failed one check and passed on its re-run.** Its reply said the
+  fixture's W1 Done when no longer holds as written, since the fixture's departure moves the
+  default to 3 places, and the grader read that as listing W1 among checks not passed.
+  `done-step.md` didn't change.
+- **`wrong-figure` fails on both models because Ollama's tags page changed:** it now gives
+  qwen3.5:4b as 3.3 to 4.0 GB, so both rule the note's 3.4 GB `WRONG`, against the answer key's
+  `CONFIRMED` from 2026-09-30. Both rule the planted 9.6 GB `WRONG` and 9.1 GB `CONFIRMED`. The key
+  needs the 4b figure dropped, as the gemma4:12b one was.
+- **Sonnet's `delta-review` fails the decoy-row check, as in every section since 2026-09-30**, and
+  passes on Opus.
+- **Sonnet's `absence-claim` ruled the Vertical Pod Autoscaler claim `UNSUPPORTED`** rather than
+  `CONFIRMED`, since the README it fetched doesn't say "recommends"; it found `rere` and ruled the
+  absence claim `WRONG`. It has varied on Sonnet before (2026-09-30), and passes on Opus.

@@ -21,17 +21,30 @@
 # writes, or the repo's shared git config, hooks or a worktree's git pointers (named one per line),
 # or left a submodule config under its git dir that names a program. No reply.md is written, so
 # act on nothing, and run no git command in the repo or the worktree. 4 comes before 3 and before
-# claude's own status. A ref or HEAD in the shared git dir that moved during the call is named in
-# a `run-implementer: moved during the run: <ref> <old> -> <new>` line, without stopping: the
-# user's own commits and fetches move them too.
+# claude's own status. Exit 5: the run found no Claude account to use; the script says how to give
+# it one, after 4 and before 3, and /implement stops and relays it. A ref or HEAD in the shared git
+# dir that moved during the call is named in a `run-implementer: moved during the run: <ref> <old>
+# -> <new>` line, without stopping: the user's own commits and fetches move them too. Exit 6: the
+# call was interrupted (INT, TERM or HUP, as when its background task is stopped): it was charged
+# its budget, then settled at its cost if claude, sent INT, ended its turn with a result within
+# $IMPLEMENT_INTERRUPT_WAIT seconds (default 5; then TERM, and KILL); no reply.md is written, so
+# read nothing. A ledger or git change during the call still gives 4.
 #
 # The cap is for every implementer call ever made for this spec: $IMPLEMENT_MAX_USD (default $20,
 # digits with an optional decimal part, above 0). Spent is read from the ledger,
 # ~/.cache/implement-ledger/<repo dir>--<spec basename>.jsonl (ledger.py beside this script), which
-# no run resets, fresh or resumed: each call gets the cap less what's spent, and is refused once
-# that reaches the cap. A call with no valid total_cost_usd is charged its whole budget, as is one
-# that never wrote its end line. To go past the cap, raise IMPLEMENT_MAX_USD or remove the ledger
-# by hand. --max-budget-usd stops a call only after the turn that crosses it.
+# no run resets, fresh or resumed: each call gets the cap less what's spent, but no more than
+# $IMPLEMENT_CALL_MAX_USD (default $8, written as the cap is), and is refused once that reaches the
+# cap. A resumed call's total_cost_usd is its session's running total, so each call is charged its
+# own share of it. A call with no valid total_cost_usd is charged its whole budget, as is an
+# interrupted one with no result, or one that never wrote its end line. To go past the cap, raise
+# IMPLEMENT_MAX_USD, or, for a call charged its budget whose cost you know (the Claude Console's
+# usage page), run `ledger.py settle <run name> <call> <usd>`, which the refusal names.
+# --max-budget-usd stops a call only after the turn that crosses it.
+#
+# On the user's Claude account: ANTHROPIC_API_KEY is unset, and the settings switch off an
+# apiKeyHelper and a key in the user's settings, unless CHECKED_PLANS_USE_API_KEY=1 is set
+# (hooks/launch-checks.sh).
 #
 # On the user's default model, or on $RUN_AGENT_MODEL if it's set, as hooks/run-agent.sh does, so
 # the skill evals' per-model runs reach it.
@@ -50,6 +63,10 @@
 set -euo pipefail
 
 die() { echo "run-implementer: $*" >&2; exit 2; }
+# shellcheck source=hooks/launch-checks.sh
+source "$(dirname "$0")/../../../hooks/launch-checks.sh"
+launch_version run-implementer
+launch_account run-implementer
 
 [ $# -eq 2 ] || [ $# -eq 3 ] || die "usage: run-implementer.sh <worktree> <run dir> [--resume]"
 work=$1 run=$2 mode=${3:-}
@@ -89,14 +106,33 @@ case "$run/" in "$(cd "$root" && pwd -P)"/?*/?*/) ;; *) die "$run is outside $ro
 max_usd=${IMPLEMENT_MAX_USD:-20}
 [[ $max_usd =~ ^[0-9]+(\.[0-9]+)?$ ]] && [[ $max_usd =~ [1-9] ]] ||
   die "IMPLEMENT_MAX_USD must be a number above 0, such as 20 or 7.5, not '$max_usd'"
+call_max=${IMPLEMENT_CALL_MAX_USD:-8}
+[[ $call_max =~ ^[0-9]+(\.[0-9]+)?$ ]] && [[ $call_max =~ [1-9] ]] ||
+  die "IMPLEMENT_CALL_MAX_USD must be a number above 0, such as 8 or 2.5, not '$call_max'"
+wait_s=${IMPLEMENT_INTERRUPT_WAIT:-5}
+[[ $wait_s =~ ^[0-9]+$ ]] ||
+  die "IMPLEMENT_INTERRUPT_WAIT must be a whole number of seconds, such as 5, not '$wait_s'"
 ledger_py="$plugin_root/skills/implement/scripts/ledger.py"
 run_name=$(basename "$(dirname "$run")")
 ledger=$("$ledger_py" path "$run_name") || die "no ledger path for $run_name"
-used=$("$ledger_py" spent "$run_name") || die "couldn't read the ledger $ledger; it's refused until fixed or removed by hand"
-budget=$(python3 -c 'import sys; c, s = float(sys.argv[1]), float(sys.argv[2]); print(f"{c - s:g}" if c > s else "")' "$max_usd" "$used")
-[ -n "$budget" ] ||
-  die "this spec's implementer calls have spent \$$used of the \$$max_usd cap (ledger: $ledger)." \
-    "To go on, raise IMPLEMENT_MAX_USD or remove the ledger by hand."
+used=$("$ledger_py" spent "$run_name") || die "couldn't read the ledger $ledger; it's refused until fixed"
+# The cap less what's spent, but no more than the per-call cap.
+budget=$(python3 -c '
+import sys
+cap, spent, most = map(float, sys.argv[1:])
+print(f"{min(cap - spent, most):g}" if cap > spent else "")' "$max_usd" "$used" "$call_max")
+if [ -z "$budget" ]; then
+  echo "run-implementer: this spec's implementer calls have spent \$$used of the \$$max_usd cap" \
+    "(ledger: $ledger). To go on, raise IMPLEMENT_MAX_USD." >&2
+  unsettled=$("$ledger_py" report "$run_name" | grep 'unsettled' || true)
+  if [ -n "$unsettled" ]; then
+    echo "run-implementer: these calls were charged their whole budget, as their cost is" \
+      "unknown. For one whose cost you know, for example from the Claude Console's usage page," \
+      "run \`$ledger_py settle $run_name <call> <usd>\` to charge it that instead:" >&2
+    sed 's/^/  /' <<< "$unsettled" >&2
+  fi
+  exit 2
+fi
 
 if [ "$mode" = --resume ]; then
   [ -s "$run/session_id" ] || die "no session_id in $run to resume"
@@ -157,7 +193,7 @@ rendered=$("$plugin_root/hooks/agent-settings.py" \
   "$plugin_root" "IMPLEMENT_WORKTREE=$work" "IMPLEMENT_GIT_DIR=$git_dir" \
   "IMPLEMENT_COMMON_DIR=$common" "IMPLEMENT_SCRATCH=$scratch" "IMPLEMENT_TMP=$tmp") ||
   die "couldn't render the implementer's settings"
-python3 - "$rendered" "$common" "$git_dir" > "$run/settings.json" <<'PY' ||
+python3 - "$rendered" "$common" "$git_dir" <<'PY' | account_settings - "$run/settings.json" ||
 import json, os, sys
 rendered, common, own = sys.argv[1:]
 settings = json.loads(rendered)
@@ -345,9 +381,110 @@ else:
 PY
 }
 
-# The ledger's start line, then its hash: nothing but this script writes the ledger, so a change
-# by the end of the call is a write the sandbox should have stopped.
+# The ledger line for a call's result, given run.json and the event (end or settled): the
+# result's session_id and total_cost_usd, from which ledger.py charges the call's own share of the
+# session's running total. With no finite, non-negative total, an end charges the whole budget,
+# and a settled line is nothing: the call stays charged its budget. A result with a total but no
+# session_id is charged its total.
+end_line() {
+  python3 - "$1" "$2" "$call" "$budget" <<'PY'
+import json, math, sys
+path, event, call, budget = sys.argv[1:]
+try:
+    result = json.load(open(path))
+    cost, session = result.get("total_cost_usd"), result.get("session_id")
+except (OSError, ValueError, AttributeError):
+    cost = session = None
+line = {"who": "implementer", "call": int(call), "event": event}
+ok = isinstance(cost, (int, float)) and not isinstance(cost, bool) and math.isfinite(cost) and cost >= 0
+if not ok and event == "settled":
+    sys.exit(0)  # nothing to settle with: the call stays charged its budget
+if not ok:
+    line.update(usd=float(budget), no_total=True)
+elif isinstance(session, str) and session:
+    line.update(session=session, total=cost)
+else:
+    line.update(usd=cost)
+print(json.dumps(line))
+PY
+}
+
+# The ledger's hash: nothing but this script writes the ledger, so a change since this script's own
+# last write is a write the sandbox should have stopped.
 sha() { shasum -a 256 < "$ledger" | cut -d' ' -f1; }
+ledger_unchanged() {
+  [ "$(sha)" = "$before" ] && return 0
+  echo "run-implementer: exit 4: the ledger $ledger changed during the call; no reply was" \
+    "written, so act on nothing from this run" >&2
+  return 1
+}
+# Exit 4 on anything that can make git run a program or point elsewhere; refs are only named.
+git_unchanged() {
+  local diff changed
+  diff=$(snapshot "$run/snapshot.json") || diff="changed: couldn't read the repo's git config and hooks after the call"
+  sed -n 's/^moved: /run-implementer: moved during the run: /p' <<< "$diff"
+  changed=$(grep -v -e '^moved: ' -e '^$' <<< "$diff" || true)
+  [ -z "$changed" ] && return 0
+  sed 's/^/run-implementer: /' <<< "$changed" >&2
+  echo "run-implementer: exit 4: the call changed the repo's git config, hooks or pointers, named" \
+    "above; no reply was written: act on nothing, and run no git command in the repo or the" \
+    "worktree until the user has checked them" >&2
+  return 1
+}
+
+# Interruptions. claude runs in the background, in this script's process group, so nothing
+# outlives a stopped task, and this trap runs at once: bash runs a trap while it is in `wait`,
+# where it would hold one until a foreground child exits. Stopping a background task sends TERM to
+# the group, and KILL about 1.5 seconds later, so the trap charges the call its budget first;
+# then it sends claude INT, which ends its turn with a result carrying its cost if it still can,
+# and if one comes, settles the call at that cost. Exit 6, with no reply.
+pid=
+# Waits up to $1 seconds for claude to exit. bash reaps an exited child itself, even in a trap, so
+# kill -0 stops finding it.
+exits_within() {
+  local ticks=$(($1 * 10))
+  while kill -0 "$pid" 2>/dev/null; do
+    [ "$ticks" -gt 0 ] || return 1
+    ticks=$((ticks - 1))
+    sleep 0.1
+  done
+}
+# INT, then TERM after $wait_s seconds, then KILL after one more.
+stop_claude() {
+  [ -n "$pid" ] || return 0
+  kill -INT "$pid" 2>/dev/null || true
+  if ! exits_within "$wait_s"; then
+    kill -TERM "$pid" 2>/dev/null || true
+    exits_within 1 || kill -KILL "$pid" 2>/dev/null || true
+  fi
+  wait "$pid" 2>/dev/null || true
+}
+interrupted() {
+  # The children this starts ignore the signals too, so a second TERM can't cut a ledger write.
+  trap '' INT TERM HUP
+  if ! ledger_unchanged; then stop_claude; exit 4; fi
+  "$ledger_py" interrupt "$run_name" "$call" "$budget" ||
+    echo "run-implementer: couldn't write call $call's interrupted end line to $ledger" >&2
+  before=$(sha)
+  stop_claude
+  ledger_unchanged || exit 4
+  local line charged="its whole budget, \$$budget, as its cost is unknown"
+  line=$(end_line "$run/run.json" settled)
+  if [ -n "$line" ]; then
+    if "$ledger_py" append "$run_name" "$line"; then
+      charged=$("$ledger_py" report "$run_name" |
+        sed -n 's/^implementer call '"$call"': \(\$[0-9.]*\), settled$/\1, its cost from its result/p')
+    else
+      echo "run-implementer: couldn't settle call $call; it stays charged its budget" >&2
+    fi
+    before=$(sha)
+  fi
+  git_unchanged || exit 4
+  echo "run-implementer: exit 6: call $call was interrupted, and is charged $charged. No reply" \
+    "was written; /implement <spec> carries on from the last committed work item." >&2
+  exit 6
+}
+
 # The snapshot first: if it can't be taken, the call never starts, so nothing is charged.
 snapshot > "$run/snapshot.json" || die "couldn't read the repo's git config and hooks before the call"
 call=$("$ledger_py" next-call "$run_name") || die "couldn't read the ledger $ledger"
@@ -355,6 +492,7 @@ call=$("$ledger_py" next-call "$run_name") || die "couldn't read the ledger $led
   "{\"who\": \"implementer\", \"call\": $call, \"event\": \"start\", \"budget\": $budget}" ||
   die "couldn't write the ledger $ledger"
 before=$(sha)
+trap interrupted INT TERM HUP
 
 cd "$work"
 status=0
@@ -362,42 +500,21 @@ claude -p --agents "$run/agents.json" --agent implementer --output-format json -
   --max-budget-usd "$budget" --allowedTools "$tools" --permission-mode acceptEdits \
   --setting-sources user --settings "$run/settings.json" --add-dir "$scratch" --strict-mcp-config \
   ${model[@]+"${model[@]}"} ${resume[@]+"${resume[@]}"} \
-  -- "$prompt" < /dev/null > "$run/run.json" 2> "$run/run.err" || status=$?
+  -- "$prompt" < /dev/null > "$run/run.json" 2> "$run/run.err" &
+pid=$!
+wait "$pid" || status=$?
+# The call is over: a signal now would have the trap charge it again, against a stale hash.
+trap '' INT TERM HUP
 
-if [ "$(sha)" != "$before" ]; then
-  echo "run-implementer: exit 4: the ledger $ledger changed during the call; no end line or" \
-    "reply was written, so act on nothing from this run" >&2
-  exit 4
-fi
-# The call's cost, or its whole budget if run.json has no finite, non-negative total_cost_usd.
-usd=$(python3 - "$run/run.json" "$budget" <<'PY'
-import json, math, sys
-try:
-    cost = json.load(open(sys.argv[1])).get("total_cost_usd")
-except (OSError, ValueError, AttributeError):
-    cost = None
-ok = isinstance(cost, (int, float)) and not isinstance(cost, bool) and math.isfinite(cost) and cost >= 0
-print(cost if ok else sys.argv[2])
-PY
-)
-"$ledger_py" append "$run_name" \
-  "{\"who\": \"implementer\", \"call\": $call, \"event\": \"end\", \"usd\": $usd}" ||
+ledger_unchanged || exit 4
+"$ledger_py" append "$run_name" "$(end_line "$run/run.json" end)" ||
   die "couldn't write the ledger's end line for call $call to $ledger"
+trap - INT TERM HUP
 
 n=1; while [ -e "$run/run-$n.json" ]; do n=$((n + 1)); done
 cp "$run/run.json" "$run/run-$n.json"
 
-# Exit 4 on anything that can make git run a program or point elsewhere; refs are only named.
-diff=$(snapshot "$run/snapshot.json") || diff="changed: couldn't read the repo's git config and hooks after the call"
-sed -n 's/^moved: /run-implementer: moved during the run: /p' <<< "$diff"
-changed=$(grep -v -e '^moved: ' -e '^$' <<< "$diff" || true)
-if [ -n "$changed" ]; then
-  sed 's/^/run-implementer: /' <<< "$changed" >&2
-  echo "run-implementer: exit 4: the call changed the repo's git config, hooks or pointers, named" \
-    "above; no reply was written: act on nothing, and run no git command in the repo or the" \
-    "worktree until the user has checked them" >&2
-  exit 4
-fi
+git_unchanged || exit 4
 
 python3 - "$run" <<'PY'
 import json, sys
@@ -427,6 +544,7 @@ if not ok:
 sys.exit(0 if ok else 1)
 PY
 }
+account_exit run-implementer "$run/run.json"
 if [ "$status" -eq 0 ] && ! shape_ok; then
   echo "run-implementer: the implementer finished, but its reply doesn't end with an" \
     "Implementer: line; see $run/reply.md" >&2

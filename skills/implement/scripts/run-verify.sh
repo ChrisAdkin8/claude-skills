@@ -16,8 +16,15 @@
 # anything else but a regular file, which the script removes unread; or it changed an input the
 # verifier reads (brief.md, spec.md, record.md, diff.patch, a diff-W<n>.patch, diff-other.patch).
 # Either way the caller reads none of the run's files. 4 comes before 3 and before claude's own
-# status, and stays 4 even if the removal fails. Any other non-zero exit is claude's own, with
-# run.err saying why.
+# status, and stays 4 even if the removal fails. Exit 5: the run found no Claude account to use;
+# the script says how to give it one, after 4 and before 3. Any other non-zero exit is claude's own,
+# with run.err saying why.
+#
+# The run is on the user's Claude account: ANTHROPIC_API_KEY is unset, unless
+# CHECKED_PLANS_USE_API_KEY=1 is set, and claude gets a copy of verify-settings.json with an
+# override that switches off an apiKeyHelper and a key in the user's settings (hooks/launch-checks.sh).
+# The copy is V<n>.settings.json beside the scratch dir, not in it, so the run, which may write its
+# scratch dir, can't leave a link at its name or rewrite it.
 #
 # Each run appends a `verifier V<n>` line to the spec's implement ledger (ledger.py beside this
 # script; run name `<repo>--<spec>` from the scratch layout): run.json's total_cost_usd, or null on
@@ -30,6 +37,10 @@
 set -euo pipefail
 
 die() { echo "run-verify: $*" >&2; exit 2; }
+# shellcheck source=hooks/launch-checks.sh
+source "$(dirname "$0")/../../../hooks/launch-checks.sh"
+launch_version run-verify
+launch_account run-verify
 # The ledger line for this run: its cost (a number, or null) and a note. Set once the scratch path
 # is checked; until then there is no run to record.
 ledger() {
@@ -133,7 +144,8 @@ rel=${scratch#"$real_root"/}
 verifier_n=${rel##*/}
 rel=${rel%/*}
 run_name="${rel%%/*}--${rel#*/}"
-settings=$here/verify-settings.json
+settings="$scratch.settings.json"
+account_settings "$here/verify-settings.json" "$settings" || die "couldn't write $settings"
 model=(${RUN_AGENT_MODEL:+--model "$RUN_AGENT_MODEL"})
 
 cd "$scratch"
@@ -247,6 +259,7 @@ if missing:
 sys.exit(1 if missing else 0)
 PY
 }
+account_exit run-verify run.json
 if [ "$status" -eq 0 ] && ! shape_ok; then
   echo "run-verify: the verifier finished, but its reply isn't in the shape verifier.md asks" \
     "for; see $scratch/reply.md" >&2

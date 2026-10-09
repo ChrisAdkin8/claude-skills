@@ -10,8 +10,8 @@ what was written, not what was meant.
 
 **Is it for you?** It's for people who use Claude Code most days and want a plan checked before
 code gets written. It has only been tried on macOS. The research and each check run a paid
-agent, capped at $5 a run ($10 for the research). Each `/implement` run's implementer is capped at
-$20 in all, and each of its up to two checker runs at $5.
+agent, capped at $5 a run ($10 for the research). `/implement`'s implementer is capped at $20 per
+spec, across all its runs, and each of its up to two checker runs at $5 on top of that.
 
 [Try it](#try-it) · [How it works](#from-idea-to-merged-change) ·
 [A worked example](#a-worked-example) · [Safety and cost](#safety-and-cost)
@@ -65,7 +65,9 @@ How to read it:
 - **Claude Code 2.1.277 or later.** The agents rely on a sandbox rule that holds from that version
   on. Before it, one command allowed to run outside the sandbox, such as `gh`, took any command run
   along with it outside too. Last tested on 2.1.285; don't assume the sandbox works on anything
-  older.
+  older. The commands refuse to start an agent on an older one.
+- **A Claude account** (Pro, Max, Team or Enterprise), which the agents run on, or an Anthropic
+  API key if you choose to pay that way ([Safety and cost](#safety-and-cost)).
 - **macOS.** Nothing has been tried anywhere else ([Linux notes](docs/containment.md#on-linux)).
 - **`python3`**, for the checking scripts. Some spikes also use `uv`.
 - **Your code in git repos under `~/code`**, such as `~/code/my-app`. `/spec` and `/implement`
@@ -368,12 +370,44 @@ What things cost:
   environment variable overrides both. Agents run on your default model, or on the one
   `RUN_AGENT_MODEL` names (`sonnet` or `opus`).
 - **Each spec's implementer** is capped at $20 in all, across every `/implement` run of that
-  spec and every resume with an answer, until you remove its cost ledger,
-  `~/.cache/implement-ledger/<repo>--<spec>.jsonl`, by hand. The `IMPLEMENT_MAX_USD` environment
-  variable overrides the cap. Each of its up to two checker runs is capped at $5.
+  spec and every resume with an answer, and each call at $8 of that. The `IMPLEMENT_MAX_USD`
+  environment variable overrides the $20, and `IMPLEMENT_CALL_MAX_USD` the $8. What it has spent
+  is kept in a cost ledger, `~/.cache/implement-ledger/<repo>--<spec>.jsonl`. A call whose cost is
+  never known, such as one stopped before it could report it, is charged its whole budget, at most
+  $8. If you know what it cost, from the Claude Console's usage page, run the `ledger.py settle`
+  command that the refusal at the cap names, to charge it that instead. Don't delete the ledger.
+- **Each of its up to two checker runs** is capped at $5, outside the implementer's $20.
 - **Each spike** is capped at $2 and 60 turns. A *turn* is one step: Claude replies once, and may
   use a tool. Assume a spike that fetches anything from the web costs close to its cap.
 - A cap stops a run only after the turn that crosses it, so a run can go over by up to one turn.
+- **The figures are estimates**, Claude Code's own count, not your bill. On a subscription they
+  measure use against your plan, not money spent.
+- **Who pays.** Every run uses your Claude account: the one you signed in to with `/login`, or a
+  token from `claude setup-token` set as `CLAUDE_CODE_OAUTH_TOKEN`. An `ANTHROPIC_API_KEY` in your
+  shell or settings would bill the key instead, so the runs drop it, saying so in one line, and
+  switch off an `apiKeyHelper` too. Set `CHECKED_PLANS_USE_API_KEY=1` to bill the key. A run that
+  finds no account stops and says how to fix it. `ANTHROPIC_AUTH_TOKEN` and cloud-provider
+  settings work as before. The agents' sandboxed commands can see none of these keys or tokens.
+- **Set the variables** `IMPLEMENT_MAX_USD`, `IMPLEMENT_CALL_MAX_USD`, `RUN_AGENT_MAX_USD`,
+  `RUN_AGENT_MODEL` and `CHECKED_PLANS_USE_API_KEY` in the shell that starts Claude Code, or under
+  `env` in `~/.claude/settings.json`.
+
+Typical cost and time of each command's agents, from this repo's eval runs on 2026-10-09: each
+agent run's `total_cost_usd` and `duration_ms` in its `run.json`, on the small cases in
+`tests/skill-evals` and `tests/agent-evals`.
+
+| Command | Its agents | On Sonnet | On Opus |
+|---|---|---|---|
+| `/research`, a quick note | researcher, then research-verifier | $0.19, 42 s | $0.54, 85 s |
+| `/spec quick` | spec-verifier | $0.05, 16 s | $0.10, 38 s |
+| `/cold-review` | cold-reviewer | $0.12 to $0.15, 25 s | $0.24 to $0.29, 32 to 39 s |
+| `/implement` | implementer, then implement-verifier | $0.43, 61 s | $0.77, 111 s |
+
+The session you run the command in costs extra: $0.24 to $0.36 a command on Sonnet and $0.27 to
+$0.58 on Opus in the same runs. A full `/spec` adds a cold review and any spikes. Real work costs
+more than these small cases: on this repo's own two-part spec, on Opus on 2026-10-07 and
+2026-10-08, each part's implementer cost $7.32 and $9.00 over about an hour, its checker runs
+$1.57 and $1.91, the spec-verifier runs $0.79 and $0.97, and the cold-reviewer runs $1.34 and $1.57.
 
 ## Working on this repo
 

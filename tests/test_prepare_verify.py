@@ -31,6 +31,10 @@ INPUTS = (
 )  # fmt: skip
 STUB = """#!/usr/bin/env python3
 import json, os, subprocess, sys
+# The launchers' version check (hooks/launch-checks.sh), answered before the call is logged.
+if sys.argv[1:] == ["--version"]:
+    print("2.1.285 (Claude Code)")
+    sys.exit(0)
 with open(os.environ["STUB_CALLS"], "a") as f:
     f.write(json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd(),
                         "uv": os.environ.get("UV_CACHE_DIR"),
@@ -674,8 +678,17 @@ class RunVerify(Home):
         argv = call["argv"]
         flag = lambda name: argv[argv.index(name) + 1]
         self.assertEqual(Path(call["cwd"]).resolve(), self.scratch.resolve())
+        # A copy of verify-settings.json with the account override, beside the scratch dir
+        # (hooks/launch-checks.sh; tests/test_launch_checks.py).
+        copy = self.scratch.resolve().parent / "V1.settings.json"
+        self.assertEqual(flag("--settings"), str(copy))
         self.assertEqual(
-            flag("--settings"), str(SCRIPTS.parent / "verify-settings.json")
+            json.loads(copy.read_text()),
+            {
+                **json.loads((SCRIPTS.parent / "verify-settings.json").read_text()),
+                "apiKeyHelper": "",
+                "env": {"ANTHROPIC_API_KEY": ""},
+            },
         )
         self.assertEqual(
             flag("--append-system-prompt-file"), str(SCRIPTS.parent / "verifier.md")

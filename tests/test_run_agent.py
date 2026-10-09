@@ -18,6 +18,10 @@ REPO = Path(__file__).resolve().parents[1]
 SCRIPT = REPO / "hooks" / "run-agent.sh"
 STUB = """#!/usr/bin/env python3
 import json, os, sys
+# The launchers' version check (hooks/launch-checks.sh), answered before the call is logged.
+if sys.argv[1:] == ["--version"]:
+    print("2.1.285 (Claude Code)")
+    sys.exit(0)
 calls = os.environ["STUB_CALLS"]
 with open(calls, "a") as f:
     f.write(json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd(),
@@ -25,7 +29,12 @@ with open(calls, "a") as f:
                         "memory": os.environ.get("CLAUDE_CODE_DISABLE_AUTO_MEMORY")}) + "\\n")
 n = sum(1 for _ in open(calls))
 tail = os.environ.get("STUB_TAIL", "| # | Kind |\\nCounts: 0 findings\\nCold read: yes")
-print(json.dumps({"session_id": "sess-1", "result": f"reply {n}\\n{tail}", "subtype": "success"}))
+out = {"session_id": "sess-1", "result": f"reply {n}\\n{tail}", "subtype": "success"}
+if "STUB_COST" in os.environ:
+    out["total_cost_usd"] = float(os.environ["STUB_COST"])
+# STUB_RAW is printed instead of a JSON result; STUB_EXIT is the exit code.
+print(os.environ.get("STUB_RAW") or json.dumps(out))
+sys.exit(int(os.environ.get("STUB_EXIT", "0")))
 """
 
 
@@ -226,6 +235,32 @@ class RunAgent(unittest.TestCase):
                 self.assertEqual(code, 3, out)
                 self.assertIn("isn't in the shape", out)
                 self.assertIn(tail.splitlines()[0], (run / "reply.md").read_text())
+
+    def last_line(self, out):
+        return out.strip().splitlines()[-1]
+
+    def test_the_last_line_names_the_cost(self):
+        run = self.run_dir()
+        run.mkdir(parents=True)
+        (run / "brief.md").write_text("Review this.\n")
+        self.env["STUB_COST"] = "0.42"
+        code, out = self.run_agent("cold-reviewer", self.work, run)
+        self.assertEqual(code, 0, out)
+        self.assertIn("finished (exit 0)", self.last_line(out))
+        self.assertTrue(self.last_line(out).endswith("cost $0.42"), out)
+        # A run that exits 0 with no readable result ends on its exit 3 line.
+        del self.env["STUB_COST"]
+        self.env["STUB_RAW"] = "not JSON"
+        code, out = self.run_agent("cold-reviewer", self.work, run)
+        self.assertEqual(code, 3, out)
+        self.assertIn("isn't in the shape", self.last_line(out))
+        self.assertTrue(self.last_line(out).endswith("cost unknown"), out)
+        # A run that fails ends on its finished line.
+        self.env["STUB_EXIT"] = "1"
+        code, out = self.run_agent("cold-reviewer", self.work, run)
+        self.assertEqual(code, 1, out)
+        self.assertIn("finished (exit 1)", self.last_line(out))
+        self.assertTrue(self.last_line(out).endswith("cost unknown"), out)
 
     def test_resume_needs_a_session(self):
         run = self.run_dir()

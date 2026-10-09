@@ -14,7 +14,7 @@ cite-repo: none
 
 A spec committed to a shared repo passes its checks on a teammate's machine. A spec renamed in Finder keeps its review history. `/implement` says plainly when a spec is in a format it can't build. `/cold-review again <file>` gives a document a second full review when its author asks, and `/cold-review` refuses a document its reviewer can't read before it spends anything. Spikes run on the model the user chose, and a question no spike can answer comes with the command to run it by hand. Repos whose own git config names a program, such as one set up with `nbstripout`, can still be read.
 
-Part 6 of 7 from the usability review of 2026-10-07. It stands alone. Part 2's gate checks come before W3's in `/implement`'s gate.
+Part 6 of 7 from the usability review of 2026-10-07. It stands alone. The gate checks of parts 2a and 2b come before W3's in `/implement`'s gate.
 
 ## Decision
 
@@ -115,7 +115,7 @@ Read at `377b2dd` on 2026-10-07.
 |---|---|---|
 | W1 | 1 h | none |
 | W2 | 2 h | none |
-| W3 | 1 h | part 2's gate checks |
+| W3 | 1 h | the gate checks of parts 2a and 2b |
 | W4 | 4 h | none |
 | W5 | 2 h | none |
 | W6 | 2 h | none |

@@ -90,7 +90,7 @@ Skills: each skill's Frame step runs `${CLAUDE_PLUGIN_ROOT}/hooks/locations.py` 
 
 - **Change:** wherever a skill or script asks whether a repo is under the code folder, compare the repo's `git rev-parse --show-toplevel` with `locations.py`'s resolved folder.
 - **Files:** `skills/idea/SKILL.md`, `skills/research/SKILL.md`, `skills/spec/SKILL.md`, `skills/implement/SKILL.md`, `skills/implement/scripts/run-implementer.sh`, `tests/test_run_implementer.py`.
-- **Done when:** a new test with `CHECKED_PLANS_CODE_DIR` pointing at a symlink to a scratch folder gets `run-implementer.sh --check` (part 2's W1) to accept a worktree in the real folder; the four skills' repo checks say "under the code folder `locations.py` prints, compared as real paths". The unit tests pass.
+- **Done when:** a new test with `CHECKED_PLANS_CODE_DIR` pointing at a symlink to a scratch folder gets `run-implementer.sh --check` (part 2a's W1) to accept a worktree in the real folder; the four skills' repo checks say "under the code folder `locations.py` prints, compared as real paths". The unit tests pass.
 
 ### W6: the evals follow it
 
@@ -112,7 +112,7 @@ Skills: each skill's Frame step runs `${CLAUDE_PLUGIN_ROOT}/hooks/locations.py` 
 | W2 | 3 h | W1, part 3's W2 |
 | W3 | 4 h | W1 |
 | W4 | 4 h, after spike question 1 | W1 |
-| W5 | 1 h | W1, part 2's W1 |
+| W5 | 1 h | W1, part 2a's W1 |
 | W6 | 2 h | W1 |
 | W7 | 1 h | W1 to W6 |
 | Evals | both sets on both models, and the implement cases | W1 to W7 |

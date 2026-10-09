@@ -229,11 +229,11 @@ The six stages match the diagram.
 5. **Implement: `/implement <spec>`**, once the spec, its record and its spike results are
    committed. It first checks the spec: it must be `reviewed`, pass `check-spec.py`, and cite no
    code that has changed since it was read (else `/spec finish <spec>` updates it). Then it makes
-   a worktree on the branch `implement/<spec name>` and hands the work to an implementer, an agent
-   in a session of its own. The implementer does the work items in order, each test first and in
-   its own commit, then tidies the code with `/simplify` and `/code-review`. A sandboxed checker
-   then re-runs each work item's "Done when" test. What they found goes in the spec's record, on
-   the branch. It never pushes or merges.
+   a worktree on the branch `implement/<spec name>` (a safe form of the name, if it has spaces or
+   accents) and hands the work to an implementer, an agent in a session of its own. The implementer
+   does the work items in order, each test first and in its own commit, then tidies the code with
+   `/simplify` and `/code-review`. A sandboxed checker then re-runs each work item's "Done when"
+   test. What they found goes in the spec's record, on the branch. It never pushes or merges.
    ([tools spec](docs/specs/2026-09-26-implement-skill-1-tools.md),
    [skill spec](docs/specs/2026-09-26-implement-skill-2-skill.md))
 6. **Close out: `/spec done <spec>`**, given the spec's path in `/implement`'s worktree and run in

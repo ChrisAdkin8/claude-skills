@@ -80,3 +80,7 @@ Needs a run: 5
 - Not reviewed: after a delta review, the base is the delta's own commit, never its parent, and W2's Done when tests a delta saved in one commit with its edits, from delta review row 3, on 2026-10-09.
 - Not reviewed: check 6 gives its action for each of `review-state.py`'s states, stopping on `unlogged` and on `no-base`, and W2's test finds them, from delta review row 4, on 2026-10-09.
 - Not reviewed: `run-name.py` normalises a name to Unicode NFC before folding and hashing it, and W3's Done when tests `café` stored both ways, from delta review row 5, on 2026-10-09.
+
+## Evidence
+
+- Started at 01c368e

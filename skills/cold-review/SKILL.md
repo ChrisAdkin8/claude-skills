@@ -49,6 +49,9 @@ reviewer runs, and in the final report. When it returns, carry on from the first
    - `unlogged`: say so, show `stat:` and `headings:`, and draft one `Not reviewed:` line per
      change; once the user confirms them, add them to the record under
      `## Changes since the review` (lines anywhere else don't count), and do the delta review.
+     If it printed `delta-review: yes`, the changes came after the delta review, and there is no
+     third round: add the confirmed lines under `## Changes after the delta review` instead,
+     review nothing, and stop.
    - `unchanged` (say its `review-date:`), `no-base` (no commit to diff from) or `done` (name any
      `logged:` lines left): say so, and stop.
    - If it printed `record-moved:`, the record is still under the document's old name: say so,

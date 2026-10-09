@@ -125,6 +125,25 @@ class Gate(unittest.TestCase):
             any(fnmatch.fnmatchcase(command, rule) for rule in rules), rules
         )
 
+    def test_check_6_stops_on_a_hand_edit_after_the_review(self):
+        command = "${CLAUDE_PLUGIN_ROOT}/skills/cold-review/scripts/review-state.py --plan <spec>"
+        check = self.check(6)
+        self.assertIn(f"`{command}`", check)
+        rules = BASH_RULE.findall(allowed_tools(SKILL))
+        self.assertTrue(
+            any(fnmatch.fnmatchcase(command, rule) for rule in rules), rules
+        )
+        # Its action for each state review-state.py prints.
+        for state in ("full", "unchanged", "done", "delta", "unlogged", "no-base"):
+            with self.subTest(state=state):
+                self.assertIn(f"`{state}`", check)
+        self.assertRegex(check, r"`unlogged`[^`]*[Ss]top[^\n]*/cold-review <spec>")
+        self.assertRegex(check, r"`no-base`[^`]*[Ss]top[^\n]*git fetch --unshallow")
+        carry_on = check.split("`unlogged`", 1)[0]
+        for state in ("full", "unchanged", "done", "delta"):
+            with self.subTest(carries_on=state):
+                self.assertIn(f"`{state}`", carry_on)
+
 
 class ExitCodes(unittest.TestCase):
     def step(self, heading):

@@ -4,6 +4,7 @@
 # verifies; the implementer does the work items, from its agent file, hooks/agents/implementer.md.
 #
 # Usage: run-implementer.sh <worktree> <run dir> [--resume]
+#        run-implementer.sh --check <run dir>
 #
 #   <worktree>  a linked git worktree of a repo under ~/code, itself under ~/code
 #   <run dir>   ~/.cache/implement-runs/<repo dir>--<spec basename>/implementer, holding brief.md
@@ -12,6 +13,15 @@
 #               there, and keeps each call's run.json as run-<n>.json.
 #   --resume    send followup.md from the run dir to the same session instead, keeping the
 #               previous reply as reply-<n>.md
+#   --check     run only the refusals that don't need the worktree, for /implement's gate before
+#               it makes one: the version and account checks, the run dir's name, the three
+#               variables, the cap, the temp dir and the user's sandbox keys. It skips the
+#               worktree's checks, making the run and scratch dirs, the brief, rendering the
+#               settings, the snapshot and the ledger's start line, so it writes nothing and
+#               launches nothing; it calls claude only for --version. A run dir that doesn't exist
+#               yet can't be resolved, so a link that leads it outside ~/.cache/implement-runs is
+#               still refused only at launch. Exit 0 if a launch would get past them, else 2 with
+#               the launch's own message.
 #
 # Exit 0: reply.md's last line is `Implementer: done`, `Implementer: question: <text>` or
 # `Implementer: stopped: <reason>`. Exit 3: the run finished, but it isn't (an API error, a budget
@@ -68,9 +78,16 @@ source "$(dirname "$0")/../../../hooks/launch-checks.sh"
 launch_version run-implementer
 launch_account run-implementer
 
-[ $# -eq 2 ] || [ $# -eq 3 ] || die "usage: run-implementer.sh <worktree> <run dir> [--resume]"
-work=$1 run=$2 mode=${3:-}
-[ -z "$mode" ] || [ "$mode" = --resume ] || die "unknown option: $mode"
+usage="usage: run-implementer.sh <worktree> <run dir> [--resume], or --check <run dir>"
+check=
+if [ "${1:-}" = --check ]; then
+  [ $# -eq 2 ] || die "$usage"
+  check=1 work='' run=$2 mode=''
+else
+  [ $# -eq 2 ] || [ $# -eq 3 ] || die "$usage"
+  work=$1 run=$2 mode=${3:-}
+  [ -z "$mode" ] || [ "$mode" = --resume ] || die "unknown option: $mode"
+fi
 
 # The plugin root (the repo, or the plugin cache copy) is found from this script's own location:
 # skills/implement/scripts/.
@@ -83,25 +100,30 @@ file="$plugin_root/hooks/agents/implementer.md"
 [ -f "$file" ] || die "no agent file: $file"
 
 # The working directory: a linked worktree (its git dir isn't the common one), whose main repo
-# and itself both resolve under ~/code.
-code=$(cd "$HOME/code" 2>/dev/null && pwd -P) || die "no ~/code"
-[ -d "$work" ] || die "no such worktree: $work"
-work=$(cd "$work" && pwd -P)
-case "$work/" in "$code"/?*/) ;; *) die "$work is not under ~/code" ;; esac
-top=$(git -C "$work" rev-parse --show-toplevel 2>/dev/null) || die "not a git repo: $work"
-[ "$(cd "$top" && pwd -P)" = "$work" ] || die "$work is not the top of its worktree ($top)"
-git_dir=$(cd "$work" && cd "$(git rev-parse --git-dir)" && pwd -P)
-common=$(cd "$work" && cd "$(git rev-parse --git-common-dir)" && pwd -P)
-[ "$git_dir" != "$common" ] || die "$work is a repo's main checkout, not a worktree of it"
-case "$common/" in "$code"/?*/) ;; *) die "$work is a worktree of a repo outside ~/code ($common)" ;; esac
+# and itself both resolve under ~/code. --check has none yet.
+if [ -z "$check" ]; then
+  code=$(cd "$HOME/code" 2>/dev/null && pwd -P) || die "no ~/code"
+  [ -d "$work" ] || die "no such worktree: $work"
+  work=$(cd "$work" && pwd -P)
+  case "$work/" in "$code"/?*/) ;; *) die "$work is not under ~/code" ;; esac
+  top=$(git -C "$work" rev-parse --show-toplevel 2>/dev/null) || die "not a git repo: $work"
+  [ "$(cd "$top" && pwd -P)" = "$work" ] || die "$work is not the top of its worktree ($top)"
+  git_dir=$(cd "$work" && cd "$(git rev-parse --git-dir)" && pwd -P)
+  common=$(cd "$work" && cd "$(git rev-parse --git-common-dir)" && pwd -P)
+  [ "$git_dir" != "$common" ] || die "$work is a repo's main checkout, not a worktree of it"
+  case "$common/" in "$code"/?*/) ;; *) die "$work is a worktree of a repo outside ~/code ($common)" ;; esac
+fi
 
 root="$HOME/.cache/implement-runs"
 name='[A-Za-z0-9][A-Za-z0-9._-]*'
 [[ $run =~ ^$root/$name/$name$ ]] ||
   die "run dir must be ~/.cache/implement-runs/<repo>--<spec>/implementer, not $run"
-mkdir -p "$run"
-run=$(cd "$run" && pwd -P)
-case "$run/" in "$(cd "$root" && pwd -P)"/?*/?*/) ;; *) die "$run is outside $root" ;; esac
+# --check makes nothing, so it resolves the run dir only if it's there already.
+if [ -z "$check" ] || [ -d "$run" ]; then
+  [ -n "$check" ] || mkdir -p "$run"
+  run=$(cd "$run" && pwd -P)
+  case "$run/" in "$(cd "$root" && pwd -P)"/?*/?*/) ;; *) die "$run is outside $root" ;; esac
+fi
 
 max_usd=${IMPLEMENT_MAX_USD:-20}
 [[ $max_usd =~ ^[0-9]+(\.[0-9]+)?$ ]] && [[ $max_usd =~ [1-9] ]] ||
@@ -134,7 +156,9 @@ if [ -z "$budget" ]; then
   exit 2
 fi
 
-if [ "$mode" = --resume ]; then
+if [ -n "$check" ]; then
+  :
+elif [ "$mode" = --resume ]; then
   [ -s "$run/session_id" ] || die "no session_id in $run to resume"
   [ -s "$run/followup.md" ] || die "write $run/followup.md first"
   n=1; while [ -e "$run/reply-$n.md" ]; do n=$((n + 1)); done
@@ -150,7 +174,7 @@ fi
 
 # The scratch dir: the one place outside the worktree the implementer may write (baseline.txt).
 scratch="$(dirname "$run")/scratch"
-mkdir -p "$scratch"
+[ -n "$check" ] || mkdir -p "$scratch"
 # The macOS per-user temp dir: mktemp writes there, and without it this repo's suite fails.
 tmp=$(getconf DARWIN_USER_TEMP_DIR 2>/dev/null) && [ -d "$tmp" ] && tmp=$(cd "$tmp" && pwd -P) ||
   die "couldn't find the per-user temp dir (getconf DARWIN_USER_TEMP_DIR)"
@@ -186,6 +210,11 @@ if widening:
     sys.exit(f"run-implementer: {sys.argv[1]} sets {', '.join(widening)}, which could widen the"
              " implementer's sandbox; remove it to run /implement")
 PY
+
+if [ -n "$check" ]; then
+  echo "run-implementer: --check passed: a launch with $run would get past these checks"
+  exit 0
+fi
 
 # The settings, with this run's paths, and each other worktree's git files denied too.
 rendered=$("$plugin_root/hooks/agent-settings.py" \

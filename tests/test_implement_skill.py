@@ -92,10 +92,38 @@ class InterruptsAndCosts(unittest.TestCase):
         self.assertIn("nothing", exit_6[1])
 
     def test_step_6_reads_the_ledger_report(self):
-        command = "${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/ledger.py report <run name>"
+        command = (
+            "${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/ledger.py report <run name>"
+        )
         self.assertIn(f"`{command}`", self.step(6))
         rules = BASH_RULE.findall(allowed_tools(SKILL))
-        self.assertTrue(any(fnmatch.fnmatchcase(command, rule) for rule in rules), rules)
+        self.assertTrue(
+            any(fnmatch.fnmatchcase(command, rule) for rule in rules), rules
+        )
+
+
+class Gate(unittest.TestCase):
+    """The gate's checks, step 2, all come before step 3 makes the worktree."""
+
+    def gate(self):
+        return body(SKILL).split("\n## 2. Gate\n", 1)[1].split("\n## ", 1)[0]
+
+    def check(self, number):
+        found = re.search(rf"^{number}\. (.*)$", self.gate(), re.MULTILINE)
+        self.assertIsNotNone(found, f"no check {number} in the gate")
+        return found[1]
+
+    def test_check_5_runs_the_launchers_refusals_before_the_worktree(self):
+        command = "${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/run-implementer.sh --check <run dir>"
+        check = self.check(5)
+        self.assertIn(f"`{command}`", check)
+        text = body(SKILL)
+        step_3 = text.index("\n## 3. Worktree\n")
+        self.assertLess(text.index(command), text.index("worktree add", step_3))
+        rules = BASH_RULE.findall(allowed_tools(SKILL))
+        self.assertTrue(
+            any(fnmatch.fnmatchcase(command, rule) for rule in rules), rules
+        )
 
 
 class ExitCodes(unittest.TestCase):

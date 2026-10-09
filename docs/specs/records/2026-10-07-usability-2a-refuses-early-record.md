@@ -84,3 +84,9 @@ Needs a run: 5
 ## Evidence
 
 - Started at 01c368e
+- Baseline: python3 -m unittest discover -s tests -> pass (644 tests)
+- Baseline: ruff check --isolated --select E9,F . (ruff 0.16.7) -> pass
+- Baseline: git ls-files -z '*.sh' | xargs -0 shellcheck -S warning -> pass
+- Baseline: python3 tests/replay_guard.py -> pass (SKIP: no recorded agent transcripts in the sandbox)
+- Baseline: claude plugin validate . --json; claude plugin validate .claude-plugin/plugin.json -> pass (only the expected no-version and root CLAUDE.md warnings)
+- Baseline: tests/agent-evals/run.sh and tests/skill-evals/run.sh -> not run: paid, by hand, need a model and network

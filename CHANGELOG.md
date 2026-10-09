@@ -3,6 +3,53 @@
 What changed, by day, drawn from the commit history. The repo has no releases or tags, so each
 section is a date. Within a day, changes are grouped by area.
 
+## 2026-10-09
+
+Two specs built with `/implement`, `docs/specs/2026-10-07-usability-1a-what-runs-cost.md` and
+`docs/specs/2026-10-07-usability-1b-which-account-pays.md`, the first two parts of a usability
+review of the five commands, written on 2026-10-07 with parts 2 to 7, which are still drafts. Each
+was built on its own branch on 2026-10-08; the two branches were joined, both eval sets ran on both
+models on the result (`tests/agent-evals/BASELINE.md`), and it was merged locally with no pull
+request. One case fails at both commits: on Sonnet, `/cold-review prompt` sometimes runs the
+reviewer instead of printing the prompt, and did so more often after the change.
+
+### Changed
+
+- Every headless run uses your Claude account: the one you signed in to with `/login`, or a
+  `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token`. An `ANTHROPIC_API_KEY` in your shell or
+  settings billed the key before, since `claude -p` always prefers it. Now the launchers drop it,
+  saying so in one line, and switch off an `apiKeyHelper` and a key in your settings' `env` block;
+  `CHECKED_PLANS_USE_API_KEY=1` keeps the key. A run that finds no account stops with exit 5 and
+  says how to fix it, and the skills relay that rather than retry.
+- The launchers refuse a Claude Code older than 2.1.277, the version the agents' sandbox rule holds
+  from, and say which version they found.
+- Each implementer call is capped at $8 (`IMPLEMENT_CALL_MAX_USD`), within the spec's $20.
+- `/research`, `/spec` and `/cold-review` end their reports with what their agents cost, and
+  `run-agent.sh`'s last line gives each run's cost, or `cost unknown`. `/implement`'s report reads
+  its costs through `ledger.py report`.
+- The README says the implementer's $20 cap is per spec, not per run, with each checker run's $5
+  on top, and who pays and where to set the variables. A new table gives what each command's agents
+  typically cost and how long they take.
+
+### Fixed
+
+- The ledger charges a resumed implementer call its own cost. A resumed call reports its session's
+  running total, and the ledger added those totals up, so a spec whose implementer asked a question
+  was charged its first call twice, and reached the $20 cap early.
+- Stopping `/implement`'s background task mid-call no longer locks the spec at its cap. The call
+  was charged its whole budget, all $20 for a first call, and every later run was refused until you
+  deleted the ledger by hand. Now a stopped call is charged its budget, at most $8, or its real cost
+  if `claude` can still report it, as after an `INT`, and exits 6; `ledger.py settle` sets a call's
+  charge to what it really cost, if you know it.
+
+### Security
+
+- The agents' sandboxed commands can't see `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_AUTH_TOKEN`, as
+  they already couldn't see `ANTHROPIC_API_KEY`.
+- The verifier's and the spikes' settings, with the account override added, are written beside
+  their run's folder, not in it, so the sandboxed run can't leave a link at that name or rewrite
+  them.
+
 ## 2026-10-04
 
 Three fixes from a review of the whole repo, each on its own branch, merged locally with no pull

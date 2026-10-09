@@ -18,7 +18,7 @@ Usage:
                                         from, each verifier run's, the implementer total that
                                         counts against the cap, and the total of all runs
 
-<run name> is `<repo dir>--<spec basename>`, as in ~/.cache/implement-runs/. The ledger is
+<run name> is `<safe repo>--<safe basename>`, as in ~/.cache/implement-runs/. The ledger is
 ~/.cache/implement-ledger/<run name>.jsonl, in a 0700 dir outside everything the implementer's
 sandbox can write, and nothing here ever removes or rewrites a line: to go past the cap, the user
 raises IMPLEMENT_MAX_USD, or settles a call charged its budget whose cost they know.

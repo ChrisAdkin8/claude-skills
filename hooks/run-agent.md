@@ -1,6 +1,6 @@
 # Running an agent
 
-How `/research`, `/spec` and `/cold-review` run their agents: `researcher`, `research-verifier`, `spec-verifier` and `cold-reviewer`. Each runs as a headless, sandboxed session through `${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.sh`, not as an in-session subagent: Claude Code can't sandbox those, and these agents read untrusted pages and repos. The skill that sent you here gives the agent, the brief, the work dir and the run dir's `<name>`.
+How `/research`, `/spec` and `/cold-review` run their agents: `researcher`, `research-verifier`, `spec-verifier` and `cold-reviewer`. Each runs as a headless, sandboxed session through `${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.sh`, not as an in-session subagent: Claude Code can't sandbox those, and these agents read untrusted pages and repos. The skill that sent you here gives the agent, the brief, the work dir and the run dir's `<name>`, built from what `${CLAUDE_PLUGIN_ROOT}/hooks/run-name.py` prints for the repo's and document's names, so a name with spaces or accents is one `run-agent.sh` accepts.
 
 `${CLAUDE_PLUGIN_ROOT}` in this file is the plugin's root, the directory that holds its `skills/` and `hooks/`. Claude Code expands it in `SKILL.md` but not in a file you read, so in a Bash call write the absolute path, never the variable.
 

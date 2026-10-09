@@ -99,6 +99,16 @@ class PrepareSpike(unittest.TestCase):
         )  # fmt: skip
         return run.returncode, run.stdout + run.stderr
 
+    def test_a_bad_name_is_named_with_the_rule(self):
+        for repo_dir, spec in (("My App", "spec"), (self.name, "café")):
+            with self.subTest(repo_dir=repo_dir, spec=spec):
+                bad = spec if repo_dir == self.name else repo_dir
+                code, out = self.prepare(self.root / repo_dir / spec / "S1", self.repo, self.sha)
+                self.assertEqual(code, 2, out)
+                self.assertIn(f'"{bad}"', out)
+                self.assertIn("may hold only letters, digits", out)
+                self.assertIn("starting with a letter or digit", out)
+
     def test_exports_the_repo_at_read_at(self):
         (self.scratch / "src").mkdir(parents=True)
         (self.scratch / "old.txt").write_text("from an earlier run\n")

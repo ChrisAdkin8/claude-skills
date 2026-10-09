@@ -4,7 +4,7 @@ description: Turns a research note or a described change into an implementation 
 disable-model-invocation: true
 argument-hint: '[quick] <research note path> [direction] | [quick] <description of the change> | finish <spec path> | spike <spec path> | done <spec path>'
 allowed-tools: Read Grep Glob Edit(~/code/**/docs/specs/**) Edit(~/notes/**) Edit(~/.cache/spec-spikes/**) Bash(grep *) Bash(git rev-parse *) Bash(git status *) Bash(git ls-files *)
-  Bash(git -C ~/notes status *) Bash(${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py *) Bash(git -C ~/notes add *) Bash(git -C ~/notes commit *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/check-spec.py *)
+  Bash(git -C ~/notes status *) Bash(${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py *) Bash(${CLAUDE_PLUGIN_ROOT}/hooks/run-name.py *) Bash(git -C ~/notes add *) Bash(git -C ~/notes commit *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/check-spec.py *)
   Bash(${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/check-note.py *) Bash(${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.sh *) Edit(~/.cache/agent-runs/**)
   Bash(${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/prepare-spike.sh ~/.cache/spec-spikes/*) Bash(${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/run-spike.sh ~/.cache/spec-spikes/*)
 ---
@@ -37,7 +37,7 @@ The checking rules are in `${CLAUDE_PLUGIN_ROOT}/hooks/agents/spec-verifier.md`,
 
 ## Agent runs
 
-Each agent runs as a headless, sandboxed session: read `${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.md` and follow it. The work dir is the repo root; the run dir is `~/.cache/agent-runs/<repo dir name>--<spec basename>/<agent>`. For a split spec, launch one per part at once.
+Each agent runs as a headless, sandboxed session: read `${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.md` and follow it. The work dir is the repo root; the run dir is `~/.cache/agent-runs/<safe repo>--<safe basename>/<agent>`, where `<safe repo>` and `<safe basename>` are what `${CLAUDE_PLUGIN_ROOT}/hooks/run-name.py '<repo dir name>'` and `${CLAUDE_PLUGIN_ROOT}/hooks/run-name.py '<spec basename>'` print: the name itself if git and the launchers accept it, else a safe name for it. For a split spec, launch one per part at once.
 
 ## Modes
 
@@ -147,7 +147,7 @@ If a cold review is saved, stop after step 5's item 5 and report as its item 7 d
    - Log a later change to a work item, Done when, the Design or the Decision the same way, `from spike S<n>` or `from the user`. No second full cold review; the one delta review of the `Not reviewed:` lines is `/cold-review <spec>`.
 5. **Spikes.** Unless Spike questions says "None.", offer step 7.
 6. **Next**, always: step 7, if it runs; `/spec finish <spec>` only after hand edits; `/cold-review <spec>` if there are `Not reviewed:` lines; `status: reviewed`; implement.
-   Give the hand-off only once `check-spec.py` passes with `status: reviewed`: commit the spec, its record and its spike results (if any), then run `/implement <spec path>` in this same session. It checks them, implements the work items test first on a branch of its own, `implement/<spec basename>`, in a worktree beside the repo, and has each Done when re-run by a verifier. Then, still in this session, `/spec done <the spec's path in that worktree>`.
+   Give the hand-off only once `check-spec.py` passes with `status: reviewed`: commit the spec, its record and its spike results (if any), then run `/implement <spec path>` in this same session. It checks them, implements the work items test first on a branch of its own, `implement/<safe basename>` (`${CLAUDE_PLUGIN_ROOT}/hooks/run-name.py '<spec basename>'` prints `<safe basename>`), in a worktree beside the repo, and has each Done when re-run by a verifier. Then, still in this session, `/spec done <the spec's path in that worktree>`.
 
 ## 7. Spike
 

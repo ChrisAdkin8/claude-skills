@@ -81,7 +81,11 @@ work=$(cd "$work" && pwd -P)
 
 root="$HOME/.cache/agent-runs"
 name='[A-Za-z0-9][A-Za-z0-9._-]*'
-[[ $run =~ ^$root/$name/$name$ ]] || die "run dir must be ~/.cache/agent-runs/<name>/<agent>, not $run"
+if ! [[ $run =~ ^$root/$name/$name$ ]]; then
+  bad=$(tr / '\n' <<< "${run#"$root"/}" | grep -v '^$' | grep -Evx "$name" | head -n 1 || true)
+  [ -z "$bad" ] || bad=": \"$bad\" isn't a valid name: a name may hold only letters, digits, ., _ and -, starting with a letter or digit"
+  die "run dir must be ~/.cache/agent-runs/<name>/<agent>, not $run$bad"
+fi
 mkdir -p "$run"
 run=$(cd "$run" && pwd -P)
 case "$run/" in "$(cd "$root" && pwd -P)"/?*/?*/) ;; *) die "$run is outside $root" ;; esac

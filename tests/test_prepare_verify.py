@@ -372,6 +372,16 @@ class PrepareVerify(Home):
                 self.assertEqual(code, 2, out)
         self.assertTrue(victim.is_dir())
 
+    def test_a_bad_name_is_named_with_the_rule(self):
+        for repo_dir, spec in (("My App", "spec"), (self.name, "Design Notes"), (self.name, "café")):
+            with self.subTest(repo_dir=repo_dir, spec=spec):
+                bad = spec if repo_dir == self.name else repo_dir
+                code, out = self.prepare(self.root / repo_dir / spec / "V1")
+                self.assertEqual(code, 2, out)
+                self.assertIn(f'"{bad}"', out)
+                self.assertIn("may hold only letters, digits", out)
+                self.assertIn("starting with a letter or digit", out)
+
     def test_refuses_a_symlinked_parent(self):
         outside = self.tmp / "outside"
         (outside / "spec" / "V1").mkdir(parents=True)
@@ -657,6 +667,18 @@ class RunVerify(Home):
         code, out = self.run_script(RUN, self.scratch)
         self.assertEqual(code, 2, out)
         self.assertIn("missing", out)
+        self.assertEqual(self.calls_made(), [])
+
+    def test_a_bad_name_is_named_with_the_rule(self):
+        for repo_dir, spec in (("My App", "spec"), (self.name, "Design Notes")):
+            with self.subTest(repo_dir=repo_dir, spec=spec):
+                bad = spec if repo_dir == self.name else repo_dir
+                scratch = self.make_scratch(scratch=self.root / repo_dir / spec / "V1")
+                code, out = self.run_script(RUN, scratch)
+                self.assertEqual(code, 2, out)
+                self.assertIn(f'"{bad}"', out)
+                self.assertIn("may hold only letters, digits", out)
+                self.assertIn("starting with a letter or digit", out)
         self.assertEqual(self.calls_made(), [])
 
     def test_refuses_a_symlink_out_of_the_root(self):

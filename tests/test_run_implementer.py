@@ -198,6 +198,18 @@ class RunImplementer(unittest.TestCase):
                 self.assertEqual(code, 2, out)
         self.assertEqual(self.calls_made(), [])
 
+    def test_a_bad_name_is_named_with_the_rule(self):
+        root = self.home / ".cache" / "implement-runs"
+        for name in ("My App--spec", "proj--Design Notes", "café--spec"):
+            with self.subTest(name=name):
+                for args in ((self.worktree,), ("--check",)):
+                    code, out = self.launch(*args, root / name / "implementer")
+                    self.assertEqual(code, 2, out)
+                    self.assertIn(f'"{name}"', out)
+                    self.assertIn("may hold only letters, digits", out)
+                    self.assertIn("starting with a letter or digit", out)
+        self.assertEqual(self.calls_made(), [])
+
     def test_needs_a_brief(self):
         code, out = self.launch(self.worktree, self.run_dir)
         self.assertEqual(code, 2, out)

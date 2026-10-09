@@ -5,7 +5,7 @@ disable-model-invocation: true
 argument-hint: <spec path>
 allowed-tools: Read Grep Glob Edit(~/.cache/implement-runs/**) Edit(~/.cache/implement-verify/**) Edit(~/code/**/*-worktrees/*/docs/specs/**)
   Bash(git -C * status *) Bash(git -C * worktree add *) Bash(git -C * add *) Bash(git -C * commit *) Bash(git -C * revert *)
-  Bash(${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/check-spec.py *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/cold-review/scripts/review-state.py --plan *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/run-implementer.sh *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/ledger.py report *)
+  Bash(${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py *) Bash(${CLAUDE_PLUGIN_ROOT}/hooks/run-name.py *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/check-spec.py *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/cold-review/scripts/review-state.py --plan *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/run-implementer.sh *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/ledger.py report *)
   Bash(${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/prepare-verify.sh ~/.cache/implement-verify/*) Bash(${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/run-verify.sh ~/.cache/implement-verify/*)
 ---
 
@@ -39,8 +39,9 @@ You frame, relay and verify; you don't write the code. The work items are done b
 
 - `<spec>`: the path given; stop if there is none. `<repo>`: `git-read.py -C <spec's dir> rev-parse --show-toplevel`, which must be under `~/code` (else stop: `/implement` works only on repos there). `<repo dir>`: its directory name.
 - `<basename>`: the spec's filename without `.md`. `<record>`: `<spec dir>/records/<basename>-record.md`. `<spikes>`: `<spec dir>/spikes/<basename>-results.md` (it may not exist). Paths below are from the repo root unless they start with `~`.
-- `<worktree>`: `<repo>/../<repo dir>-worktrees/<basename>`, written with `~`. `<branch>`: `implement/<basename>`.
-- `<run name>`: `<repo dir>--<basename>`. `<run dir>`: `~/.cache/implement-runs/<run name>/implementer`. `<baseline>`: `~/.cache/implement-runs/<run name>/scratch/baseline.txt`, in the one dir outside the worktree the implementer may write. `<scratch V<n>>`: `~/.cache/implement-verify/<repo dir>/<basename>/V<n>`.
+- `<safe repo>`: what `${CLAUDE_PLUGIN_ROOT}/hooks/run-name.py <repo dir>` prints, and `<safe basename>`: what `${CLAUDE_PLUGIN_ROOT}/hooks/run-name.py <basename>` prints, each name in single quotes. A name that holds only letters, digits, `.`, `_` and `-`, starting with a letter or digit, comes back as it is; any other, such as `Design Notes` or `café`, comes back as a safe name that git and the launchers accept, the same each time. Every name below is built from these two; the spec's, record's and spike results' own paths keep the real `<basename>`.
+- `<worktree>`: `<repo>/../<safe repo>-worktrees/<safe basename>`, written with `~`. `<branch>`: `implement/<safe basename>`.
+- `<run name>`: `<safe repo>--<safe basename>`. `<run dir>`: `~/.cache/implement-runs/<run name>/implementer`. `<baseline>`: `~/.cache/implement-runs/<run name>/scratch/baseline.txt`, in the one dir outside the worktree the implementer may write. `<scratch V<n>>`: `~/.cache/implement-verify/<safe repo>/<safe basename>/V<n>`.
 - **New or resume.** `git-read.py -C <repo> branch --list <branch>`: empty means a new run; a branch means resume (step 3's Resume).
 
 ## 2. Gate

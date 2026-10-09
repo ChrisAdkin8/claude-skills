@@ -104,6 +104,19 @@ class RunAgent(unittest.TestCase):
                 self.assertEqual(code, 2, out)
         self.assertEqual(self.calls_made(), [])
 
+    def test_a_bad_name_is_named_with_the_rule(self):
+        # The skills map names with hooks/run-name.py; a name that skipped it says what's wrong.
+        for bad in ("My App", "café", "_infra"):
+            with self.subTest(bad=bad):
+                code, out = self.run_agent(
+                    "cold-reviewer", self.work, self.root / bad / "cold-reviewer"
+                )
+                self.assertEqual(code, 2, out)
+                self.assertIn(f'"{bad}"', out)
+                self.assertIn("may hold only letters, digits", out)
+                self.assertIn("starting with a letter or digit", out)
+        self.assertEqual(self.calls_made(), [])
+
     def test_needs_a_brief(self):
         code, out = self.run_agent("cold-reviewer", self.work, self.run_dir())
         self.assertEqual(code, 2)

@@ -7,10 +7,12 @@
 #        run-implementer.sh --check <run dir>
 #
 #   <worktree>  a linked git worktree of a repo under ~/code, itself under ~/code
-#   <run dir>   ~/.cache/implement-runs/<repo dir>--<spec basename>/implementer, holding brief.md
+#   <run dir>   ~/.cache/implement-runs/<run name>/implementer, holding brief.md
 #               (written first by /implement). The run writes reply.md (the implementer's reply),
 #               run.json, run.err, session_id and snapshot.json (git's state before a call)
 #               there, and keeps each call's run.json as run-<n>.json.
+#               <run name> is <repo dir>--<spec basename>, each as hooks/run-name.py prints it, so
+#               a name with spaces or accents becomes one the name check below accepts.
 #   --resume    send followup.md from the run dir to the same session instead, keeping the
 #               previous reply as reply-<n>.md
 #   --check     run only the refusals that don't need the worktree, for /implement's gate before
@@ -42,7 +44,7 @@
 #
 # The cap is for every implementer call ever made for this spec: $IMPLEMENT_MAX_USD (default $20,
 # digits with an optional decimal part, above 0). Spent is read from the ledger,
-# ~/.cache/implement-ledger/<repo dir>--<spec basename>.jsonl (ledger.py beside this script), which
+# ~/.cache/implement-ledger/<run name>.jsonl (ledger.py beside this script), which
 # no run resets, fresh or resumed: each call gets the cap less what's spent, but no more than
 # $IMPLEMENT_CALL_MAX_USD (default $8, written as the cap is), and is refused once that reaches the
 # cap. A resumed call's total_cost_usd is its session's running total, so each call is charged its
@@ -116,8 +118,11 @@ fi
 
 root="$HOME/.cache/implement-runs"
 name='[A-Za-z0-9][A-Za-z0-9._-]*'
-[[ $run =~ ^$root/$name/$name$ ]] ||
-  die "run dir must be ~/.cache/implement-runs/<repo>--<spec>/implementer, not $run"
+if ! [[ $run =~ ^$root/$name/$name$ ]]; then
+  bad=$(tr / '\n' <<< "${run#"$root"/}" | grep -v '^$' | grep -Evx "$name" | head -n 1 || true)
+  [ -z "$bad" ] || bad=": \"$bad\" isn't a valid name: a name may hold only letters, digits, ., _ and -, starting with a letter or digit"
+  die "run dir must be ~/.cache/implement-runs/<repo>--<spec>/implementer, not $run$bad"
+fi
 # --check makes nothing, so it resolves the run dir only if it's there already.
 if [ -z "$check" ] || [ -d "$run" ]; then
   [ -n "$check" ] || mkdir -p "$run"

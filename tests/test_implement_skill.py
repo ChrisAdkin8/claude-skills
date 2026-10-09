@@ -145,6 +145,52 @@ class Gate(unittest.TestCase):
                 self.assertIn(f"`{state}`", carry_on)
 
 
+class Names(unittest.TestCase):
+    """Names built from the repo folder and the spec's basename go through hooks/run-name.py, so
+    `Design Notes.md` or a folder called `My App` get a worktree, branch, run dir and scratch
+    folder git and the launchers accept. The spec's and record's paths keep the real name."""
+
+    RUN_NAME = "${CLAUDE_PLUGIN_ROOT}/hooks/run-name.py"
+
+    def frame(self):
+        return body(SKILL).split("\n## 1. Frame\n", 1)[1].split("\n## ", 1)[0]
+
+    def test_the_frame_builds_names_from_run_names_output(self):
+        frame = self.frame()
+        for command in (f"{self.RUN_NAME} <repo dir>", f"{self.RUN_NAME} <basename>"):
+            with self.subTest(command=command):
+                self.assertIn(f"`{command}`", frame)
+                rules = BASH_RULE.findall(allowed_tools(SKILL))
+                self.assertTrue(
+                    any(fnmatch.fnmatchcase(command, rule) for rule in rules), rules
+                )
+        for name, built in (
+            ("<worktree>", "<repo>/../<safe repo>-worktrees/<safe basename>"),
+            ("<branch>", "implement/<safe basename>"),
+            ("<run name>", "<safe repo>--<safe basename>"),
+            ("<scratch V<n>>", "~/.cache/implement-verify/<safe repo>/<safe basename>/V<n>"),
+            ("<record>", "<spec dir>/records/<basename>-record.md"),
+        ):
+            with self.subTest(name=name):
+                self.assertIn(f"`{name}`: `{built}`", frame)
+        # Nothing else in the skill builds a name from the raw ones.
+        self.assertNotIn("<repo dir>--<basename>", body(SKILL))
+        self.assertNotIn("implement/<basename>", body(SKILL))
+
+    def test_no_branch_is_built_from_the_raw_basename(self):
+        for path in (
+            REPO / "skills" / "spec" / "SKILL.md",  # the hand-off
+            REPO / "skills" / "spec" / "done-step.md",  # /spec done's lookup
+            REPO / "hooks" / "agents" / "implementer.md",  # its clean-up
+        ):
+            with self.subTest(path=path.name):
+                self.assertNotIn("implement/<spec basename>", path.read_text())
+        self.assertIn("run-name.py", (REPO / "skills" / "spec" / "SKILL.md").read_text())
+        self.assertIn("run-name.py", (REPO / "skills" / "spec" / "done-step.md").read_text())
+        implementer = (REPO / "hooks" / "agents" / "implementer.md").read_text()
+        self.assertRegex(implementer, r"medium --fix <branch>`[^\n]*git branch --show-current")
+
+
 class ExitCodes(unittest.TestCase):
     def step(self, heading):
         return body(SKILL).split(f"\n## {heading}\n", 1)[1].split("\n## ", 1)[0]

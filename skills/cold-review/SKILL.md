@@ -3,7 +3,7 @@ name: cold-review
 description: Gives a markdown document one adversarial read by an agent that never saw the conversation that wrote it, and relays what it found; on a reviewed document, reviews only the changes logged since. Runs when the user types /cold-review.
 disable-model-invocation: true
 argument-hint: <path to a markdown file> | prompt <path to a markdown file>
-allowed-tools: Read, Grep, Glob, Bash(git rev-parse *), Bash(git status *), Bash(git ls-files *), Bash(${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py *), Bash(${CLAUDE_PLUGIN_ROOT}/skills/cold-review/scripts/review-state.py *), Bash(grep *), Bash(ls *), Bash(${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.sh *), Edit(~/.cache/agent-runs/**), Edit(~/code/**/records/*-record.md), Edit(~/notes/**/records/*-record.md)
+allowed-tools: Read, Grep, Glob, Bash(git rev-parse *), Bash(git status *), Bash(git ls-files *), Bash(${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py *), Bash(${CLAUDE_PLUGIN_ROOT}/skills/cold-review/scripts/review-state.py *), Bash(grep *), Bash(ls *), Bash(${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.sh *), Bash(${CLAUDE_PLUGIN_ROOT}/hooks/run-name.py *), Edit(~/.cache/agent-runs/**), Edit(~/code/**/records/*-record.md), Edit(~/notes/**/records/*-record.md)
 ---
 
 
@@ -146,7 +146,9 @@ no history of this one, ask them to paste the reply back here, and stop.
 Otherwise run the `cold-reviewer` agent: read `${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.md` and follow it, with
 the prompt as the brief. The work dir is the repo root, or the document's directory. The run dir is
 `~/.cache/agent-runs/<name>/cold-reviewer` (`cold-reviewer-delta` for a delta review), where
-`<name>` is `<repo dir name>--<document basename>` (outside a repo, its directory's name).
+`<name>` is `<safe repo>--<safe basename>` (outside a repo, just `<safe dir>`), each the name as
+`${CLAUDE_PLUGIN_ROOT}/hooks/run-name.py '<name>'` prints it for the repo dir's name, the document's basename (or
+its directory's name): the name itself if the launcher accepts it, else a safe name for it.
 If the reply can't be used, relay nothing. Tell the user in one line, and end your turn.
 
 ## 5. When the reviewer finishes

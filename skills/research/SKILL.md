@@ -3,7 +3,7 @@ name: research
 description: Researches a question or idea and writes a cited markdown note to ~/notes/research, which an independent agent then verifies. Runs when the user types /research.
 disable-model-invocation: true
 argument-hint: '[quick | ideas] <question or path to an idea note> | finish <path to research note> ["claim to check" ...]'
-allowed-tools: Read Edit(~/notes/**) Bash(grep *) Bash(git -C ~/notes status *) Bash(${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py *) Bash(git -C ~/notes add *) Bash(git -C ~/notes commit *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/check-note.py *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/build-index.py *) Bash(${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.sh *) Edit(~/.cache/agent-runs/**)
+allowed-tools: Read Edit(~/notes/**) Bash(grep *) Bash(git -C ~/notes status *) Bash(${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py *) Bash(git -C ~/notes add *) Bash(git -C ~/notes commit *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/check-note.py *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/research/scripts/build-index.py *) Bash(${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.sh *) Bash(${CLAUDE_PLUGIN_ROOT}/hooks/run-name.py *) Edit(~/.cache/agent-runs/**)
 ---
 
 # Research and document
@@ -29,7 +29,7 @@ The research rules are in `${CLAUDE_PLUGIN_ROOT}/hooks/agents/researcher.md` and
 
 ## Agent runs
 
-Each agent runs as a headless, sandboxed session: read `${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.md` and follow it. The work dir is `~/notes`; the run dir is `~/.cache/agent-runs/<note basename>/<agent>`.
+Each agent runs as a headless, sandboxed session: read `${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.md` and follow it. The work dir is `~/notes`; the run dir is `~/.cache/agent-runs/<safe basename>/<agent>`, where `<safe basename>` is what `${CLAUDE_PLUGIN_ROOT}/hooks/run-name.py '<note basename>'` prints: the name itself if the launcher accepts it, else a safe name for it.
 
 ## Modes
 

@@ -37,7 +37,7 @@ The checking rules are in `${CLAUDE_PLUGIN_ROOT}/hooks/agents/spec-verifier.md`,
 
 ## Agent runs
 
-Each agent runs as a headless, sandboxed session: read `${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.md` and follow it. The work dir is the repo root; the run dir is `~/.cache/agent-runs/<safe repo>--<safe basename>/<agent>`, where `<safe repo>` and `<safe basename>` are what `${CLAUDE_PLUGIN_ROOT}/hooks/run-name.py '<repo dir name>'` and `${CLAUDE_PLUGIN_ROOT}/hooks/run-name.py '<spec basename>'` print: the name itself if git and the launchers accept it, else a safe name for it. For a split spec, launch one per part at once.
+Each agent runs as a headless, sandboxed session: read `${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.md` and follow it. The work dir is the repo root; the run dir is `~/.cache/agent-runs/<safe repo>--<safe basename>/<agent>`, where `<safe repo>` and `<safe basename>` are what `${CLAUDE_PLUGIN_ROOT}/hooks/run-name.py '<repo dir name>'` and `${CLAUDE_PLUGIN_ROOT}/hooks/run-name.py '<spec basename>'` print, `<spec basename>` being the spec's filename without `.md`: the name itself if git and the launchers accept it, else a safe name for it. For a split spec, launch one per part at once.
 
 ## Modes
 

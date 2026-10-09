@@ -147,8 +147,8 @@ Otherwise run the `cold-reviewer` agent: read `${CLAUDE_PLUGIN_ROOT}/hooks/run-a
 the prompt as the brief. The work dir is the repo root, or the document's directory. The run dir is
 `~/.cache/agent-runs/<name>/cold-reviewer` (`cold-reviewer-delta` for a delta review), where
 `<name>` is `<safe repo>--<safe basename>` (outside a repo, just `<safe dir>`), each the name as
-`${CLAUDE_PLUGIN_ROOT}/hooks/run-name.py '<name>'` prints it for the repo dir's name, the document's basename (or
-its directory's name): the name itself if the launcher accepts it, else a safe name for it.
+`${CLAUDE_PLUGIN_ROOT}/hooks/run-name.py '<name>'` prints it for the repo dir's name, the document's filename
+without `.md` (or its directory's name): the name itself if the launcher accepts it, else a safe name for it.
 If the reply can't be used, relay nothing. Tell the user in one line, and end your turn.
 
 ## 5. When the reviewer finishes

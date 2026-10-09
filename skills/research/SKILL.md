@@ -29,7 +29,7 @@ The research rules are in `${CLAUDE_PLUGIN_ROOT}/hooks/agents/researcher.md` and
 
 ## Agent runs
 
-Each agent runs as a headless, sandboxed session: read `${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.md` and follow it. The work dir is `~/notes`; the run dir is `~/.cache/agent-runs/<safe basename>/<agent>`, where `<safe basename>` is what `${CLAUDE_PLUGIN_ROOT}/hooks/run-name.py '<note basename>'` prints: the name itself if the launcher accepts it, else a safe name for it.
+Each agent runs as a headless, sandboxed session: read `${CLAUDE_PLUGIN_ROOT}/hooks/run-agent.md` and follow it. The work dir is `~/notes`; the run dir is `~/.cache/agent-runs/<safe basename>/<agent>`, where `<safe basename>` is what `${CLAUDE_PLUGIN_ROOT}/hooks/run-name.py '<note basename>'` prints, `<note basename>` being the note's filename without `.md`: the name itself if the launcher accepts it, else a safe name for it.
 
 ## Modes
 

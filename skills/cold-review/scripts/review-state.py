@@ -70,9 +70,22 @@ from mdcheck import (  # shared with the checkers
 )
 
 HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", re.MULTILINE)
-# The sections --plan compares, and a citation's line numbers, which it sets aside.
+# The sections --plan compares, and a citation's line numbers, which it sets aside: `:12`,
+# `path:12-14`, `file.py:12—20` or `file.py:3,7-9`. Only after a path (a `/` or `.` in it) or
+# nothing, so `localhost:8080`, `10:30` or a URL's port still counts as a change.
 PLAN = ("## Decision", "## Design", "## Work items")
-LINE_NUMBERS = re.compile(r":\d+(?:\s*[-–]\s*\d+)?")
+LINE_NUMBERS = re.compile(
+    r"(?P<pre>[\w./~-]*)(?P<tick>`?):\d+(?:\s*[-–—]\s*\d+)?(?:,\d+(?:[-–—]\d+)?)*"
+)
+
+
+def set_aside_line_numbers(line):
+    def one(m):
+        pre = m["pre"]
+        cited = not pre or (("/" in pre or "." in pre) and not pre.startswith("//"))
+        return f"{pre}{m['tick']}:N" if cited else m[0]
+
+    return LINE_NUMBERS.sub(one, line)
 
 
 def git(root, *args):
@@ -147,7 +160,10 @@ def changed_lines(hunks):
 def lines_at(root, commit, path):
     """The stripped lines of `path` as it was at `commit`; empty if it wasn't there."""
     name = path_at(root, commit, path.relative_to(root).as_posix())
-    return {line.strip() for line in (git(root, "show", f"{commit}:{name}") or "").splitlines()}
+    return {
+        line.strip()
+        for line in (git(root, "show", f"{commit}:{name}") or "").splitlines()
+    }
 
 
 def plan_blocks(lines):
@@ -163,7 +179,7 @@ def plan_blocks(lines):
                 blocks.setdefault(current, [])
             continue
         if inside:
-            blocks[current].append(LINE_NUMBERS.sub(":N", line.rstrip()))
+            blocks[current].append(set_aside_line_numbers(line.rstrip()))
     return blocks
 
 
@@ -180,14 +196,37 @@ def oldest_adding(root, needle, paths):
     hits = [
         found.split()[-1]
         for path in paths
-        if (found := git(root, "log", "--follow", "--format=%h", f"-S{needle}", "--", path))
+        if (
+            found := git(
+                root, "log", "--follow", "--format=%h", f"-S{needle}", "--", path
+            )
+        )
         and found.strip()
     ]
     commit = oldest(root, hits)
-    shallow = (git(root, "rev-parse", "--is-shallow-repository") or "").strip() == "true"
-    if commit and shallow and git(root, "rev-parse", "--verify", "--quiet", f"{commit}^") is None:
+    shallow = (
+        git(root, "rev-parse", "--is-shallow-repository") or ""
+    ).strip() == "true"
+    if (
+        commit
+        and shallow
+        and git(root, "rev-parse", "--verify", "--quiet", f"{commit}^") is None
+    ):
         return None, True
     return commit, False
+
+
+def delta_heading(lines, start, end, date):
+    """The delta review's heading as written, for `git log -S`: read_review() matches it in any
+    case and dates it by its `Reviewed on` line, so `### Delta Review, round 2` is one too."""
+    code = in_code(lines)
+    for i in range(start + 1, end):
+        if code[i] or not heading_is(lines[i], DELTA_HEADING) or "," not in lines[i]:
+            continue
+        own = next((l.strip() for l in lines[i + 1 : end] if l.strip()), "")
+        if own.startswith(f"Reviewed on {date} by"):
+            return lines[i].strip()
+    return f"{DELTA_HEADING}, {date}"
 
 
 def main():
@@ -256,15 +295,24 @@ def main():
             if delta:
                 # Its heading, not its `Reviewed on` line, which a full review on the same date
                 # shares.
-                heading = f"{DELTA_HEADING}, {review.delta_date}"
+                heading = delta_heading(
+                    rec_lines if where == "record" else doc_lines,
+                    review.start,
+                    review.end,
+                    review.delta_date,
+                )
                 delta_commit, delta_cut_off = oldest_adding(root, heading, paths)
                 out["delta-commit"] = delta_commit or "none"
                 if delta_commit:
-                    base = (git(root, "rev-parse", "--short", delta_commit) or delta_commit).strip()
+                    base = (
+                        git(root, "rev-parse", "--short", delta_commit) or delta_commit
+                    ).strip()
                     # `Not reviewed:` lines that weren't in their file at that commit.
                     then = {
                         "document": lines_at(root, delta_commit, doc),
-                        "record": lines_at(root, delta_commit, record) if record else set(),
+                        "record": lines_at(root, delta_commit, record)
+                        if record
+                        else set(),
                     }
                     since_delta = [
                         line

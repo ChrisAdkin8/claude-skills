@@ -464,6 +464,36 @@ class ReviewState(unittest.TestCase):
         got, out = state(self.doc, None, "--plan")
         self.assertEqual(got["state"], "unlogged", out)
 
+    def test_a_delta_heading_in_another_case_is_found(self):
+        self.spec_with_review()
+        delta = DELTA.format(date="2026-09-22").replace("Delta review", "Delta Review")
+        self.write(self.record, REVIEW + delta)
+        commit = self.commit("delta review")
+        self.write(self.doc, SPEC.replace("exits 2.", "exits 3."))
+        self.commit("hand edit")
+        got, out = state(self.doc, None, "--plan")
+        self.assertEqual(got["delta-commit"], commit, out)
+        self.assertEqual(got["state"], "unlogged", out)
+
+    def test_plan_counts_a_port_change_and_sets_aside_other_citations(self):
+        spec = SPEC.replace("(`gate.md:5`)", "(`gate.md:5`) on localhost:8080")
+        subprocess.run(["git", "init", "-q", str(self.root)], check=True)
+        self.write(self.doc, spec)
+        self.commit("spec")
+        self.write(self.record, REVIEW)
+        self.commit("save review")
+        self.write(self.doc, spec.replace("localhost:8080", "localhost:9090"))
+        got, out = state(self.doc, None, "--plan")
+        self.assertEqual(got["state"], "unlogged", out)
+        self.write(
+            self.doc,
+            spec.replace("run.sh:10-12", "run.sh:11—14,20").replace(
+                "gate.md:5", "gate.md:3,9"
+            ),
+        )
+        got, out = state(self.doc, None, "--plan")
+        self.assertEqual(got["state"], "unchanged", out)
+
     def test_full_and_delta_reviews_on_one_date_stay_apart(self):
         self.repo_with_review()  # reviewed on 2026-09-20
         self.write(self.doc, DOC.replace("Undo it.", "Undo it, then restart."))

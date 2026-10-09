@@ -87,7 +87,8 @@ name='[A-Za-z0-9][A-Za-z0-9._-]*'
 # <root>/<repo dir name>/<spec basename>/V<n>, each name as hooks/run-name.py prints it: no `..`, no
 # extra levels.
 if ! [[ $scratch =~ ^$root/$name/$name/V[0-9]+$ ]]; then
-  bad=$(tr / '\n' <<< "${scratch#"$root"/}" | grep -v '^$' | grep -Evx "$name" | head -n 1 || true)
+  bad=
+  [[ $scratch != "$root"/* ]] || bad=$(tr / '\n' <<< "${scratch#"$root"/}" | grep -v '^$' | grep -Evx "$name" | head -n 1 || true)
   [ -z "$bad" ] || bad=": \"$bad\" isn't a valid name: a name may hold only letters, digits, ., _ and -, starting with a letter or digit"
   die "scratch must be ~/.cache/implement-verify/<repo>/<spec>/V<n>, not $scratch$bad"
 fi

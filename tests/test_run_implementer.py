@@ -429,6 +429,79 @@ class RunImplementer(unittest.TestCase):
                 self.assertFalse((self.run_dir / "reply.md").exists())
                 self.assertFalse(marker.exists())
 
+    def tracking_fixture(self):
+        """A brief, a bare remote `origin` pushed to, and the main checkout's branch, whose name
+        the fixture's default decides."""
+        self.brief()
+        origin = self.tmp / "origin.git"
+        git(self.tmp, "init", "-q", "--bare", str(origin))
+        git(self.repo, "remote", "add", "origin", str(origin))
+        branch = git(self.repo, "symbolic-ref", "--short", "HEAD").strip()
+        git(self.repo, "push", "-q", "origin", branch)
+        return branch
+
+    @staticmethod
+    def in_main(*args):
+        """Stub code that runs `git <args>` in the main checkout, as the user would."""
+        return f"run('git', '-C', str(common.parent), *{list(args)!r})\n"
+
+    def assert_no_copies(self):
+        for name in ("git-before", "git-after"):
+            self.assertFalse((self.run_dir / name).exists(), name)
+
+    def test_branch_tracking_in_the_main_checkout_is_not_refused(self):
+        def cases(b):
+            tracked = lambda x: [
+                ("branch", x),
+                ("config", f"branch.{x}.remote", "origin"),
+                ("config", f"branch.{x}.merge", f"refs/heads/{x}"),
+            ]
+            return (
+                ("push -u", [], [("push", "-q", "-u", "origin", b)]),
+                ("set-upstream-to", [], [("branch", "--set-upstream-to", f"origin/{b}")]),
+                ("branch -d",
+                 tracked("x") + [("config", "branch.x.vscode-merge-base", f"origin/{b}")],
+                 [("branch", "-d", "x")]),
+                ("branch -m", tracked("y"), [("branch", "-m", "y", "z")]),
+                ("description", [], [("config", f"branch.{b}.description", "x")]),
+            )  # fmt: skip
+
+        for n in range(5):
+            self.setUp()
+            b = self.tracking_fixture()
+            name, before, during = cases(b)[n]
+            with self.subTest(name):
+                for args in before:
+                    git(self.repo, *args)
+                self.stub_does("".join(self.in_main(*args) for args in during))
+                code, out = self.launch(self.worktree, self.run_dir)
+                self.assertEqual(code, 0, out)
+                self.assertNotIn("changed:", out)
+                self.assert_no_copies()
+
+    def test_other_config_changes_in_the_main_checkout_exit_4(self):
+        def cases(b):
+            return (
+                (f"branch.{b}.remote", "/some/path", f"branch.{b}.remote"),
+                (f"branch.{b}.mergeOptions", "-s x", f"branch.{b}.mergeoptions"),
+                (f"branch.{b}.rebase", "interactive", f"branch.{b}.rebase"),
+                ("remote.origin.uploadpack", "x", "remote.origin.uploadpack"),
+                ("include.path", "x", "include.path"),
+            )
+
+        for n in range(5):
+            self.setUp()
+            b = self.tracking_fixture()
+            key, value, named = cases(b)[n]
+            with self.subTest(key):
+                self.stub_does(self.in_main("config", key, value))
+                code, out = self.launch(self.worktree, self.run_dir)
+                self.assertEqual(code, 4, out)
+                config = (self.repo / ".git").resolve() / "config"
+                self.assertIn(f"changed: {config} sets {named}\n", out)
+                self.assertFalse((self.run_dir / "reply.md").exists())
+                self.assert_no_copies()
+
     def test_a_submodules_sample_hooks_are_not_refused(self):
         # git copies its template's *.sample hooks into each submodule it clones.
         self.brief()

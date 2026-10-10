@@ -10,7 +10,8 @@
 #   <run dir>   ~/.cache/implement-runs/<run name>/implementer, holding brief.md
 #               (written first by /implement). The run writes reply.md (the implementer's reply),
 #               run.json, run.err, session_id and snapshot.json (git's state before a call)
-#               there, and keeps each call's run.json as run-<n>.json.
+#               there, and keeps each call's run.json as run-<n>.json. It keeps copies of the
+#               shared git config in git-before/ and git-after/ only while it checks a call.
 #               <run name> is <repo dir>--<spec basename>, each as hooks/run-name.py prints it, so
 #               a name with spaces or accents becomes one the name check below accepts.
 #   --resume    send followup.md from the run dir to the same session instead, keeping the
@@ -31,7 +32,12 @@
 # brief, no session to resume, the cap spent, a bad cap or ledger, a user setting that could widen
 # the sandbox). Exit 4: the call changed what it mustn't: the ledger, which nothing but this script
 # writes, or the repo's shared git config, hooks or a worktree's git pointers (named one per line),
-# or left a submodule config under its git dir that names a program. No reply.md is written, so
+# or left a submodule config under its git dir that names a program. The shared config is compared
+# by git's own parse, and passes if the only changes are branch tracking, as the user's own
+# `git push -u`, `git branch --set-upstream-to`, `-d` or `-m` make: any `branch.*` entry removed,
+# and a `branch.<b>.remote` or `pushremote` naming `.` or a remote with a URL, a `merge` under
+# refs/, a `rebase` of true, false or merges, or a `description` added; anything else in it is
+# named as `changed: <file> sets <key>`. No reply.md is written, so
 # act on nothing, and run no git command in the repo or the worktree. 4 comes before 3 and before
 # claude's own status. Exit 5: the run found no Claude account to use; the script says how to give
 # it one, after 4 and before 3, and /implement stops and relays it. A ref or HEAD in the shared git
@@ -264,21 +270,24 @@ PY
 [ -n "$tools" ] || die "no tools in $file"
 model=(${RUN_AGENT_MODEL:+--model "$RUN_AGENT_MODEL"})
 
-# What can make git run a program or point a checkout elsewhere, read without running git: the
-# shared config and hooks, every worktree's pointers, submodules' config and hooks. With no
-# argument it prints the state as JSON; given that JSON, it prints a `changed:` line for each path
-# that differs, a `moved:` line for each ref but the branch's own that moved, and a `program:` line
+# What can make git run a program or point a checkout elsewhere: the shared config and hooks,
+# every worktree's pointers, submodules' config and hooks, read without running git, but for the
+# shared config's two files, which are copied into the run dir and, if their bytes differ, listed
+# by git itself. With no argument it prints the state as JSON and copies them to git-before/;
+# given that JSON, it copies them to git-after/ and prints a `changed:` line for each path that
+# differs (for the two config files, each entry outside the branch-tracking allowlist that was
+# added or removed), a `moved:` line for each ref but the branch's own that moved, and a `program:` line
 # for a submodule config under the worktree's git dir that names a program or a hooks entry there:
 # /implement's own git add and commit, unsandboxed, would read them, and their -c flags cover only
 # core.fsmonitor and core.hooksPath.
 snapshot() {
-  python3 - "$plugin_root/hooks/git-read.py" "$common" "$git_dir" "$work" "$@" <<'PY'
-import hashlib, importlib.util, json, os, re, stat, sys
+  python3 - "$plugin_root/hooks/git-read.py" "$common" "$git_dir" "$work" "$run" "$@" <<'PY'
+import collections, hashlib, importlib.util, json, os, re, shutil, stat, subprocess, sys
 
 spec = importlib.util.spec_from_file_location("git_read", sys.argv.pop(1))
 git_read = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(git_read)
-common, git_dir, work = sys.argv[1:4]
+common, git_dir, work, run = sys.argv[1:5]
 # git-read.py's keys that name a program, the two its -c flags (and /implement's) override, and
 # an include, whose file keys() doesn't follow and which could set any of them.
 RUNS = re.compile(
@@ -398,13 +407,96 @@ def programs():
                 found += [f"program: {path} sets {k}" for k in names if RUNS.fullmatch(k)]
     return found
 
-if len(sys.argv) == 4:
-    print(json.dumps({"watched": watched(), "refs": refs()}))
+# The shared config's files, compared by git's parse of a copy rather than byte for byte.
+CONFIGS = ("config", "config.worktree")
+# Branch tracking the user's own git writes: the last part, since a branch name can hold dots.
+TRACKING = re.compile(r"branch\..+\.(remote|pushremote|merge|rebase|description)")
+PLAIN = re.compile(r"[0-7]+ [0-9a-f]{64}")
+
+def copy(to):
+    """Each config in CONFIGS that is a plain file, copied into `to`, made afresh."""
+    shutil.rmtree(to, ignore_errors=True)
+    os.makedirs(to, mode=0o700)
+    for name in CONFIGS:
+        src = os.path.join(common, name)
+        try:
+            if stat.S_ISREG(os.lstat(src).st_mode):
+                shutil.copyfile(src, os.path.join(to, name))
+        except FileNotFoundError:
+            pass
+
+def read(path):
+    try:
+        with open(path, "rb") as f:
+            return f.read()
+    except FileNotFoundError:
+        return None
+
+def entries(path):
+    """git's own parse of a copy, as (key, value) pairs, value None for a key with no value: from
+    the run dir, with no system or global config, no repo above it and no include followed, so it
+    runs nothing a config sets. A missing copy is empty; None if git can't parse it."""
+    if not os.path.exists(path):
+        return []
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    env.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL="/dev/null",
+               GIT_CEILING_DIRECTORIES=os.path.dirname(run))
+    listed = subprocess.run(["git", "config", "--file", path, "--no-includes", "--list", "-z"],
+                            cwd=run, env=env, capture_output=True, check=False)
+    if listed.returncode:
+        return None
+    found = []
+    # Each record is key\nvalue\0, or key\0 for a key with no value.
+    for record in listed.stdout.split(b"\0")[:-1]:
+        key, newline, value = record.decode(errors="surrogateescape").partition("\n")
+        found.append((key, value if newline else None))
+    return found
+
+def tracking(key, value, was):
+    """Whether an added entry is branch tracking with a value git's own commands would write."""
+    m = TRACKING.fullmatch(key)
+    if not m or value is None:
+        return bool(m) and m[1] == "description"
+    if m[1] in ("remote", "pushremote"):
+        return value == "." or f"remote.{value}.url" in {k for k, _ in was}
+    if m[1] == "merge":
+        return value.startswith("refs/")
+    if m[1] == "rebase":
+        return value in ("true", "false", "merges")
+    return True
+
+def config_changes(name, old, new):
+    """`changed:` lines for one of CONFIGS, given its state before and now."""
+    path = os.path.join(common, name)
+    plain = all(s == "missing" or PLAIN.fullmatch(s) for s in (old, new))
+    if not plain or "missing" not in (old, new) and old.split()[0] != new.split()[0]:
+        return [f"changed: {path}"] if old != new else []
+    copies = [os.path.join(run, side, name) for side in ("git-before", "git-after")]
+    if read(copies[0]) == read(copies[1]):
+        return []
+    was, now = map(entries, copies)
+    if was is None or now is None:
+        return [f"changed: {path} (git can't parse it)"]
+    was_n, now_n = collections.Counter(was), collections.Counter(now)
+    bad = {k for k, _ in was_n - now_n if not k.startswith("branch.")}
+    bad |= {k for k, v in now_n - was_n if not tracking(k, v, was)}
+    return [f"changed: {path} sets {k}" for k in sorted(bad)]
+
+if len(sys.argv) == 5:
+    state_now = watched()
+    copy(os.path.join(run, "git-before"))
+    print(json.dumps({"watched": state_now, "refs": refs()}))
 else:
-    before = json.load(open(sys.argv[4]))  # a file: every ref is too long for argv
+    before = json.load(open(sys.argv[5]))  # a file: every ref is too long for argv
     now = watched()
+    copy(os.path.join(run, "git-after"))
+    configs = {os.path.join(common, n): n for n in CONFIGS}
     for path in sorted(set(now) | set(before["watched"])):
-        if now.get(path, "missing") != before["watched"].get(path, "missing"):
+        old, new = before["watched"].get(path, "missing"), now.get(path, "missing")
+        if path in configs:
+            for line in config_changes(configs[path], old, new):
+                print(line)
+        elif new != old:
             print(f"changed: {path}")
     for line in programs():
         print(line)
@@ -457,6 +549,8 @@ ledger_unchanged() {
 git_unchanged() {
   local diff changed
   diff=$(snapshot "$run/snapshot.json") || diff="changed: couldn't read the repo's git config and hooks after the call"
+  # The copies can hold a token in a remote's URL.
+  rm -rf "$run/git-before" "$run/git-after"
   sed -n 's/^moved: /run-implementer: moved during the run: /p' <<< "$diff"
   changed=$(grep -v -e '^moved: ' -e '^$' <<< "$diff" || true)
   [ -z "$changed" ] && return 0
@@ -520,7 +614,9 @@ interrupted() {
   exit 6
 }
 
-# The snapshot first: if it can't be taken, the call never starts, so nothing is charged.
+# The snapshot first: if it can't be taken, the call never starts, so nothing is charged. Its
+# config copies go on any exit, if the after-call check hasn't removed them already.
+trap 'rm -rf "$run/git-before" "$run/git-after"' EXIT
 snapshot > "$run/snapshot.json" || die "couldn't read the repo's git config and hooks before the call"
 call=$("$ledger_py" next-call "$run_name") || die "couldn't read the ledger $ledger"
 "$ledger_py" append "$run_name" \

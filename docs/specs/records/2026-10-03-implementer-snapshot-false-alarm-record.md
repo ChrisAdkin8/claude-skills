@@ -80,6 +80,18 @@ Needs a run: none
 - Question 2: Route: research.
 - Question 1 ran on 2026-10-03 as spike S1: EXPECTED, $0.16 over 5 turns.
 
+## Implementation
+
+- 2026-10-10, W1 (pending): the listing runs as a Python `subprocess.run` with `cwd` set to the run dir, inside `snapshot()`'s own Python, rather than a shell subshell that `cd`s there; it also drops every other `GIT_*` variable from git's environment. Same effect, and the parse and comparison stay in one place.
+- 2026-10-10, W1 (pending): besides `git_unchanged()` deleting the copies after its check, an `EXIT` trap deletes them on any other exit (a ledger change's exit 4, a `die`), the gap delta review row 5 named.
+
 ## Evidence
 
 - Started at 20f52c8
+- Baseline: python3 -m unittest discover -s tests -> pass (681 tests)
+- Baseline: python3 tests/replay_guard.py -> pass, but it read 0 transcripts: the sandbox denies reads of ~/.claude, so it checked nothing here
+- Baseline: ruff check --isolated --select E9,F . (ruff 0.16.7, local; CI's `pipx run` needs the network) -> pass
+- Baseline: git ls-files -z '*.sh' | xargs -0 shellcheck -S warning -> pass
+- Baseline: claude plugin validate . --json -> pass (the expected missing-version and root CLAUDE.md warnings only)
+- Baseline: claude plugin validate .claude-plugin/plugin.json -> pass (the same two warnings)
+- Baseline: the paid agent and skill evals are left to W3, which runs them by hand; not run here

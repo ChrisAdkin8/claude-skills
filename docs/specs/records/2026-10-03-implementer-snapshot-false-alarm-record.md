@@ -79,3 +79,7 @@ Needs a run: none
 - Question 1: Route: spike. Changes: Design, Config: "*(assumption: this runs nothing a config sets; spike question 1)*"; W1's "Before it" line; whether W1 starts at all. Expect: with `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null` and `GIT_CEILING_DIRECTORIES` set, `git config --file <copy> --no-includes --list -z` lists every entry of the copy, follows no include, and touches no marker, both from a dir outside any repo and with `$HOME` inside a repo whose config sets `core.fsmonitor`. Box: $2, 60 turns; hosts: none.
 - Question 2: Route: research.
 - Question 1 ran on 2026-10-03 as spike S1: EXPECTED, $0.16 over 5 turns.
+
+## Evidence
+
+- Started at 20f52c8

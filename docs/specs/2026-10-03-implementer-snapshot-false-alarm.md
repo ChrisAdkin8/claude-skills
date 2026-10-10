@@ -1,7 +1,7 @@
 ---
 title: The implementer's snapshot lets the user's own branch tracking and worktrees through
 created: 2026-10-03
-status: reviewed # draft | reviewed | in-progress | done | superseded
+status: in-progress # draft | reviewed | in-progress | done | superseded
 research: ~/notes/research/2026-10-02-implementer-snapshot-false-alarm.md
 idea: ~/notes/ideas/2026-10-02-implementer-push-false-alarm.md
 read-at: 18ee9ac

@@ -437,12 +437,9 @@ def copy(to, wids):
     os.makedirs(to, mode=0o700)
     for name in [*CONFIGS, *map(wt_config, wids)]:
         src, dst = os.path.join(common, name), os.path.join(to, name)
-        try:
-            if stat.S_ISREG(os.lstat(src).st_mode):
-                os.makedirs(os.path.dirname(dst), exist_ok=True)
-                shutil.copyfile(src, dst)
-        except FileNotFoundError:
-            pass
+        if regular(src):
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            shutil.copyfile(src, dst)
 
 def read(path):
     try:
@@ -487,9 +484,11 @@ def tracking(key, value, was):
 def config_changes(name, old, new):
     """`changed:` lines for one of CONFIGS, given its state before and now."""
     path = os.path.join(common, name)
+    if old == new:
+        return []
     plain = all(s == "missing" or PLAIN.fullmatch(s) for s in (old, new))
     if not plain or "missing" not in (old, new) and old.split()[0] != new.split()[0]:
-        return [f"changed: {path}"] if old != new else []
+        return [f"changed: {path}"]
     copies = [os.path.join(run, side, name) for side in ("git-before", "git-after")]
     if read(copies[0]) == read(copies[1]):
         return []
@@ -499,6 +498,10 @@ def config_changes(name, old, new):
     was_n, now_n = collections.Counter(was), collections.Counter(now)
     bad = {k for k, _ in was_n - now_n if not k.startswith("branch.")}
     bad |= {k for k, v in now_n - was_n if not tracking(k, v, was)}
+    # The same entries in a new order can change which value wins, or what an include overrides.
+    rest = [[e for e in side if not e[0].startswith("branch.")] for side in (was, now)]
+    if not bad and rest[0] != rest[1]:
+        return [f"changed: {path} (entries reordered)"]
     return [f"changed: {path} sets {k}" for k in sorted(bad)]
 
 def truthy(value):

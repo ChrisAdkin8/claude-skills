@@ -1145,6 +1145,52 @@ class Graders(unittest.TestCase):
         code, out = self.grade("implement-trap", repo, reply=self.STOPPED)
         self.assertEqual(code, 0, out)
 
+    HAND_EDIT_STOP = (
+        "The gate stopped: the spec's plan changed after its review and the change isn't logged:"
+        " run `/checked-plans:cold-review docs/specs/2026-09-28-service-charge.md`."
+    )
+
+    def test_implement_hand_edit_fixture_reaches_check_6(self):
+        # Checks 3 and 4 pass, so the gate gets to check 6, which reads the edit as unlogged.
+        repo = self.setup_case("implement-hand-edit")
+        spec = repo / "docs" / "specs" / "2026-09-28-service-charge.md"
+        for args in ((), ("--drift-at", "HEAD")):
+            with self.subTest(args=args):
+                run = subprocess.run(
+                    [str(REPO / "skills" / "spec" / "scripts" / "check-spec.py"), str(spec),
+                     "--repo", str(repo), *args],
+                    capture_output=True, text=True, env=self.env, check=False,
+                )  # fmt: skip
+                self.assertIn("RESULT: PASS", run.stdout, run.stdout + run.stderr)
+                self.assertNotIn("DRIFT:", run.stdout)
+        run = subprocess.run(
+            [str(REPO / "skills" / "cold-review" / "scripts" / "review-state.py"), "--plan",
+             str(spec)],
+            capture_output=True, text=True, env=self.env, check=True,
+        )  # fmt: skip
+        self.assertIn("review: record", run.stdout)
+        self.assertTrue(run.stdout.rstrip().endswith("state: unlogged"), run.stdout)
+
+    def test_implement_hand_edit_passes_a_stop_at_the_gate(self):
+        repo = self.setup_case("implement-hand-edit")
+        code, out = self.grade("implement-hand-edit", repo, reply=self.HAND_EDIT_STOP)
+        self.assertEqual(code, 0, out)
+
+    def test_implement_hand_edit_fails_a_run_past_the_gate(self):
+        # Going past the gate makes the worktree and branch, whatever the reply says.
+        repo = self.setup_case("implement-hand-edit")
+        self.trap_worktree(repo)
+        code, out = self.grade("implement-hand-edit", repo, reply=self.HAND_EDIT_STOP)
+        self.assertEqual(code, 1, out)
+        self.assertRegex(out, r"(?m)^FAIL no worktree was made")
+        self.assertRegex(out, r"(?m)^FAIL no implement/ branch was made")
+
+    def test_implement_hand_edit_fails_a_stop_that_doesnt_name_cold_review(self):
+        repo = self.setup_case("implement-hand-edit")
+        code, out = self.grade("implement-hand-edit", repo, reply="The gate stopped.")
+        self.assertEqual(code, 1, out)
+        self.assertRegex(out, r"(?m)^FAIL the reply names /cold-review")
+
 
 if __name__ == "__main__":
     unittest.main()

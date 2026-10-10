@@ -25,9 +25,50 @@ REVIEW = (
 )
 
 
-def state(doc, home=None):
+SPEC = """---
+title: "A spec"
+status: reviewed # draft | reviewed | in-progress | done | superseded
+read-at: 1111111
+---
+
+# A spec
+
+## Goal
+
+Make it work.
+
+## Decision
+
+- Use the launcher (`run.sh:10-12`).
+
+## Background
+
+Read at `1111111`. The launcher refuses early (`run.sh:10-12`, `:40`).
+
+## Design
+
+The gate calls `run.sh --check` (`gate.md:5`), as the launcher does at :40.
+
+## Work items
+
+### W1: check early
+
+- **Change:** `run.sh --check`.
+- **Done when:** a test shows `--check` exits 2.
+
+## Open questions
+
+None.
+"""
+DELTA = (
+    "\n### Delta review, {date}\n\nReviewed on {date} by cold-reviewer: the changes logged as"
+    " Not reviewed. Saved unchanged.\n\n| # | Kind |\n|---|---|\n"
+)
+
+
+def state(doc, home=None, *flags):
     run = subprocess.run(
-        [sys.executable, str(SCRIPT), str(doc)],
+        [sys.executable, str(SCRIPT), *flags, str(doc)],
         capture_output=True,
         text=True,
         check=True,
@@ -338,6 +379,170 @@ class ReviewState(unittest.TestCase):
         )
         got, out = state(clone / "docs" / "runbook.md")
         self.assertEqual(got["review-commit"], "none", out)
+        self.assertEqual(got["state"], "no-base", out)
+
+    # --plan, for /implement's gate: only the Decision, Design and Work items count, with their
+    # citations' line numbers set aside.
+
+    def spec_with_review(self):
+        subprocess.run(["git", "init", "-q", str(self.root)], check=True)
+        self.write(self.doc, SPEC)
+        self.commit("spec")
+        self.write(self.record, REVIEW)
+        return self.commit("save review")
+
+    def test_plan_sets_aside_status_read_at_and_re_cites(self):
+        self.spec_with_review()
+        self.write(
+            self.doc,
+            SPEC.replace("status: reviewed", "status: in-progress")
+            .replace("1111111", "2222222")
+            .replace("run.sh:10-12", "run.sh:11-14")
+            .replace("gate.md:5", "gate.md:7")
+            .replace(":40", ":42"),
+        )
+        self.commit("moved on and re-cited")
+        got, out = state(self.doc, None, "--plan")
+        self.assertEqual(got["state"], "unchanged", out)
+        # Without --plan, every changed line counts, as /cold-review needs.
+        got, out = state(self.doc)
+        self.assertEqual(got["state"], "unlogged", out)
+
+    def test_plan_counts_a_done_when_change(self):
+        self.spec_with_review()
+        self.write(self.doc, SPEC.replace("exits 2.", "exits 3."))
+        self.commit("hand edit")
+        got, out = state(self.doc, None, "--plan")
+        self.assertEqual(got["state"], "unlogged", out)
+        self.assertEqual(got["headings"], "### W1: check early", out)
+
+    def test_plan_leaves_out_the_goal_and_background(self):
+        self.spec_with_review()
+        self.write(self.doc, SPEC.replace("Make it work.", "Make it work well."))
+        got, out = state(self.doc, None, "--plan")
+        self.assertEqual(got["state"], "unchanged", out)
+
+    # After a delta review, a change since the commit that added its heading counts too.
+
+    def test_an_unlogged_edit_after_a_delta_review_is_unlogged(self):
+        self.repo_with_review()
+        self.write(self.doc, DOC.replace("Do it.", "Do it twice."))
+        self.write(
+            self.record,
+            REVIEW
+            + DELTA.format(date="2026-09-22")
+            + "\n## Changes since the review\n\n- Delta-reviewed on 2026-09-22: step 1.\n",
+        )
+        delta = self.commit("fold and delta review")
+        self.write(
+            self.doc, DOC.replace("Do it.", "Do it twice.").replace("Undo it.", "Undo.")
+        )
+        self.commit("hand edit")
+        for flags in ((), ("--plan",)):
+            with self.subTest(flags=flags):
+                got, out = state(self.doc, None, *flags)
+                self.assertEqual(got["delta-commit"], delta, out)
+                self.assertEqual(got["base"], delta, out)
+        got, out = state(self.doc)
+        self.assertEqual(got["state"], "unlogged", out)
+        self.assertEqual(got["headings"], "## Rollback", out)
+        # Logged after the delta review, it's done: there is no third round.
+        self.write(
+            self.record,
+            self.record.read_text()
+            + "\n## Changes after the delta review\n\n- Not reviewed: Rollback, on 2026-09-23.\n",
+        )
+        got, out = state(self.doc)
+        self.assertEqual(got["state"], "done", out)
+
+    def test_a_plan_edit_after_a_delta_review_is_unlogged_under_plan(self):
+        self.spec_with_review()
+        self.write(self.record, REVIEW + DELTA.format(date="2026-09-22"))
+        self.commit("delta review")
+        self.write(self.doc, SPEC.replace("exits 2.", "exits 3."))
+        self.commit("hand edit")
+        got, out = state(self.doc, None, "--plan")
+        self.assertEqual(got["state"], "unlogged", out)
+
+    def test_a_delta_heading_in_another_case_is_found(self):
+        self.spec_with_review()
+        delta = DELTA.format(date="2026-09-22").replace("Delta review", "Delta Review")
+        self.write(self.record, REVIEW + delta)
+        commit = self.commit("delta review")
+        self.write(self.doc, SPEC.replace("exits 2.", "exits 3."))
+        self.commit("hand edit")
+        got, out = state(self.doc, None, "--plan")
+        self.assertEqual(got["delta-commit"], commit, out)
+        self.assertEqual(got["state"], "unlogged", out)
+
+    def test_plan_counts_a_port_change_and_sets_aside_other_citations(self):
+        spec = SPEC.replace("(`gate.md:5`)", "(`gate.md:5`) on localhost:8080")
+        subprocess.run(["git", "init", "-q", str(self.root)], check=True)
+        self.write(self.doc, spec)
+        self.commit("spec")
+        self.write(self.record, REVIEW)
+        self.commit("save review")
+        self.write(self.doc, spec.replace("localhost:8080", "localhost:9090"))
+        got, out = state(self.doc, None, "--plan")
+        self.assertEqual(got["state"], "unlogged", out)
+        self.write(
+            self.doc,
+            spec.replace("run.sh:10-12", "run.sh:11—14,20").replace(
+                "gate.md:5", "gate.md:3,9"
+            ),
+        )
+        got, out = state(self.doc, None, "--plan")
+        self.assertEqual(got["state"], "unchanged", out)
+
+    def test_full_and_delta_reviews_on_one_date_stay_apart(self):
+        self.repo_with_review()  # reviewed on 2026-09-20
+        self.write(self.doc, DOC.replace("Undo it.", "Undo it, then restart."))
+        self.write(
+            self.record,
+            REVIEW
+            + "\n## Changes since the review\n\n- Not reviewed: Rollback, on 2026-09-20.\n",
+        )
+        self.commit("fold")
+        self.write(
+            self.record,
+            REVIEW
+            + DELTA.format(date="2026-09-20")
+            + "\n## Changes since the review\n\n- Delta-reviewed on 2026-09-20: Rollback.\n",
+        )
+        delta = self.commit("delta review")
+        for flags in ((), ("--plan",)):
+            with self.subTest(flags=flags):
+                got, out = state(self.doc, None, *flags)
+                self.assertEqual(got["delta-commit"], delta, out)
+                self.assertEqual(got["state"], "done", out)
+
+    def test_a_delta_review_saved_with_the_edits_it_reviewed_is_done(self):
+        self.repo_with_review()
+        self.write(self.doc, DOC.replace("Undo it.", "Undo it, then restart."))
+        self.write(
+            self.record,
+            REVIEW
+            + DELTA.format(date="2026-09-22")
+            + "\n## Changes since the review\n\n- Delta-reviewed on 2026-09-22: Rollback.\n",
+        )
+        delta = self.commit("edits and their delta review")
+        got, out = state(self.doc)
+        # The base is the delta review's commit itself, never its parent.
+        self.assertEqual(got["base"], delta, out)
+        self.assertEqual(got["state"], "done", out)
+
+    def test_a_delta_review_in_a_shallow_clone_cut_off_has_no_base(self):
+        self.repo_with_review()
+        self.write(self.record, REVIEW + DELTA.format(date="2026-09-22"))
+        self.commit("delta review")
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        clone = Path(tmp.name) / "clone"
+        subprocess.run(
+            ["git", "clone", "-q", "--depth", "1", f"file://{self.root}", str(clone)],
+            check=True,
+        )
+        got, out = state(clone / "docs" / "runbook.md", None, "--plan")
         self.assertEqual(got["state"], "no-base", out)
 
 

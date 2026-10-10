@@ -84,9 +84,14 @@ scratch=$1 repo=$2 base=$3 head=$4
 root="$HOME/.cache/implement-verify"
 name='[A-Za-z0-9][A-Za-z0-9._-]*'
 
-# <root>/<repo dir name>/<spec basename>/V<n>: no `..`, no extra levels.
-[[ $scratch =~ ^$root/$name/$name/V[0-9]+$ ]] ||
-  die "scratch must be ~/.cache/implement-verify/<repo>/<spec>/V<n>, not $scratch"
+# <root>/<repo dir name>/<spec basename>/V<n>, each name as hooks/run-name.py prints it: no `..`, no
+# extra levels.
+if ! [[ $scratch =~ ^$root/$name/$name/V[0-9]+$ ]]; then
+  bad=
+  [[ $scratch != "$root"/* ]] || bad=$(tr / '\n' <<< "${scratch#"$root"/}" | grep -v '^$' | grep -Evx "$name" | head -n 1 || true)
+  [ -z "$bad" ] || bad=": \"$bad\" isn't a valid name: a name may hold only letters, digits, ., _ and -, starting with a letter or digit"
+  die "scratch must be ~/.cache/implement-verify/<repo>/<spec>/V<n>, not $scratch$bad"
+fi
 top=$(git -C "$repo" rev-parse --show-toplevel 2>/dev/null) || die "not a git repo: $repo"
 # A revision that starts with `-` would reach git as an option.
 for rev in "$base" "$head"; do

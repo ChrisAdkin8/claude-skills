@@ -92,10 +92,103 @@ class InterruptsAndCosts(unittest.TestCase):
         self.assertIn("nothing", exit_6[1])
 
     def test_step_6_reads_the_ledger_report(self):
-        command = "${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/ledger.py report <run name>"
+        command = (
+            "${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/ledger.py report <run name>"
+        )
         self.assertIn(f"`{command}`", self.step(6))
         rules = BASH_RULE.findall(allowed_tools(SKILL))
-        self.assertTrue(any(fnmatch.fnmatchcase(command, rule) for rule in rules), rules)
+        self.assertTrue(
+            any(fnmatch.fnmatchcase(command, rule) for rule in rules), rules
+        )
+
+
+class Gate(unittest.TestCase):
+    """The gate's checks, step 2, all come before step 3 makes the worktree."""
+
+    def gate(self):
+        return body(SKILL).split("\n## 2. Gate\n", 1)[1].split("\n## ", 1)[0]
+
+    def check(self, number):
+        found = re.search(rf"^{number}\. (.*)$", self.gate(), re.MULTILINE)
+        self.assertIsNotNone(found, f"no check {number} in the gate")
+        return found[1]
+
+    def test_check_5_runs_the_launchers_refusals_before_the_worktree(self):
+        command = "${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/run-implementer.sh --check <run dir>"
+        check = self.check(5)
+        self.assertIn(f"`{command}`", check)
+        text = body(SKILL)
+        step_3 = text.index("\n## 3. Worktree\n")
+        self.assertLess(text.index(command), text.index("worktree add", step_3))
+        rules = BASH_RULE.findall(allowed_tools(SKILL))
+        self.assertTrue(
+            any(fnmatch.fnmatchcase(command, rule) for rule in rules), rules
+        )
+
+    def test_check_6_stops_on_a_hand_edit_after_the_review(self):
+        command = "${CLAUDE_PLUGIN_ROOT}/skills/cold-review/scripts/review-state.py --plan <spec>"
+        check = self.check(6)
+        self.assertIn(f"`{command}`", check)
+        rules = BASH_RULE.findall(allowed_tools(SKILL))
+        self.assertTrue(
+            any(fnmatch.fnmatchcase(command, rule) for rule in rules), rules
+        )
+        # Its action for each state review-state.py prints.
+        for state in ("full", "unchanged", "done", "delta", "unlogged", "no-base"):
+            with self.subTest(state=state):
+                self.assertIn(f"`{state}`", check)
+        self.assertRegex(check, r"`unlogged`[^`]*[Ss]top[^\n]*/cold-review <spec>")
+        self.assertRegex(check, r"`no-base`[^`]*[Ss]top[^\n]*git fetch --unshallow")
+        carry_on = check.split("`unlogged`", 1)[0]
+        for state in ("full", "unchanged", "done", "delta"):
+            with self.subTest(carries_on=state):
+                self.assertIn(f"`{state}`", carry_on)
+
+
+class Names(unittest.TestCase):
+    """Names built from the repo folder and the spec's basename go through hooks/run-name.py, so
+    `Design Notes.md` or a folder called `My App` get a worktree, branch, run dir and scratch
+    folder git and the launchers accept. The spec's and record's paths keep the real name."""
+
+    RUN_NAME = "${CLAUDE_PLUGIN_ROOT}/hooks/run-name.py"
+
+    def frame(self):
+        return body(SKILL).split("\n## 1. Frame\n", 1)[1].split("\n## ", 1)[0]
+
+    def test_the_frame_builds_names_from_run_names_output(self):
+        frame = self.frame()
+        for command in (f"{self.RUN_NAME} <repo dir>", f"{self.RUN_NAME} <basename>"):
+            with self.subTest(command=command):
+                self.assertIn(f"`{command}`", frame)
+                rules = BASH_RULE.findall(allowed_tools(SKILL))
+                self.assertTrue(
+                    any(fnmatch.fnmatchcase(command, rule) for rule in rules), rules
+                )
+        for name, built in (
+            ("<worktree>", "<repo>/../<safe repo>-worktrees/<safe basename>"),
+            ("<branch>", "implement/<safe basename>"),
+            ("<run name>", "<safe repo>--<safe basename>"),
+            ("<scratch V<n>>", "~/.cache/implement-verify/<safe repo>/<safe basename>/V<n>"),
+            ("<record>", "<spec dir>/records/<basename>-record.md"),
+        ):
+            with self.subTest(name=name):
+                self.assertIn(f"`{name}`: `{built}`", frame)
+        # Nothing else in the skill builds a name from the raw ones.
+        self.assertNotIn("<repo dir>--<basename>", body(SKILL))
+        self.assertNotIn("implement/<basename>", body(SKILL))
+
+    def test_no_branch_is_built_from_the_raw_basename(self):
+        for path in (
+            REPO / "skills" / "spec" / "SKILL.md",  # the hand-off
+            REPO / "skills" / "spec" / "done-step.md",  # /spec done's lookup
+            REPO / "hooks" / "agents" / "implementer.md",  # its clean-up
+        ):
+            with self.subTest(path=path.name):
+                self.assertNotIn("implement/<spec basename>", path.read_text())
+        self.assertIn("run-name.py", (REPO / "skills" / "spec" / "SKILL.md").read_text())
+        self.assertIn("run-name.py", (REPO / "skills" / "spec" / "done-step.md").read_text())
+        implementer = (REPO / "hooks" / "agents" / "implementer.md").read_text()
+        self.assertRegex(implementer, r"medium --fix <branch>`[^\n]*git branch --show-current")
 
 
 class ExitCodes(unittest.TestCase):

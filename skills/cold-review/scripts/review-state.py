@@ -2,7 +2,7 @@
 """Where a document stands in its review: which review round it's due, and what changed since
 its saved review. /cold-review runs this in step 1 instead of working it out by hand.
 
-Usage: review-state.py <markdown file>
+Usage: review-state.py [--plan] <markdown file>
 
 Prints `key: value` lines, then `state:` last:
 
@@ -13,7 +13,8 @@ Prints `key: value` lines, then `state:` last:
   unchanged  a saved review, and the document hasn't changed since: nothing to do
   no-base    a saved review, no `Not reviewed:` lines, and no commit to diff from: unlogged
              changes can't be found
-  done       the full review and its delta review have both run: no third round
+  done       the full review and its delta review have both run, and nothing has changed
+             since the delta review, or each change since is logged: no third round
 
 The review lives in the record, records/<basename>-record.md beside the document, or in an
 older document under its own `## Cold review`. mdcheck.read_review() reads it, the same parser
@@ -35,6 +36,17 @@ only if a line was added or deleted: a rename with no edits isn't a change.
 In a shallow clone, a review commit with no parent may be the clone's cut-off rather than the
 commit that added the review, so there is no base. Read-only: runs git log, show, cat-file,
 merge-base, rev-parse and diff, nothing else.
+
+After a delta review, the base is the commit that added its `### Delta review, <date>` heading
+(`delta-commit:`), itself, never its parent: edits saved in that commit are the ones it reviewed.
+A change since then with no `Not reviewed:` line logged after it (one that wasn't in its file at
+that commit) is `unlogged`; with one, or with no change, it's `done`. Until the heading is
+committed, as /cold-review leaves it, the state is `done`.
+
+--plan, for /implement's gate: only changes to the document's `## Decision`, `## Design` and
+`## Work items` count, with each citation's line numbers (`path:12`, `:12-14`) set aside, since
+only those changes are logged as `Not reviewed:`. A status change, a moved `read-at` or a re-cite
+reads `unchanged`, and `headings:` names the plan's changed headings only.
 """
 
 import re
@@ -46,15 +58,34 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "research" / "scripts"))
 from mdcheck import (  # shared with the checkers
+    DELTA_HEADING,
     earlier_paths,
+    heading_is,
     in_code,
     is_heading,
+    level,
     read_review,
     record_for,
     record_path,
 )
 
 HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", re.MULTILINE)
+# The sections --plan compares, and a citation's line numbers, which it sets aside: `:12`,
+# `path:12-14`, `file.py:12—20` or `file.py:3,7-9`. Only after a path (a `/` or `.` in it) or
+# nothing, so `localhost:8080`, `10:30` or a URL's port still counts as a change.
+PLAN = ("## Decision", "## Design", "## Work items")
+LINE_NUMBERS = re.compile(
+    r"(?P<pre>[\w./~-]*)(?P<tick>`?):\d+(?:\s*[-–—]\s*\d+)?(?:,\d+(?:[-–—]\d+)?)*"
+)
+
+
+def set_aside_line_numbers(line):
+    def one(m):
+        pre = m["pre"]
+        cited = not pre or (("/" in pre or "." in pre) and not pre.startswith("//"))
+        return f"{pre}{m['tick']}:N" if cited else m[0]
+
+    return LINE_NUMBERS.sub(one, line)
 
 
 def git(root, *args):
@@ -126,10 +157,86 @@ def changed_lines(hunks):
     return lines
 
 
+def lines_at(root, commit, path):
+    """The stripped lines of `path` as it was at `commit`; empty if it wasn't there."""
+    name = path_at(root, commit, path.relative_to(root).as_posix())
+    return {
+        line.strip()
+        for line in (git(root, "show", f"{commit}:{name}") or "").splitlines()
+    }
+
+
+def plan_blocks(lines):
+    """The Decision, Design and Work items, as {heading: its lines}, each heading the nearest one
+    above, with citations' line numbers set aside. Fences are skipped for headings only."""
+    blocks, inside, current = {}, False, None
+    for line, code in zip(lines, in_code(lines)):
+        if not code and is_heading(line):
+            if level(line) <= 2:
+                inside = any(heading_is(line, h) for h in PLAN)
+            current = line.strip()
+            if inside:
+                blocks.setdefault(current, [])
+            continue
+        if inside:
+            blocks[current].append(set_aside_line_numbers(line.rstrip()))
+    return blocks
+
+
+def plan_changes(old_lines, new_lines):
+    """The plan headings whose text differs, in the new document's order, then any removed."""
+    old, new = plan_blocks(old_lines), plan_blocks(new_lines)
+    return [h for h in new if old.get(h) != new[h]] + [h for h in old if h not in new]
+
+
+def oldest_adding(root, needle, paths):
+    """The oldest commit that added `needle` to any of `paths`, each followed through renames:
+    otherwise a later `git mv` of the record is the oldest commit that "added" it. None in a
+    shallow clone if it's the clone's cut-off, which "adds" every line in it."""
+    hits = [
+        found.split()[-1]
+        for path in paths
+        if (
+            found := git(
+                root, "log", "--follow", "--format=%h", f"-S{needle}", "--", path
+            )
+        )
+        and found.strip()
+    ]
+    commit = oldest(root, hits)
+    shallow = (
+        git(root, "rev-parse", "--is-shallow-repository") or ""
+    ).strip() == "true"
+    if (
+        commit
+        and shallow
+        and git(root, "rev-parse", "--verify", "--quiet", f"{commit}^") is None
+    ):
+        return None, True
+    return commit, False
+
+
+def delta_heading(lines, start, end, date):
+    """The delta review's heading as written, for `git log -S`: read_review() matches it in any
+    case and dates it by its `Reviewed on` line, so `### Delta Review, round 2` is one too."""
+    code = in_code(lines)
+    for i in range(start + 1, end):
+        if code[i] or not heading_is(lines[i], DELTA_HEADING) or "," not in lines[i]:
+            continue
+        own = next((l.strip() for l in lines[i + 1 : end] if l.strip()), "")
+        if own.startswith(f"Reviewed on {date} by"):
+            return lines[i].strip()
+    return f"{DELTA_HEADING}, {date}"
+
+
 def main():
-    if len(sys.argv) != 2:
-        sys.exit("usage: review-state.py <markdown file>")
-    doc = Path(sys.argv[1]).expanduser().resolve()
+    args = sys.argv[1:]
+    plan = args[:1] == ["--plan"]
+    if plan:
+        args = args[1:]
+    if len(args) != 1:
+        sys.exit("usage: review-state.py [--plan] <markdown file>")
+    doc = Path(args[0]).expanduser().resolve()
     if not doc.is_file():
         sys.exit(f"review-state: no such file: {doc}")
     out = {"document": str(doc)}
@@ -164,45 +271,18 @@ def main():
         )
 
     out["repo"] = str(root) if root else "none"
-    base = None
+    if plan:
+        out["plan"] = "yes: only the Decision, Design and Work items count"
+    base, since_delta, delta_commit, delta_cut_off = None, None, None, False
     if root:
         out["head"] = (git(root, "rev-parse", "--short", "HEAD") or "none").strip()
         if where != "none":
-            needle = f"Reviewed on {date} by"
             paths = [
                 p.relative_to(root).as_posix()
                 for p in (record, doc)
                 if p and p.is_file()
             ]
-            # One path at a time, following renames: otherwise a later `git mv` of the record
-            # is the oldest commit that "added" the line, and the edits before it are missed.
-            hits = [
-                found.split()[-1]
-                for path in paths
-                if (
-                    found := git(
-                        root,
-                        "log",
-                        "--follow",
-                        "--format=%h",
-                        f"-S{needle}",
-                        "--",
-                        path,
-                    )
-                )
-                and found.strip()
-            ]
-            commit = oldest(root, hits)
-            shallow = (
-                git(root, "rev-parse", "--is-shallow-repository") or ""
-            ).strip() == "true"
-            if (
-                commit
-                and shallow
-                and git(root, "rev-parse", "--verify", "--quiet", f"{commit}^") is None
-            ):
-                # The clone's cut-off commit "adds" every line in it, so it isn't the review.
-                commit = None
+            commit, _ = oldest_adding(root, f"Reviewed on {date} by", paths)
             out["review-commit"] = commit or "none"
             if commit:
                 base = commit
@@ -212,6 +292,35 @@ def main():
                 if where == "record" and touched and touched.strip() and existed:
                     base = f"{commit}^"
                 base = (git(root, "rev-parse", "--short", base) or base).strip()
+            if delta:
+                # Its heading, not its `Reviewed on` line, which a full review on the same date
+                # shares.
+                heading = delta_heading(
+                    rec_lines if where == "record" else doc_lines,
+                    review.start,
+                    review.end,
+                    review.delta_date,
+                )
+                delta_commit, delta_cut_off = oldest_adding(root, heading, paths)
+                out["delta-commit"] = delta_commit or "none"
+                if delta_commit:
+                    base = (
+                        git(root, "rev-parse", "--short", delta_commit) or delta_commit
+                    ).strip()
+                    # `Not reviewed:` lines that weren't in their file at that commit.
+                    then = {
+                        "document": lines_at(root, delta_commit, doc),
+                        "record": lines_at(root, delta_commit, record)
+                        if record
+                        else set(),
+                    }
+                    since_delta = [
+                        line
+                        for source, _, line in review.not_reviewed
+                        if line not in then[source.split(" ", 1)[0]]
+                    ]
+                elif delta_cut_off:
+                    base = None
         out["base"] = base or "none"
         if base:
             # Both names if the document was renamed since, so the diff pairs them up.
@@ -229,6 +338,11 @@ def main():
                 for line in numstat.splitlines()
                 if line
             )
+            plan_headings = []
+            if plan and changed:
+                then = git(root, "show", f"{base}:{names[0]}") or ""
+                plan_headings = plan_changes(then.splitlines(), doc_lines)
+                changed = bool(plan_headings)
             out["changed"] = "yes" if changed else "no"
             if changed:
                 stat = (
@@ -237,13 +351,18 @@ def main():
                 out["stat"] = stat.splitlines()[-1].strip()
                 hunks = git(root, "diff", "-M", "-U0", base, "--", *names) or ""
                 out["headings"] = "; ".join(
-                    headings_at(doc_lines, changed_lines(hunks))
+                    plan_headings or headings_at(doc_lines, changed_lines(hunks))
                 )
 
     if where == "none":
         state = "full"
+    elif delta and delta_cut_off:
+        state = "no-base"
+    elif delta and not delta_commit:
+        state = "done"  # not committed yet, as /cold-review leaves it, or no repo
     elif delta:
-        state = "done"
+        unlogged = out.get("changed") == "yes" and not since_delta
+        state = "unlogged" if unlogged else "done"
     elif logged:
         state = "delta"
     elif not base:

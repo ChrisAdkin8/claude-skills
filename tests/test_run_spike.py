@@ -84,6 +84,16 @@ class RunSpike(unittest.TestCase):
             return []
         return [json.loads(line) for line in self.calls.read_text().splitlines()]
 
+    def test_a_bad_name_is_named_with_the_rule(self):
+        for rel, bad in (("My App/spec/S1", "My App"), ("repo/Design Notes/S1", "Design Notes")):
+            with self.subTest(rel=rel):
+                code, out = self.run_spike(self.scratch(rel))
+                self.assertEqual(code, 2, out)
+                self.assertIn(f'"{bad}"', out)
+                self.assertIn("may hold only letters, digits", out)
+                self.assertIn("starting with a letter or digit", out)
+        self.assertEqual(self.calls_made(), [])
+
     def test_runs_in_scratch_through_symlinked_home(self):
         self.scratch()
         code, out = self.run_spike(self.home / ".cache/spec-spikes/repo/spec/S1")

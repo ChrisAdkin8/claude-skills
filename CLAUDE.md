@@ -9,7 +9,7 @@ each step, and expect a skill you're editing to be the one you're running.
 
 - `python3 -m unittest discover -s tests` — deterministic tests for the guard, both checkers,
   `build-index.py`, `review-state.py`, `git-read.py`, `prepare-spike.sh`, `run-spike.sh`,
-  `run-agent.sh`, `launch-checks.sh`, `agent-def.py`, `agent-settings.py`, `mdcheck.py`,
+  `run-agent.sh`, `run-name.py`, `launch-checks.sh`, `agent-def.py`, `agent-settings.py`, `mdcheck.py`,
   `mine-sessions.py`, `scan-diff.py`, `prepare-verify.sh`, `run-verify.sh`, `run-implementer.sh`,
   `ledger.py` and the research scripts; that the eval runners exit 1 on a failure; that the guard's and all four sandbox
   settings' deny lists agree, and `hooks/user-deny.json` with them; that no skill's allowed-tools
@@ -33,9 +33,9 @@ each step, and expect a skill you're editing to be the one you're running.
   column for the model. Run one set after the other, never at the same time: each checks that
   nothing else in `~/notes` changed while it ran.
 - A change to `skills/implement/` or `hooks/agents/implementer.md` needs the implement skill-eval
-  cases, `implement-basic` and `implement-trap`, on both models. Each also runs the implementer
-  (capped at $5 under the runner) and up to two verifiers ($5 each), which the runner's printed
-  cost leaves out: add theirs from the `run.json` files in the results.
+  cases, `implement-basic`, `implement-trap` and `implement-hand-edit`, on both models. The first
+  two also run the implementer (capped at $5 under the runner) and up to two verifiers ($5 each),
+  which the runner's printed cost leaves out: add theirs from the `run.json` files in the results.
 - A change to `skills/spec/` or `hooks/agents/spec-*` usually needs `check-spec.py` run over
   `docs/specs/` too: the specs in this repo cite these files by `path:line`.
 

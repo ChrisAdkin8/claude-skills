@@ -71,9 +71,14 @@ scratch=$1 repo=$2 read_at=$3
 root="$HOME/.cache/spec-spikes"
 name='[A-Za-z0-9][A-Za-z0-9._-]*'
 
-# <root>/<repo dir name>/<spec basename>/S<n>, and nothing else: no `..`, no extra levels.
-[[ $scratch =~ ^$root/$name/$name/S[0-9]+$ ]] ||
-  die "scratch must be ~/.cache/spec-spikes/<repo>/<spec>/S<n>, not $scratch"
+# <root>/<repo dir name>/<spec basename>/S<n>, each name as hooks/run-name.py prints it, and nothing
+# else: no `..`, no extra levels.
+if ! [[ $scratch =~ ^$root/$name/$name/S[0-9]+$ ]]; then
+  bad=
+  [[ $scratch != "$root"/* ]] || bad=$(tr / '\n' <<< "${scratch#"$root"/}" | grep -v '^$' | grep -Evx "$name" | head -n 1 || true)
+  [ -z "$bad" ] || bad=": \"$bad\" isn't a valid name: a name may hold only letters, digits, ., _ and -, starting with a letter or digit"
+  die "scratch must be ~/.cache/spec-spikes/<repo>/<spec>/S<n>, not $scratch$bad"
+fi
 if [ "$read_at" = none ]; then
   [ "$repo" = none ] || die "read-at is none, so the source repo must be none too"
 else

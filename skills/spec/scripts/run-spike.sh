@@ -30,13 +30,18 @@ launch_account run-spike
 
 [ $# -eq 1 ] || die "usage: run-spike.sh <scratch dir>"
 # Both sides resolved, so a symlinked home still matches. The layout is prepare-spike.sh's:
-# <root>/<repo dir name>/<spec basename>/S<n>, so not the root itself or its .uv-cache.
+# <root>/<repo dir name>/<spec basename>/S<n>, each name as hooks/run-name.py prints it, so not the
+# root itself or its .uv-cache.
 root=$(cd "$HOME/.cache/spec-spikes" 2>/dev/null && pwd -P) || die "no ~/.cache/spec-spikes"
 scratch=$(cd "$1" 2>/dev/null && pwd -P) || die "no such scratch dir: $1"
 name='[A-Za-z0-9][A-Za-z0-9._-]*'
 case "$scratch" in
-  "$root"/*) [[ ${scratch#"$root"/} =~ ^$name/$name/S[0-9]+$ ]] ||
-    die "scratch must be ~/.cache/spec-spikes/<repo>/<spec>/S<n>, not $1" ;;
+  "$root"/*)
+    if ! [[ ${scratch#"$root"/} =~ ^$name/$name/S[0-9]+$ ]]; then
+      bad=$(tr / '\n' <<< "${scratch#"$root"/}" | grep -v '^$' | grep -Evx "$name" | head -n 1 || true)
+      [ -z "$bad" ] || bad=": \"$bad\" isn't a valid name: a name may hold only letters, digits, ., _ and -, starting with a letter or digit"
+      die "scratch must be ~/.cache/spec-spikes/<repo>/<spec>/S<n>, not $1$bad"
+    fi ;;
   *) die "not under ~/.cache/spec-spikes/: $1" ;;
 esac
 for f in brief.md settings.json; do

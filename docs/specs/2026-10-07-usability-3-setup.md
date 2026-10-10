@@ -113,7 +113,7 @@ Read at `377b2dd` on 2026-10-07.
 | W3 | 2 h | none |
 | W4 | 3 h | none |
 | W5 | 3 h | none |
-| W6 | 2 h | parts 1a, 1b and 2's README changes, to avoid two edits of one section |
+| W6 | 2 h | parts 1a, 1b and 2b's README changes, to avoid two edits of one section |
 | W7 | 1 h | none |
 | Evals | both sets on both models | W1 to W7 |
 

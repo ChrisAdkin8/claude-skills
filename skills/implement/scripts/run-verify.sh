@@ -68,7 +68,11 @@ case "$1" in
   "$real_root"/*) rest=${1#"$real_root"/} ;;
   *) die "not under ~/.cache/implement-verify/: $1" ;;
 esac
-[[ $rest =~ $layout ]] || die "scratch must be ~/.cache/implement-verify/<repo>/<spec>/V<n>, not $1"
+if ! [[ $rest =~ $layout ]]; then
+  bad=$(tr / '\n' <<< "$rest" | grep -v '^$' | grep -Evx "$name" | head -n 1 || true)
+  [ -z "$bad" ] || bad=": \"$bad\" isn't a valid name: a name may hold only letters, digits, ., _ and -, starting with a letter or digit"
+  die "scratch must be ~/.cache/implement-verify/<repo>/<spec>/V<n>, not $1$bad"
+fi
 
 # Then resolved, so a symlink on the way can't lead out of the root.
 [ -d "$real_root" ] || die "no ~/.cache/implement-verify"

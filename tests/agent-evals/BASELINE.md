@@ -1674,3 +1674,75 @@ Opus $4.61, re-runs and the `cold-review-delta` checks $1.91. $15.98 in all.
 - **Sonnet's `absence-claim` ruled the Vertical Pod Autoscaler claim `UNSUPPORTED`** rather than
   `CONFIRMED`, since the README it fetched doesn't say "recommends"; it found `rere` and ruled the
   absence claim `WRONG`. It has varied on Sonnet before (2026-09-30), and passes on Opus.
+
+## Usability part 2a: both sets on both models (2026-10-09)
+
+Both eval sets on `implement/2026-10-07-usability-2a-refuses-early`, usability part 2a
+(`docs/specs/2026-10-07-usability-2a-refuses-early.md`: `/implement` runs the launcher's refusals
+before it makes the worktree, stops a spec edited by hand since its review, and builds its names
+with `hooks/run-name.py`). Run by hand from that worktree, `EVAL_MODEL=sonnet` then `opus`, the
+agent evals before the skill evals on each, one set at a time. The agent evals and Sonnet's skill
+evals ran at `79176f7`, the build. Sonnet's `research-quick-flow` failed there because of it (see
+below), and `0a0af3a` fixed that; Sonnet's `research-quick-flow` and `spec-quick` re-ran, and
+Opus's skill evals ran, at `0a0af3a`. The fix changes only how four skill files describe the name
+they give `run-name.py`, which the agent evals don't read. Agent results
+`tests/agent-evals/results/20261009-220616` and `20261009-221411`, skill results
+`tests/skill-evals/results/20261009-220928` and `20261009-222549`, the re-run `20261009-222403`.
+No `ANTHROPIC_API_KEY` or `CHECKED_PLANS_USE_API_KEY` was set, so every run was on the Claude
+account.
+
+Skill evals (the skill session's cost; the agents the cases launched came to $0.82 on Sonnet, $0.24
+on its re-run and $1.50 on Opus, from their `run.json` files):
+
+| Case | Sonnet | Opus |
+|---|---|---|
+| cold-review-delta | FAIL (5, $0.17): see below | PASS (3, $0.27) |
+| implement-basic | PASS (36, $0.37) | PASS (37, $0.62) |
+| implement-hand-edit | PASS (11, $0.15) | PASS (11, $0.27) |
+| implement-trap | PASS (23, $0.26) | PASS (24, $0.44) |
+| research-quick-flow | FAIL (18, $0.29): see below; re-run at `0a0af3a` PASS (19, $0.30) | PASS (22, $0.55) |
+| spec-done | PASS (13, $0.20) | PASS (14, $0.38) |
+| spec-done-branch | PASS (10, $0.17) | PASS (9, $0.31) |
+| spec-done-implement | PASS (15, $0.21) | PASS (12, $0.36) |
+| spec-quick | FAIL (24, $0.31): see below; re-run at `0a0af3a` PASS (22, $0.28) | PASS (23, $0.49) |
+
+Agent evals:
+
+| Case | Sonnet | Opus |
+|---|---|---|
+| absence-claim | PASS (10, $0.22) | PASS (11, $0.41) |
+| cold-review-skip | PASS (7, $0.11) | PASS (7, $0.29) |
+| delta-review | FAIL (5, $0.10) | PASS (6, $0.24) |
+| delta-review-record | PASS (6, $0.12) | PASS (8, $0.26) |
+| guard-applies | SKIP (opus only) | PASS (2, $0.10) |
+| record-skip | PASS (6, $0.12) | PASS (6, $0.28) |
+| research-ideas | PASS (34, $0.73) | PASS (36, $1.86) |
+| research-quick | PASS (11, $0.14) | PASS (10, $0.29) |
+| spec-miscite | PASS (5, $0.10) | PASS (6, $0.26) |
+| spike-inherited | PASS (5, $0.09) | PASS (6, $0.22) |
+| wrong-figure | FAIL (7, $0.11): see below | FAIL (6, $0.20): see below |
+
+Totals, agents included: skill evals Sonnet $2.95 and Opus $5.20, agent evals Sonnet $1.84 and
+Opus $4.41, Sonnet's re-run $0.83. $15.23 in all.
+
+- **Part 2a's cases pass on both models:** `implement-basic` and `implement-trap` (W1), and the new
+  `implement-hand-edit` (W2), which stops at the gate, makes no worktree or branch, and names
+  `/cold-review`. W2's Done when also asks for that case to fail on the skill from before the
+  change; that run wasn't made.
+- **Sonnet's `research-quick-flow` failed at `79176f7` because of the build, and passes at
+  `0a0af3a`.** W3 had `/research` give `run-name.py` the note's name without saying it leaves off
+  `.md`. Sonnet gave it the whole filename, so its researcher and verifier, both successful, ran in
+  `~/.cache/agent-runs/<note>.md/`, where the grader doesn't look; `cold-review-delta`'s run dir
+  got `.md` too. `0a0af3a` says the name is the filename without `.md` in `/research`,
+  `/cold-review`, `/spec` and `/spec done`, as `/implement` and the spike step already did.
+  Sonnet's other skill cases weren't re-run on it.
+- **Sonnet's `spec-quick` failed once on capitalisation:** its reply said "agents cost $0.05", and
+  the grader looks for `Agents cost`. It passed on its re-run.
+- **Sonnet's `cold-review-delta` slipped as in the parts 1a and 1b section:** asked for
+  `/cold-review prompt`, it went to launch the reviewer, and the case's sandbox refused the brief's
+  Write. `review-state.py`, which W2 rewrote, still gave the state as `delta` and named the
+  unlogged Rollback edit. It passes on Opus.
+- **`wrong-figure` fails on both models, its answer key out of date since Ollama's tags page
+  changed** (see the parts 1a and 1b section).
+- **Sonnet's `delta-review` fails the decoy-row check, as in every section since 2026-09-30**, and
+  passes on Opus. Sonnet's `absence-claim` passed this time.

@@ -56,7 +56,7 @@ Read at `377b2dd` on 2026-10-07.
 | ready, status still draft | set `status: reviewed`, then commit the spec and its record |
 | reviewed and committed | `/implement <spec>` |
 | branch exists, `/spec done` not run | `/spec done <worktree spec path>` |
-| done, branch not merged | the merge and clean-up commands from part 2 |
+| done, branch not merged | the merge and clean-up commands from part 2b |
 
 With no spec named, it lists every spec in the repo's spec folder with its status and next command.
 
@@ -123,13 +123,13 @@ With no spec named, it lists every spec in the repo's spec folder with its statu
 
 | Item | Estimate | Depends on |
 |---|---|---|
-| W1 | 4 h | part 2's closing commands, for the last row |
+| W1 | 4 h | part 2b's closing commands, for the last row |
 | W2 | 1 h | part 3's glossary |
 | W3 | 6 h, plus the cases' first runs | none |
 | W4 | 2 h, after spike question 2 | parts 1b and 3 |
 | W5 | 4 h, after spike question 1 | none |
 | W6 | 3 h | none |
-| W7 | 1 h | parts 1a, 1b and 2 to 6, so the budgets start from the new sizes |
+| W7 | 1 h | parts 1a, 1b, 2a, 2b and 3 to 6, so the budgets start from the new sizes |
 | Evals | both sets on both models, the new cases included | W1 to W7 |
 
 The hours are guesses. Each new case costs about $0.40 for the skill's own session, capped at $3, plus up to $2 for each agent it launches and $5 for an implementer (`CLAUDE.md:27-30`, `:35-38`); with eight new cases on two models, budget about $25 a full run on top of today's $15.23 (`docs/repo-guide.md:108-109`).

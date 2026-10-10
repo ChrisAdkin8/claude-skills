@@ -5,7 +5,7 @@ disable-model-invocation: true
 argument-hint: <spec path>
 allowed-tools: Read Grep Glob Edit(~/.cache/implement-runs/**) Edit(~/.cache/implement-verify/**) Edit(~/code/**/*-worktrees/*/docs/specs/**)
   Bash(git -C * status *) Bash(git -C * worktree add *) Bash(git -C * add *) Bash(git -C * commit *) Bash(git -C * revert *)
-  Bash(${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/check-spec.py *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/run-implementer.sh *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/ledger.py report *)
+  Bash(${CLAUDE_PLUGIN_ROOT}/hooks/git-read.py *) Bash(${CLAUDE_PLUGIN_ROOT}/hooks/run-name.py *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/check-spec.py *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/cold-review/scripts/review-state.py --plan *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/run-implementer.sh *) Bash(${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/ledger.py report *)
   Bash(${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/prepare-verify.sh ~/.cache/implement-verify/*) Bash(${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/run-verify.sh ~/.cache/implement-verify/*)
 ---
 
@@ -39,8 +39,9 @@ You frame, relay and verify; you don't write the code. The work items are done b
 
 - `<spec>`: the path given; stop if there is none. `<repo>`: `git-read.py -C <spec's dir> rev-parse --show-toplevel`, which must be under `~/code` (else stop: `/implement` works only on repos there). `<repo dir>`: its directory name.
 - `<basename>`: the spec's filename without `.md`. `<record>`: `<spec dir>/records/<basename>-record.md`. `<spikes>`: `<spec dir>/spikes/<basename>-results.md` (it may not exist). Paths below are from the repo root unless they start with `~`.
-- `<worktree>`: `<repo>/../<repo dir>-worktrees/<basename>`, written with `~`. `<branch>`: `implement/<basename>`.
-- `<run name>`: `<repo dir>--<basename>`. `<run dir>`: `~/.cache/implement-runs/<run name>/implementer`. `<baseline>`: `~/.cache/implement-runs/<run name>/scratch/baseline.txt`, in the one dir outside the worktree the implementer may write. `<scratch V<n>>`: `~/.cache/implement-verify/<repo dir>/<basename>/V<n>`.
+- `<safe repo>`: what `${CLAUDE_PLUGIN_ROOT}/hooks/run-name.py <repo dir>` prints, and `<safe basename>`: what `${CLAUDE_PLUGIN_ROOT}/hooks/run-name.py <basename>` prints, each name in single quotes. A name that holds only letters, digits, `.`, `_` and `-`, starting with a letter or digit, comes back as it is; any other, such as `Design Notes` or `café`, comes back as a safe name that git and the launchers accept, the same each time. Every name below is built from these two; the spec's, record's and spike results' own paths keep the real `<basename>`.
+- `<worktree>`: `<repo>/../<safe repo>-worktrees/<safe basename>`, written with `~`. `<branch>`: `implement/<safe basename>`.
+- `<run name>`: `<safe repo>--<safe basename>`. `<run dir>`: `~/.cache/implement-runs/<run name>/implementer`. `<baseline>`: `~/.cache/implement-runs/<run name>/scratch/baseline.txt`, in the one dir outside the worktree the implementer may write. `<scratch V<n>>`: `~/.cache/implement-verify/<safe repo>/<safe basename>/V<n>`.
 - **New or resume.** `git-read.py -C <repo> branch --list <branch>`: empty means a new run; a branch means resume (step 3's Resume).
 
 ## 2. Gate
@@ -51,6 +52,8 @@ In order, from the repo's checkout, stopping at the first failure with what to d
 2. The spec's frontmatter says `status: reviewed`.
 3. `${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/check-spec.py <spec> --repo <repo>` prints `RESULT: PASS`.
 4. `${CLAUDE_PLUGIN_ROOT}/skills/spec/scripts/check-spec.py <spec> --repo <repo> --drift-at HEAD` prints no `DRIFT:` line. Else: "run `/spec finish <spec>`, which re-reads those ranges and moves read-at, then commit it". Keep any file its drift WARN names, for step 3.
+5. `${CLAUDE_PLUGIN_ROOT}/skills/implement/scripts/run-implementer.sh --check <run dir>` exits 0, with the `<run dir>` step 4 will launch with. It runs the launcher's refusals that don't need the worktree (the Claude Code version, the run dir's name, `IMPLEMENT_MAX_USD`, `IMPLEMENT_CALL_MAX_USD` and `IMPLEMENT_INTERRUPT_WAIT`, the spent cap, the macOS temp dir and the user's sandbox settings), writes nothing and launches nothing. Else: stop, and give the script's message as it printed it, so nothing is made or spent first.
+6. `${CLAUDE_PLUGIN_ROOT}/skills/cold-review/scripts/review-state.py --plan <spec>`, by the `state:` it prints last. It counts only changes to the Decision, Design and Work items since the saved review (or its delta review), with citations' line numbers set aside, so a status change, a moved `read-at` or a re-cite doesn't count. Carry on for `full` (no saved review, which check 3 allows), `unchanged`, `done` and `delta` (check 3 already stops a reviewed spec with unreviewed lines). On `unlogged`, stop: "the spec's plan changed after its review and the change isn't logged: run `/cold-review <spec>`, which drafts the `Not reviewed:` lines for you to confirm". On `no-base`, where git has no history to compare with, as in a shallow clone, stop: "the gate can't see the spec's history: run `git fetch --unshallow`, then `/implement <spec>` again".
 
 On resume, run the Gate in the worktree instead, where check 1 names only `<spec> <spikes>`: the implementer leaves lines in the record uncommitted (an evidence line for its next commit, the rest for step 6's), so a dirty record is expected there. The status must be `in-progress` and drift is checked with `--drift-at <the Started at commit>` (from the record's `## Evidence` on the branch), so the branch's own commits never count as drift.
 

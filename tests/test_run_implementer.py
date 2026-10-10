@@ -10,6 +10,7 @@ Run with: python3 -m unittest discover -s tests
 
 import json
 import os
+import shutil
 import signal
 import subprocess
 import tempfile
@@ -21,9 +22,12 @@ REPO = Path(__file__).resolve().parents[1]
 SCRIPT = REPO / "skills" / "implement" / "scripts" / "run-implementer.sh"
 STUB = """#!/usr/bin/env python3
 import json, os, sys
+# Every call's arguments, --version included, so a test can see what --check ran.
+with open(os.environ["STUB_CALLS"] + ".argv", "a") as f:
+    f.write(json.dumps(sys.argv[1:]) + "\\n")
 # The launchers' version check (hooks/launch-checks.sh), answered before the call is logged.
 if sys.argv[1:] == ["--version"]:
-    print("2.1.285 (Claude Code)")
+    print(os.environ.get("STUB_VERSION", "2.1.285 (Claude Code)"))
     sys.exit(0)
 calls = os.environ["STUB_CALLS"]
 with open(calls, "a") as f:
@@ -194,6 +198,18 @@ class RunImplementer(unittest.TestCase):
                 self.assertEqual(code, 2, out)
         self.assertEqual(self.calls_made(), [])
 
+    def test_a_bad_name_is_named_with_the_rule(self):
+        root = self.home / ".cache" / "implement-runs"
+        for name in ("My App--spec", "proj--Design Notes", "café--spec"):
+            with self.subTest(name=name):
+                for args in ((self.worktree,), ("--check",)):
+                    code, out = self.launch(*args, root / name / "implementer")
+                    self.assertEqual(code, 2, out)
+                    self.assertIn(f'"{name}"', out)
+                    self.assertIn("may hold only letters, digits", out)
+                    self.assertIn("starting with a letter or digit", out)
+        self.assertEqual(self.calls_made(), [])
+
     def test_needs_a_brief(self):
         code, out = self.launch(self.worktree, self.run_dir)
         self.assertEqual(code, 2, out)
@@ -227,7 +243,9 @@ class RunImplementer(unittest.TestCase):
         # Only the user's settings load, under a sandbox of the run's own.
         self.assertEqual(self.flag(argv, "--setting-sources"), "user")
         self.assertEqual(self.flag(argv, "--permission-mode"), "acceptEdits")
-        self.assertEqual(Path(self.flag(argv, "--settings")), self.run_dir / "settings.json")
+        self.assertEqual(
+            Path(self.flag(argv, "--settings")), self.run_dir / "settings.json"
+        )
         self.assertEqual(argv.count("--add-dir"), 1)
         self.assertEqual(Path(self.flag(argv, "--add-dir")), scratch)
         self.assertTrue(argv[argv.index("--add-dir") + 2].startswith("--"))
@@ -264,7 +282,10 @@ class RunImplementer(unittest.TestCase):
         common = (self.repo / ".git").resolve()
         git_dir = common / "worktrees" / "spec"
         tmp = subprocess.run(
-            ["getconf", "DARWIN_USER_TEMP_DIR"], capture_output=True, text=True, check=True
+            ["getconf", "DARWIN_USER_TEMP_DIR"],
+            capture_output=True,
+            text=True,
+            check=True,
         ).stdout.strip()
         allow = sandbox["filesystem"]["allowWrite"]
         deny = sandbox["filesystem"]["denyWrite"]
@@ -297,7 +318,12 @@ class RunImplementer(unittest.TestCase):
                 self.assertIn(str(path), deny)
         self.assertIn("~/.cache/implement-ledger", deny)
         deny_rules = settings["permissions"]["deny"]
-        for rule in ("Bash(gh *)", "WebFetch", "WebSearch", "Edit(~/.cache/implement-ledger/**)"):
+        for rule in (
+            "Bash(gh *)",
+            "WebFetch",
+            "WebSearch",
+            "Edit(~/.cache/implement-ledger/**)",
+        ):
             self.assertIn(rule, deny_rules)
 
     def test_other_worktrees_are_denied_to_the_call(self):
@@ -341,9 +367,18 @@ class RunImplementer(unittest.TestCase):
         self.assertNotIn("strictAllowlist", out)
         self.assertEqual(self.calls_made(), [])
         network = {"allowedDomains": [], "strictAllowlist": True}
-        settings.write_text(json.dumps(
-            {"sandbox": {"enabled": True, "excludedCommands": [], "network": network}, "model": "x"}
-        ))
+        settings.write_text(
+            json.dumps(
+                {
+                    "sandbox": {
+                        "enabled": True,
+                        "excludedCommands": [],
+                        "network": network,
+                    },
+                    "model": "x",
+                }
+            )
+        )
         self.assertEqual(self.launch(self.worktree, self.run_dir)[0], 0)
 
     def stub_does(self, code):
@@ -430,7 +465,9 @@ class RunImplementer(unittest.TestCase):
         code, out = self.launch(self.worktree, self.run_dir)
         self.assertEqual(code, 0, out)
         self.assertIn(f"moved during the run: refs/heads/{branch} ", out)
-        self.assertNotIn("implement/spec", out.split("moved during the run:", 1)[1].splitlines()[0])
+        self.assertNotIn(
+            "implement/spec", out.split("moved during the run:", 1)[1].splitlines()[0]
+        )
 
     def test_a_repo_with_many_refs_is_not_refused(self):
         # The before-snapshot holds every ref. Passed on the command line, 20,000 of them were
@@ -554,8 +591,12 @@ class RunImplementer(unittest.TestCase):
         self.assertEqual(self.launch(self.worktree, self.run_dir, "--resume")[0], 0)
         self.assertEqual(self.spent(), "1.3")
         first, second = (l for l in self.ledger_lines() if l["event"] == "end")
-        self.assertEqual((first["session"], first["total"], first["usd"]), ("sess-1", 1, 1))
-        self.assertEqual((second["session"], second["total"], second["usd"]), ("sess-1", 1.3, 0.3))
+        self.assertEqual(
+            (first["session"], first["total"], first["usd"]), ("sess-1", 1, 1)
+        )
+        self.assertEqual(
+            (second["session"], second["total"], second["usd"]), ("sess-1", 1.3, 0.3)
+        )
 
     def test_a_fresh_run_keeps_the_count(self):
         self.brief()
@@ -640,6 +681,131 @@ class RunImplementer(unittest.TestCase):
         self.assertEqual(self.flag(call["argv"], "--max-budget-usd"), "6")
         self.assertEqual(self.ledger_lines()[1]["call"], 2)
 
+    def check_leaves_nothing(self, run_dir):
+        """--check wrote nothing: no run dir, scratch dir or ledger line, and claude was asked
+        only for its version."""
+        self.assertFalse(run_dir.exists(), run_dir)
+        self.assertFalse((run_dir.parent / "scratch").exists())
+        argv_log = Path(f"{self.calls}.argv")
+        calls = [json.loads(line) for line in argv_log.read_text().splitlines()]
+        self.assertEqual(calls, [["--version"]])
+        argv_log.unlink()
+
+    def test_check_refuses_as_a_real_launch_does(self):
+        """Each refusal that doesn't need the worktree: --check exits 2 with the launch's own
+        message, before anything is made."""
+        root = self.home / ".cache" / "implement-runs"
+        settings = self.home / ".claude" / "settings.json"
+        no_getconf = self.tmp / "no-getconf"
+        no_getconf.mkdir()
+        (no_getconf / "getconf").write_text("#!/bin/sh\nexit 1\n")
+        (no_getconf / "getconf").chmod(0o755)
+        cap_ledger = [
+            {"who": "implementer", "call": 1, "event": "start", "budget": 5},
+            {"who": "implementer", "call": 1, "event": "end", "usd": 5},
+        ]
+
+        def env(**changes):
+            def apply():
+                self.env.update(changes)
+
+            return apply
+
+        def widening():
+            settings.parent.mkdir(exist_ok=True)
+            settings.write_text(
+                json.dumps({"sandbox": {"excludedCommands": ["git *"]}})
+            )
+
+        def no_temp_dir():
+            self.env["PATH"] = f"{no_getconf}:{self.env['PATH']}"
+
+        def spent():
+            self.env["IMPLEMENT_MAX_USD"] = "5"
+            self.plant(*cap_ledger)
+
+        bad_name = root / "My App--spec" / "implementer"
+        for case, setup, run_dir, expect in (
+            (
+                "old claude",
+                env(STUB_VERSION="2.1.276 (Claude Code)"),
+                self.run_dir,
+                "2.1.277",
+            ),
+            ("widening setting", widening, self.run_dir, "excludedCommands"),
+            ("no temp dir", no_temp_dir, self.run_dir, "DARWIN_USER_TEMP_DIR"),
+            ("bad run name", lambda: None, bad_name, "run dir"),
+            (
+                "bad call cap",
+                env(IMPLEMENT_CALL_MAX_USD="abc"),
+                self.run_dir,
+                "IMPLEMENT_CALL_MAX_USD",
+            ),
+            ("spent cap", spent, self.run_dir, "IMPLEMENT_MAX_USD"),
+        ):
+            with self.subTest(case=case):
+                saved = dict(self.env)
+                try:
+                    setup()
+                    before = (
+                        self.ledger().read_text() if self.ledger().exists() else None
+                    )
+                    code, checked = self.launch("--check", run_dir)
+                    self.assertEqual(code, 2, checked)
+                    self.assertIn(expect, checked)
+                    self.check_leaves_nothing(run_dir)
+                    after = (
+                        self.ledger().read_text() if self.ledger().exists() else None
+                    )
+                    self.assertEqual(after, before)
+                    # The real launch, with its brief, refuses with the same message.
+                    run_dir.mkdir(parents=True)
+                    (run_dir / "brief.md").write_text("Implement it.\n")
+                    code, launched = self.launch(self.worktree, run_dir)
+                    self.assertEqual(code, 2, launched)
+                    self.assertEqual(checked, launched)
+                finally:
+                    self.env = saved
+                    settings.unlink(missing_ok=True)
+                    self.ledger().unlink(missing_ok=True)
+                    shutil.rmtree(root, ignore_errors=True)
+                    Path(f"{self.calls}.argv").unlink(missing_ok=True)
+        self.assertEqual(self.calls_made(), [])
+
+    def test_check_passes_and_writes_nothing(self):
+        code, out = self.launch("--check", self.run_dir)
+        self.assertEqual(code, 0, out)
+        self.check_leaves_nothing(self.run_dir)
+        self.assertFalse(self.ledger().exists())
+        self.assertFalse((self.home / ".cache" / "implement-runs").exists())
+        self.assertEqual(self.calls_made(), [])
+        # With a ledger under the cap and a run dir from an earlier call, as on resume.
+        self.plant(
+            {"who": "implementer", "call": 1, "event": "start", "budget": 5},
+            {"who": "implementer", "call": 1, "event": "end", "usd": 5},
+        )
+        before = self.ledger().read_text()
+        self.brief()
+        listed = sorted(p.name for p in self.run_dir.iterdir())
+        code, out = self.launch("--check", self.run_dir)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.ledger().read_text(), before)
+        self.assertEqual(sorted(p.name for p in self.run_dir.iterdir()), listed)
+        self.assertFalse((self.run_dir.parent / "scratch").exists())
+        self.assertEqual(self.calls_made(), [])
+
+    def test_check_takes_only_a_run_dir(self):
+        for args in (
+            ("--check",),
+            ("--check", self.run_dir, "--resume"),
+            ("--check", self.worktree, self.run_dir),
+        ):
+            with self.subTest(args=args):
+                code, out = self.launch(*args)
+                self.assertEqual(code, 2, out)
+                self.assertIn("usage", out)
+        self.assertEqual(self.calls_made(), [])
+
     def test_a_bad_ledger_is_refused(self):
         self.brief()
         start = {"who": "implementer", "call": 1, "event": "start", "budget": 4}
@@ -699,7 +865,11 @@ class RunImplementer(unittest.TestCase):
         for name in ("brief.md", "spec.md", "diff.patch"):
             (scratch / name).write_text("x\n")
         verify = subprocess.run(
-            [str(VERIFY), str(scratch)], capture_output=True, text=True, env=self.env, check=False
+            [str(VERIFY), str(scratch)],
+            capture_output=True,
+            text=True,
+            env=self.env,
+            check=False,
         )
         # The stub's reply has no verdict lines, so 3; its cost still reaches the ledger.
         self.assertEqual(verify.returncode, 3, verify.stdout + verify.stderr)
@@ -711,7 +881,11 @@ class RunImplementer(unittest.TestCase):
 
     def ledger_cli(self, *args):
         run = subprocess.run(
-            [str(LEDGER), *args], capture_output=True, text=True, env=self.env, check=False
+            [str(LEDGER), *args],
+            capture_output=True,
+            text=True,
+            env=self.env,
+            check=False,
         )
         return run.returncode, run.stdout + run.stderr
 
@@ -731,7 +905,9 @@ class RunImplementer(unittest.TestCase):
         self.env["IMPLEMENT_CALL_MAX_USD"] = "3"
         self.env["IMPLEMENT_MAX_USD"] = "10"
         self.assertEqual(self.launch(self.worktree, self.run_dir)[0], 0)
-        self.assertEqual(self.flag(self.calls_made()[-1]["argv"], "--max-budget-usd"), "3")
+        self.assertEqual(
+            self.flag(self.calls_made()[-1]["argv"], "--max-budget-usd"), "3"
+        )
 
     def test_a_bad_per_call_cap_is_refused(self):
         self.brief()
@@ -749,8 +925,20 @@ class RunImplementer(unittest.TestCase):
         start = {"who": "implementer", "call": 1, "event": "start", "budget": 20}
         for end in (
             None,
-            {"who": "implementer", "call": 1, "event": "end", "usd": 20, "no_total": True},
-            {"who": "implementer", "call": 1, "event": "end", "usd": 20, "interrupted": True},
+            {
+                "who": "implementer",
+                "call": 1,
+                "event": "end",
+                "usd": 20,
+                "no_total": True,
+            },
+            {
+                "who": "implementer",
+                "call": 1,
+                "event": "end",
+                "usd": 20,
+                "interrupted": True,
+            },
         ):
             with self.subTest(end=end):
                 self.ledger().unlink(missing_ok=True)
@@ -760,7 +948,9 @@ class RunImplementer(unittest.TestCase):
                 self.assertIn("ledger.py settle", out)
                 self.assertIn("call 1", out)
                 self.assertEqual(self.spent(), "20")
-                self.assertEqual(self.ledger_cli("settle", "proj--spec", "1", "0.4")[0], 0)
+                self.assertEqual(
+                    self.ledger_cli("settle", "proj--spec", "1", "0.4")[0], 0
+                )
                 self.assertEqual(self.spent(), "0.4")
         self.assertEqual(self.calls_made(), [])
 
@@ -781,7 +971,9 @@ class RunImplementer(unittest.TestCase):
             if pid_file.exists() and pid_file.read_text():
                 return proc, int(pid_file.read_text())
             if proc.poll() is not None:
-                self.fail(f"the launcher exited {proc.returncode}: {proc.stdout.read()}")
+                self.fail(
+                    f"the launcher exited {proc.returncode}: {proc.stdout.read()}"
+                )
             time.sleep(0.05)
         self.fail("the stub never started")
 
@@ -822,20 +1014,27 @@ class RunImplementer(unittest.TestCase):
         time.sleep(1.5)
         try:
             os.killpg(proc.pid, signal.SIGKILL)
-        except (ProcessLookupError, PermissionError):  # macOS: a group left only a zombie
+        except (
+            ProcessLookupError,
+            PermissionError,
+        ):  # macOS: a group left only a zombie
             pass
         self.finish(proc)
         self.assertTrue(self.gone(stub))
         start, end = self.ledger_lines()
         self.assertEqual(start["budget"], 8)
-        self.assertEqual((end["event"], end["usd"], end.get("interrupted")), ("end", 8, True))
+        self.assertEqual(
+            (end["event"], end["usd"], end.get("interrupted")), ("end", 8, True)
+        )
         self.assertEqual(self.spent(), "8")
         # The next run starts with 12 of the 20 left.
         for var in ("STUB_WAIT", "IMPLEMENT_INTERRUPT_WAIT"):
             self.env.pop(var)
         self.env["IMPLEMENT_CALL_MAX_USD"] = "100"
         self.assertEqual(self.launch(self.worktree, self.run_dir)[0], 0)
-        self.assertEqual(self.flag(self.calls_made()[-1]["argv"], "--max-budget-usd"), "12")
+        self.assertEqual(
+            self.flag(self.calls_made()[-1]["argv"], "--max-budget-usd"), "12"
+        )
 
     def test_an_interrupted_call_is_settled_from_its_result(self):
         self.interruptible()
@@ -904,15 +1103,14 @@ class RunImplementer(unittest.TestCase):
     def test_a_git_hook_written_during_an_interrupted_call_exits_4(self):
         self.interruptible()
         self.env["STUB_COST"] = "0.4"
-        self.stub_does(
-            "(common / 'hooks' / 'post-commit').write_text('#!/bin/sh\\n')"
-        )
+        self.stub_does("(common / 'hooks' / 'post-commit').write_text('#!/bin/sh\\n')")
         proc, stub = self.start(self.worktree, self.run_dir)
         os.kill(proc.pid, signal.SIGINT)
         code, out = self.finish(proc)
         self.assertEqual(code, 4, out)
         self.assertIn("hooks/post-commit", out)
         self.assertEqual(self.spent(), "0.4")
+
 
 if __name__ == "__main__":
     unittest.main()

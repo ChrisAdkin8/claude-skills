@@ -11,7 +11,7 @@ In `spike` mode, start here. Take the repo from the spec's location, and `cite-r
 **Names.**
 - `<basename>`: the spec's filename without `.md`, e.g. `2026-09-17-spec-spike-phase`.
 - `<results>`: `<spec dir>/spikes/<basename>-results.md`. The spec cites it by its path from the repo root.
-- `<scratch>`: `~/.cache/spec-spikes/<repo dir name>/<basename>/S<n>`, where `<n>` is the spike question's number.
+- `<scratch>`: `~/.cache/spec-spikes/<safe repo>/<safe basename>/S<n>`, where `<n>` is the spike question's number, and `<safe repo>` and `<safe basename>` are what `${CLAUDE_PLUGIN_ROOT}/hooks/run-name.py '<repo dir name>'` and `${CLAUDE_PLUGIN_ROOT}/hooks/run-name.py '<basename>'` print: the name itself if the launchers accept it, else a safe name for it. `<results>` keeps the real `<basename>`.
 - `<source repo>`: the spec's `cite-repo` if set, else the repo.
 
 **Tool calls.** `allowed-tools` pre-approves only the command shapes given below, so use them exactly:

@@ -82,8 +82,8 @@ Needs a run: none
 
 ## Implementation
 
-- 2026-10-10, W1 (pending): the listing runs as a Python `subprocess.run` with `cwd` set to the run dir, inside `snapshot()`'s own Python, rather than a shell subshell that `cd`s there; it also drops every other `GIT_*` variable from git's environment. Same effect, and the parse and comparison stay in one place.
-- 2026-10-10, W1 (pending): besides `git_unchanged()` deleting the copies after its check, an `EXIT` trap deletes them on any other exit (a ledger change's exit 4, a `die`), the gap delta review row 5 named.
+- 2026-10-10, W1 (d86dc7b): the listing runs as a Python `subprocess.run` with `cwd` set to the run dir, inside `snapshot()`'s own Python, rather than a shell subshell that `cd`s there; it also drops every other `GIT_*` variable from git's environment. Same effect, and the parse and comparison stay in one place.
+- 2026-10-10, W1 (d86dc7b): besides `git_unchanged()` deleting the copies after its check, an `EXIT` trap deletes them on any other exit (a ledger change's exit 4, a `die`), the gap delta review row 5 named.
 
 ## Evidence
 
@@ -95,3 +95,4 @@ Needs a run: none
 - Baseline: claude plugin validate . --json -> pass (the expected missing-version and root CLAUDE.md warnings only)
 - Baseline: claude plugin validate .claude-plugin/plugin.json -> pass (the same two warnings)
 - Baseline: the paid agent and skill evals are left to W3, which runs them by hand; not run here
+- W1 (d86dc7b): Done when `python3 -m unittest tests.test_run_implementer` -> 44 pass; the new tests failed first: all five branch-tracking cases exited 4, and all five exit-4 cases exited 4 without naming the key; the existing `core.fsmonitor` case still exits 4, and `git-before/` and `git-after/` are gone after both an exit-0 and an exit-4 run; suite pass (683 tests, ruff, shellcheck, both validates, replay_guard as baseline with 0 transcripts); scan clean

@@ -502,6 +502,81 @@ class RunImplementer(unittest.TestCase):
                 self.assertFalse((self.run_dir / "reply.md").exists())
                 self.assert_no_copies()
 
+    def other_fixture(self, worktree_config=False):
+        """A brief and a second worktree `other`, added before the launch; with worktree_config,
+        extensions.worktreeConfig on and a config.worktree in `other` and the main checkout that
+        differ. Returns `other`'s path."""
+        self.brief()
+        other = self.home / "code" / "proj-worktrees" / "other"
+        git(self.repo, "worktree", "add", "-q", str(other), "-b", "other")
+        if worktree_config:
+            git(self.repo, "config", "extensions.worktreeConfig", "true")
+            git(self.repo, "config", "--worktree", "user.name", "main")
+            git(other, "config", "--worktree", "user.name", "other")
+            git(other, "config", "--worktree", "core.sparseCheckout", "true")
+        return other
+
+    def test_a_worktree_added_or_removed_elsewhere_is_not_refused(self):
+        def cases():
+            new = str(self.home / "code" / "proj-worktrees" / "new")
+            other = str(self.home / "code" / "proj-worktrees" / "other")
+            add = ["worktree", "add", "-q", new, "-b", "new"]
+            remove = self.in_main("worktree", "remove", "other")
+            # (name, worktree config on, git args before the launch, stub code during the call)
+            return (
+                ("add from the main checkout", False, [], self.in_main(*add)),
+                ("add from other, whose config.worktree differs", True, [],
+                 f"run('git', '-C', {other!r}, *{add!r})\n"),
+                ("add with core.bare = false in the main checkout's config.worktree", True,
+                 ["config", "--worktree", "core.bare", "false"], self.in_main(*add)),
+                ("remove other", False, [], remove),
+                ("remove other, with entries in its config.worktree", True, [], remove),
+            )  # fmt: skip
+
+        for n in range(5):
+            self.setUp()
+            name, worktree_config, before, code = cases()[n]
+            self.other_fixture(worktree_config)
+            if before:
+                git(self.repo, *before)
+            with self.subTest(name):
+                self.stub_does(code)
+                status, out = self.launch(self.worktree, self.run_dir)
+                self.assertEqual(status, 0, out)
+                self.assertNotIn("changed:", out)
+                self.assert_no_copies()
+                if name.startswith("add") and worktree_config:
+                    # git copied a config.worktree, so the check had one to compare.
+                    new_git = self.repo / ".git" / "worktrees" / "new"
+                    self.assertTrue((new_git / "config.worktree").exists())
+
+    def test_a_new_worktree_in_another_shape_exits_4(self):
+        def cases():
+            new = str(self.home / "code" / "proj-worktrees" / "new")
+            commondir = (self.repo / ".git").resolve() / "worktrees" / "new" / "commondir"
+            inside = str(self.worktree / "inner")
+            return (
+                ("commondir elsewhere",
+                 self.in_main("worktree", "add", "-q", new, "-b", "new")
+                 + f"pathlib.Path({str(commondir)!r}).write_text('/elsewhere\\n')\n",
+                 "worktrees/new/commondir"),
+                ("inside the implementer's worktree",
+                 self.in_main("worktree", "add", "-q", inside, "-b", "inner"),
+                 "worktrees/inner/gitdir"),
+            )  # fmt: skip
+
+        for n in range(2):
+            self.setUp()
+            self.other_fixture()
+            name, code, named = cases()[n]
+            with self.subTest(name):
+                self.stub_does(code)
+                status, out = self.launch(self.worktree, self.run_dir)
+                self.assertEqual(status, 4, out)
+                self.assertIn(f"changed: {(self.repo / '.git').resolve()}/{named}\n", out)
+                self.assertFalse((self.run_dir / "reply.md").exists())
+                self.assert_no_copies()
+
     def test_a_submodules_sample_hooks_are_not_refused(self):
         # git copies its template's *.sample hooks into each submodule it clones.
         self.brief()

@@ -11,7 +11,8 @@
 #               (written first by /implement). The run writes reply.md (the implementer's reply),
 #               run.json, run.err, session_id and snapshot.json (git's state before a call)
 #               there, and keeps each call's run.json as run-<n>.json. It keeps copies of the
-#               shared git config in git-before/ and git-after/ only while it checks a call.
+#               shared git config and the worktrees' config.worktree files in git-before/ and
+#               git-after/ only while it checks a call.
 #               <run name> is <repo dir>--<spec basename>, each as hooks/run-name.py prints it, so
 #               a name with spaces or accents becomes one the name check below accepts.
 #   --resume    send followup.md from the run dir to the same session instead, keeping the
@@ -37,7 +38,9 @@
 # `git push -u`, `git branch --set-upstream-to`, `-d` or `-m` make: any `branch.*` entry removed,
 # and a `branch.<b>.remote` or `pushremote` naming `.` or a remote with a URL, a `merge` under
 # refs/, a `rebase` of true, false or merges, or a `description` added; anything else in it is
-# named as `changed: <file> sets <key>`. No reply.md is written, so
+# named as `changed: <file> sets <key>`. Another worktree's entry under worktrees/ removed whole,
+# or a new one with the shape `git worktree add` gives it, as the user's own `git worktree add` or
+# `remove` in another checkout make, passes too; any other change to a worktree's entry doesn't. No reply.md is written, so
 # act on nothing, and run no git command in the repo or the worktree. 4 comes before 3 and before
 # claude's own status. Exit 5: the run found no Claude account to use; the script says how to give
 # it one, after 4 and before 3, and /implement stops and relays it. A ref or HEAD in the shared git
@@ -273,13 +276,16 @@ model=(${RUN_AGENT_MODEL:+--model "$RUN_AGENT_MODEL"})
 # What can make git run a program or point a checkout elsewhere: the shared config and hooks,
 # every worktree's pointers, submodules' config and hooks, read without running git, but for the
 # shared config's two files, which are copied into the run dir and, if their bytes differ, listed
-# by git itself. With no argument it prints the state as JSON and copies them to git-before/;
-# given that JSON, it copies them to git-after/ and prints a `changed:` line for each path that
-# differs (for the two config files, each entry outside the branch-tracking allowlist that was
-# added or removed), a `moved:` line for each ref but the branch's own that moved, and a `program:` line
-# for a submodule config under the worktree's git dir that names a program or a hooks entry there:
-# /implement's own git add and commit, unsandboxed, would read them, and their -c flags cover only
-# core.fsmonitor and core.hooksPath.
+# by git itself. With no argument it prints the state as JSON, the worktrees/ entries' names
+# included, and copies those files and each worktree's config.worktree to git-before/; given that
+# JSON, it copies the two and each new worktree's config.worktree to git-after/ and prints a
+# `changed:` line for each path that differs (for the two config files, each entry outside the
+# branch-tracking allowlist that was added or removed; for a worktree's entry new or removed
+# during the call, each file that isn't in the shape git gives it), a `moved:` line for each ref
+# but the branch's own that moved, and a `program:` line for a submodule config under the
+# worktree's git dir that names a program or a hooks entry there: /implement's own git add and
+# commit, unsandboxed, would read them, and their -c flags cover only core.fsmonitor and
+# core.hooksPath.
 snapshot() {
   python3 - "$plugin_root/hooks/git-read.py" "$common" "$git_dir" "$work" "$run" "$@" <<'PY'
 import collections, hashlib, importlib.util, json, os, re, shutil, stat, subprocess, sys
@@ -413,15 +419,24 @@ CONFIGS = ("config", "config.worktree")
 TRACKING = re.compile(r"branch\..+\.(remote|pushremote|merge|rebase|description)")
 PLAIN = re.compile(r"[0-7]+ [0-9a-f]{64}")
 
-def copy(to):
-    """Each config in CONFIGS that is a plain file, copied into `to`, made afresh."""
+def worktrees():
+    """The names under worktrees/, one per linked worktree's entry."""
+    return [os.path.basename(p) for p in children(os.path.join(common, "worktrees"))]
+
+def wt_config(wid):
+    return os.path.join("worktrees", wid, "config.worktree")
+
+def copy(to, wids):
+    """CONFIGS and each of `wids`' config.worktree, those that are plain files, copied into `to`,
+    made afresh, at the same paths under it as under the common dir."""
     shutil.rmtree(to, ignore_errors=True)
     os.makedirs(to, mode=0o700)
-    for name in CONFIGS:
-        src = os.path.join(common, name)
+    for name in [*CONFIGS, *map(wt_config, wids)]:
+        src, dst = os.path.join(common, name), os.path.join(to, name)
         try:
             if stat.S_ISREG(os.lstat(src).st_mode):
-                shutil.copyfile(src, os.path.join(to, name))
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                shutil.copyfile(src, dst)
         except FileNotFoundError:
             pass
 
@@ -482,17 +497,102 @@ def config_changes(name, old, new):
     bad |= {k for k, v in now_n - was_n if not tracking(k, v, was)}
     return [f"changed: {path} sets {k}" for k in sorted(bad)]
 
+def truthy(value):
+    """A config value as git reads a bool; a key with no value is true."""
+    if value is None or value.lower() in ("true", "yes", "on"):
+        return True
+    try:
+        return int(value) != 0
+    except ValueError:
+        return False
+
+def regular(path):
+    try:
+        return stat.S_ISREG(os.lstat(path).st_mode)
+    except OSError:
+        return False
+
+def text(path):
+    """A plain file's text, one trailing newline dropped; None if it isn't a plain file."""
+    if not regular(path):
+        return None
+    with open(path, errors="surrogateescape") as f:
+        content = f.read()
+    return content[:-1] if content.endswith("\n") else content
+
+def inside(path, top):
+    return path == top or path.startswith(top + os.sep)
+
+def new_worktree(wid, sources):
+    """`changed:` lines for a worktrees/<id>/ entry made during the call, unless it has the shape
+    `git worktree add` gives it: commondir ../.., gitdir an absolute <P>/.git outside the
+    implementer's worktree, run dir and scratch dir, whose file points back here, and no
+    config.worktree, or one that is some worktree's before copy as git filters it. `sources` are
+    those copies' entries."""
+    top = os.path.join(common, "worktrees", wid)
+    if os.path.islink(top) or not os.path.isdir(top):
+        return [f"changed: {top}"]
+    out = []
+    if text(os.path.join(top, "commondir")) != "../..":
+        out.append(f"changed: {top}/commondir")
+    dotgit = text(os.path.join(top, "gitdir")) or ""
+    shaped = os.path.isabs(dotgit) and os.path.basename(dotgit) == ".git"
+    if shaped:
+        fences = [os.path.realpath(p) for p in (work, run, os.path.join(os.path.dirname(run), "scratch"))]
+        checkout = os.path.realpath(os.path.dirname(dotgit))
+        pointer = text(dotgit) or ""
+        shaped = (not any(inside(checkout, f) for f in fences) and pointer.startswith("gitdir: ")
+                  and os.path.realpath(pointer[len("gitdir: "):]) == top)
+    if not shaped:
+        out.append(f"changed: {top}/gitdir")
+    live = os.path.join(common, wt_config(wid))
+    if os.path.lexists(live):
+        found = entries(os.path.join(run, "git-after", wt_config(wid))) if regular(live) else None
+        if found is None or collections.Counter(found) not in sources:
+            out.append(f"changed: {live}")
+    return out
+
+def filtered(found):
+    """A config.worktree's entries as `git worktree add` copies them: no core.worktree, and no
+    core.bare = true if core.bare reads as true."""
+    bare = [v for k, v in found if k == "core.bare"]
+    drop_bare = bool(bare) and truthy(bare[-1])
+    return collections.Counter(
+        (k, v) for k, v in found
+        if k != "core.worktree" and not (drop_bare and k == "core.bare" and v == "true")
+    )
+
 if len(sys.argv) == 5:
-    state_now = watched()
-    copy(os.path.join(run, "git-before"))
-    print(json.dumps({"watched": state_now, "refs": refs()}))
+    state_now, wids = watched(), worktrees()
+    copy(os.path.join(run, "git-before"), wids)
+    print(json.dumps({"watched": state_now, "refs": refs(), "worktrees": wids}))
 else:
     before = json.load(open(sys.argv[5]))  # a file: every ref is too long for argv
-    now = watched()
-    copy(os.path.join(run, "git-after"))
+    now, wids = watched(), worktrees()
+    new_ids = sorted(set(wids) - set(before["worktrees"]))
+    copy(os.path.join(run, "git-after"), new_ids)
     configs = {os.path.join(common, n): n for n in CONFIGS}
+    # A worktree's entry gone as a whole, but for the implementer's own, or new: by the rules
+    # below, not byte for byte.
+    entry = lambda wid: os.path.join(common, "worktrees", wid)  # noqa: E731
+    by_rule = [entry(w) for w in new_ids]
+    by_rule += [entry(w) for w in set(before["worktrees"]) - set(wids)
+                if os.path.realpath(entry(w)) != git_dir]
+    # What git may copy a new worktree's config.worktree from: any worktree's before copy, since
+    # it copies the one `git worktree add` ran in.
+    sources = []
+    for name in ["config.worktree", *map(wt_config, before["worktrees"])] if new_ids else []:
+        copied = os.path.join(run, "git-before", name)
+        found = entries(copied) if os.path.exists(copied) else None
+        if found is not None:
+            sources.append(filtered(found))
+    for wid in new_ids:
+        for line in new_worktree(wid, sources):
+            print(line)
     for path in sorted(set(now) | set(before["watched"])):
         old, new = before["watched"].get(path, "missing"), now.get(path, "missing")
+        if any(inside(path, top) for top in by_rule):
+            continue
         if path in configs:
             for line in config_changes(configs[path], old, new):
                 print(line)

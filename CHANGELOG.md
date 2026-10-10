@@ -3,6 +3,32 @@
 What changed, by day, drawn from the commit history. The repo has no releases or tags, so each
 section is a date. Within a day, changes are grouped by area.
 
+## 2026-10-10
+
+One spec built with `/implement`, `docs/specs/2026-10-07-usability-2a-refuses-early.md`, the third
+part of the usability review. Part 2 was split into 2a and 2b first; 2b and parts 3 to 7 are still
+drafts. 2a was built on its own branch on 2026-10-09, both eval sets ran on both models on it
+(`tests/agent-evals/BASELINE.md`), and it was merged locally with no pull request. The evals caught
+one slip, fixed by hand before the merge: on Sonnet, `/research` named its run folder after the
+note's whole filename, `.md` included, so its eval couldn't find the runs.
+
+### Fixed
+
+- `/implement` refuses before it makes the worktree. An old Claude Code, a setting that could widen
+  the implementer's sandbox, a bad or spent cost cap, no macOS per-user temp dir or a bad run name
+  stopped the launch only after the worktree and its branch existed, and left both behind. Now
+  `run-implementer.sh --check` runs those refusals first and writes nothing.
+- `/implement` stops a spec edited by hand since its review. A change to its Decision, Design or
+  Work items, with no `Not reviewed:` line logged since the review, stops the gate, which says to
+  run `/cold-review <spec>`. That holds after a delta review too, where `/cold-review` reported
+  `done` whatever had changed since. Moving `status:` or `read-at`, or re-citing, doesn't count. A
+  shallow clone, with no history to compare, stops with `git fetch --unshallow`.
+- Folder and file names with spaces or accents work. Every agent launch refused them, so a repo in
+  `~/code/My Project` or a spec called `Design Notes.md` couldn't be checked or built. Now
+  `hooks/run-name.py` gives each a safe name, the same every time (`Design Notes` becomes
+  `Design-Notes-5966db`), for the run folders, the worktree and the branch; the spec and its record
+  keep their real names. A launcher that refuses a name says which part, and why.
+
 ## 2026-10-09
 
 Two specs built with `/implement`, `docs/specs/2026-10-07-usability-1a-what-runs-cost.md` and

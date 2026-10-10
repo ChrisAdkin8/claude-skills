@@ -1,7 +1,7 @@
 ---
 title: "Usability, part 2a: /implement refuses early"
 created: 2026-10-07
-status: in-progress # draft | reviewed | in-progress | done | superseded
+status: done # draft | reviewed | in-progress | done | superseded
 research: none
 idea: none
 read-at: 08570cb

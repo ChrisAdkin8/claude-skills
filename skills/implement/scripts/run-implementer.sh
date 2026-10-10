@@ -423,7 +423,11 @@ def worktrees():
     """The names under worktrees/, one per linked worktree's entry."""
     return [os.path.basename(p) for p in children(os.path.join(common, "worktrees"))]
 
+def entry(wid):
+    return os.path.join(common, "worktrees", wid)
+
 def wt_config(wid):
+    """A worktree's config.worktree, relative to the common dir, as the copies hold it too."""
     return os.path.join("worktrees", wid, "config.worktree")
 
 def copy(to, wids):
@@ -529,7 +533,7 @@ def new_worktree(wid, sources):
     implementer's worktree, run dir and scratch dir, whose file points back here, and no
     config.worktree, or one that is some worktree's before copy as git filters it. `sources` are
     those copies' entries."""
-    top = os.path.join(common, "worktrees", wid)
+    top = entry(wid)
     if os.path.islink(top) or not os.path.isdir(top):
         return [f"changed: {top}"]
     out = []
@@ -538,7 +542,8 @@ def new_worktree(wid, sources):
     dotgit = text(os.path.join(top, "gitdir")) or ""
     shaped = os.path.isabs(dotgit) and os.path.basename(dotgit) == ".git"
     if shaped:
-        fences = [os.path.realpath(p) for p in (work, run, os.path.join(os.path.dirname(run), "scratch"))]
+        scratch = os.path.join(os.path.dirname(run), "scratch")
+        fences = [os.path.realpath(p) for p in (work, run, scratch)]
         checkout = os.path.realpath(os.path.dirname(dotgit))
         pointer = text(dotgit) or ""
         shaped = (not any(inside(checkout, f) for f in fences) and pointer.startswith("gitdir: ")
@@ -575,8 +580,7 @@ else:
     # A worktree's entry gone as a whole, but for the implementer's own, or new: by the rules
     # below, not byte for byte.
     gone = set(before["worktrees"]) - set(wids)
-    by_rule = [os.path.join(common, "worktrees", w) for w in [*new_ids, *gone]]
-    by_rule = [top for top in by_rule if os.path.realpath(top) != git_dir]
+    by_rule = [entry(w) for w in [*new_ids, *gone] if os.path.realpath(entry(w)) != git_dir]
     # What git may copy a new worktree's config.worktree from: any worktree's before copy, since
     # it copies the one `git worktree add` ran in.
     sources = []
@@ -644,12 +648,13 @@ ledger_unchanged() {
     "written, so act on nothing from this run" >&2
   return 1
 }
+# snapshot()'s config copies: they can hold a token in a remote's URL.
+drop_copies() { rm -rf "$run/git-before" "$run/git-after"; }
 # Exit 4 on anything that can make git run a program or point elsewhere; refs are only named.
 git_unchanged() {
   local diff changed
   diff=$(snapshot "$run/snapshot.json") || diff="changed: couldn't read the repo's git config and hooks after the call"
-  # The copies can hold a token in a remote's URL.
-  rm -rf "$run/git-before" "$run/git-after"
+  drop_copies
   sed -n 's/^moved: /run-implementer: moved during the run: /p' <<< "$diff"
   changed=$(grep -v -e '^moved: ' -e '^$' <<< "$diff" || true)
   [ -z "$changed" ] && return 0
@@ -715,7 +720,7 @@ interrupted() {
 
 # The snapshot first: if it can't be taken, the call never starts, so nothing is charged. Its
 # config copies go on any exit, if the after-call check hasn't removed them already.
-trap 'rm -rf "$run/git-before" "$run/git-after"' EXIT
+trap drop_copies EXIT
 snapshot > "$run/snapshot.json" || die "couldn't read the repo's git config and hooks before the call"
 call=$("$ledger_py" next-call "$run_name") || die "couldn't read the ledger $ledger"
 "$ledger_py" append "$run_name" \

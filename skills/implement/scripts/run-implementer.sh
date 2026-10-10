@@ -574,10 +574,9 @@ else:
     configs = {os.path.join(common, n): n for n in CONFIGS}
     # A worktree's entry gone as a whole, but for the implementer's own, or new: by the rules
     # below, not byte for byte.
-    entry = lambda wid: os.path.join(common, "worktrees", wid)  # noqa: E731
-    by_rule = [entry(w) for w in new_ids]
-    by_rule += [entry(w) for w in set(before["worktrees"]) - set(wids)
-                if os.path.realpath(entry(w)) != git_dir]
+    gone = set(before["worktrees"]) - set(wids)
+    by_rule = [os.path.join(common, "worktrees", w) for w in [*new_ids, *gone]]
+    by_rule = [top for top in by_rule if os.path.realpath(top) != git_dir]
     # What git may copy a new worktree's config.worktree from: any worktree's before copy, since
     # it copies the one `git worktree add` ran in.
     sources = []

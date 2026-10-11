@@ -3,6 +3,33 @@
 What changed, by day, drawn from the commit history. The repo has no releases or tags, so each
 section is a date. Within a day, changes are grouped by area.
 
+## 2026-10-11
+
+One spec built with `/implement`, `docs/specs/2026-10-03-implementer-snapshot-false-alarm.md`,
+written on 2026-10-03 and finished on 2026-10-10, when its delta review's three open findings were
+folded in and every citation moved to the current code. It was the first build through part 2a's
+new gate checks, on its own branch on 2026-10-10, with its evals on both models
+(`tests/agent-evals/BASELINE.md`), and was merged locally with no pull request.
+
+### Fixed
+
+- Your own git use during an `/implement` run no longer stops it. The launcher stopped a run with
+  exit 4 whenever a byte of the repo's shared git config changed during a call, so a
+  `git push -u`, `git branch --set-upstream-to`, `git branch -d` or `-m` in your main checkout cost
+  a rerun. Now git itself lists the config before and after the call, from copies outside the
+  implementer's reach, and only branch tracking with checked values gets through. Anything else
+  still stops the run, now naming the setting, and so do the same settings in a new order. A few
+  rarer cases still stop it too: renaming a branch that carries other tools' settings,
+  `git push -u <url>`, worktrees saved with relative paths, and a worktree removed and re-added
+  under the same name.
+- A worktree you add or remove in another checkout no longer stops a run, if it has the shape
+  `git worktree add` gives it. Any other change to a worktree's entry still does.
+
+### Security
+
+- The launcher's copies of the git config, which can hold a token in a remote's URL, live in the
+  run folder only while it checks a call, and are deleted on any exit.
+
 ## 2026-10-10
 
 One spec built with `/implement`, `docs/specs/2026-10-07-usability-2a-refuses-early.md`, the third

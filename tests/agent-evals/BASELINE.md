@@ -1746,3 +1746,56 @@ Opus $4.41, Sonnet's re-run $0.83. $15.23 in all.
   changed** (see the parts 1a and 1b section).
 - **Sonnet's `delta-review` fails the decoy-row check, as in every section since 2026-09-30**, and
   passes on Opus. Sonnet's `absence-claim` passed this time.
+
+## The implementer's snapshot lets branch tracking and worktrees through: W3's evals (2026-10-10)
+
+W3's evals for `docs/specs/2026-10-03-implementer-snapshot-false-alarm.md` (the launcher compares
+the shared git config by git's own parse, letting branch tracking through, and lets a worktree
+added or removed in another checkout through when it has git's shape), on
+`implement/2026-10-03-implementer-snapshot-false-alarm` at `d3aacd4`. Run by hand from that
+worktree, `EVAL_MODEL=sonnet` then `opus`, the agent evals before the implement cases on each, one
+set at a time: the full agent evals and, of the skill evals, the three implement cases `CLAUDE.md`
+asks for after a change to `skills/implement/`, as W3's Done when says; the build changes no other
+skill. Agent results `tests/agent-evals/results/20261010-144019` and `20261010-144914`, skill
+results `tests/skill-evals/results/20261010-144711` and `20261010-145724`. No `ANTHROPIC_API_KEY`
+or `CHECKED_PLANS_USE_API_KEY` was set, so every run was on the Claude account.
+
+Skill evals (the skill session's cost; the implementers and verifiers the cases launched came to
+$0.56 on Sonnet and $1.14 on Opus, from their `run.json` files):
+
+| Case | Sonnet | Opus |
+|---|---|---|
+| implement-basic | PASS (36, $0.38) | PASS (37, $0.62) |
+| implement-hand-edit | PASS (11, $0.15) | PASS (11, $0.27) |
+| implement-trap | PASS (21, $0.25) | PASS (24, $0.43) |
+
+Agent evals:
+
+| Case | Sonnet | Opus |
+|---|---|---|
+| absence-claim | PASS (9, $0.13) | PASS (14, $0.38) |
+| cold-review-skip | PASS (5, $0.10) | PASS (6, $0.25) |
+| delta-review | FAIL (8, $0.12) | PASS (7, $0.26) |
+| delta-review-record | FAIL (8, $0.18): see below; re-run FAIL (9, $0.10) | PASS (9, $0.26) |
+| guard-applies | SKIP (opus only) | PASS (2, $0.07) |
+| record-skip | PASS (6, $0.11) | PASS (6, $0.27) |
+| research-ideas | PASS (48, $1.04) | PASS (66, $2.58) |
+| research-quick | PASS (9, $0.13) | PASS (9, $0.26) |
+| spec-miscite | PASS (7, $0.11) | PASS (7, $0.21) |
+| spike-inherited | PASS (6, $0.12) | PASS (8, $0.19) |
+| wrong-figure | FAIL (5, $0.09): see below | FAIL (7, $0.21): see below |
+
+Totals, agents included: implement cases Sonnet $1.34 and Opus $2.46, agent evals Sonnet $2.14 and
+Opus $4.94, and `delta-review-record`'s re-run and its two runs at the base $0.43. $11.31 in all.
+
+- **W3's implement cases pass on both models**, `implement-hand-edit` among them, so the launcher's
+  new config and worktree checks leave `/implement`'s gate, implementer and verifier working end to
+  end.
+- **Sonnet's `delta-review-record` failed the decoy-row check at this build, and on its re-run**,
+  as `delta-review` does on Sonnet. At the base, `20f52c8`, from the main checkout, it passed once
+  and failed once the same way, so the slip predates this build, which changes no agent or
+  fixture. It passed on Sonnet in both 2026-10-09 sections, and passes on Opus.
+- **`wrong-figure` fails on both models, its answer key out of date since Ollama's tags page
+  changed** (see the parts 1a and 1b section).
+- **Sonnet's `delta-review` fails the decoy-row check, as in every section since 2026-09-30**, and
+  passes on Opus.

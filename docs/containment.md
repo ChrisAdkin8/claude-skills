@@ -67,7 +67,9 @@ Some things run outside the sandbox, and not all of them are checked by the guar
   The guard doesn't check it. Only your own settings load, not the repo's: a repo's hooks would
   run outside the sandbox. Your own hooks and plugins' hooks still do, so know what they run. If
   your `~/.claude/settings.json` sets a sandbox key that could widen its sandbox, the launcher
-  refuses to run. After each call it checks that the shared git config and hooks are unchanged.
+  refuses to run. After each call it checks that the shared git config and hooks are unchanged;
+  branch tracking your own git writes (`git push -u`, `git branch -d`) and a worktree you add or
+  remove in another checkout don't stop the run.
   Its spend goes in a ledger it can't write, `~/.cache/implement-ledger/`, capped at $20 per spec,
   across all its runs, and $8 a call. The implement-verifier that re-runs its checks sits outside
   that cap, at $5 a run. It is sandboxed, with no network and a uv cache of its own, which spikes
